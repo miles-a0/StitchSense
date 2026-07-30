@@ -1,0 +1,43 @@
+{
+  "user": {
+    "email": "tester@example.com",
+    "display_name": "Test User",
+    "legacy_wp_user_id": 123
+  },
+  "patterns": {
+    "pattern-1": {
+      "id": "pattern-1",
+      "title": "Demo Cardigan",
+      "craft_type": "knitting",
+      "original_filename": "demo-cardigan.pdf",
+      "file_url": "https://example.com/demo-cardigan.pdf",
+      "pattern_summary_text": "A test import pattern.",
+      "source": "upload",
+      "created_at": "2026-06-01T10:00:00Z",
+      "updated_at": "2026-06-01T10:00:00Z"
+    }
+  },
+  "chat_sessions": {
+    "chat-1": {
+      "id": "chat-1",
+      "pattern_id": "pattern-1",
+      "title": "Demo chat",
+      "skill_level": "beginner"
+    }
+  },
+  "chat_messages": [
+    {
+      "session_id": "chat-1",
+      "role": "user",
+      "content": "How do I start?"
+    }
+  ],
+  "rewrite_sessions": [
+    {
+      "pattern_id": "pattern-1",
+      "prompt": "Resize this",
+      "rewrite_result": "Demo rewrite",
+      "confidence_score": 80
+    }
+  ]
+}

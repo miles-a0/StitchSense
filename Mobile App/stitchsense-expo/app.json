@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "StitchSense",
+    "slug": "stitchsense",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.png",
+    "scheme": "stitchsense",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "uk.co.zuauto.stitchsense",
+      "infoPlist": {
+        "NSCameraUsageDescription": "StitchSense uses your camera so Stitch Vision can analyse knitting and crochet images you choose.",
+        "NSPhotoLibraryUsageDescription": "StitchSense uses your photo library so you can upload pattern, project, and stash images you choose.",
+        "NSPhotoLibraryAddUsageDescription": "StitchSense can save generated or selected making images when you ask it to."
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#fff7ef",
+        "foregroundImage": "./assets/logo.png"
+      },
+      "package": "uk.co.zuauto.stitchsense",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/logo.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#fff7ef"
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "StitchSense uses your photos so Stitch Vision can analyse knitting and crochet images.",
+          "cameraPermission": "StitchSense uses your camera so Stitch Vision can analyse knitting and crochet images.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "apiBaseUrl": "https://stitchsense.zu-auto.co.uk",
+      "wordpressBaseUrl": "https://catlowyarns.co.uk"
+    }
+  }
+}

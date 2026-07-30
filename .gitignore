@@ -1,0 +1,22 @@
+Mobile App/backend/stitchsense-api/.env
+Mobile App/backend/stitchsense-api/.env.*
+!Mobile App/backend/stitchsense-api/.env.example
+!Mobile App/backend/stitchsense-api/.env.vps.example
+
+# Local dependencies, build output, caches, and generated artifacts
+**/node_modules/
+**/dist/
+**/.expo/
+**/.git/
+artifacts/
+BAK/
+REF/
+*.zip
+*.log
+.DS_Store
+
+# Native signing credentials
+*.key
+*.pem
+*.p12
+*.mobileprovision

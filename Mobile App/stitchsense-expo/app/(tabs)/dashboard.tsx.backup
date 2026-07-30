@@ -1,0 +1,596 @@
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { AppCard } from '@/src/components/ui/app-card';
+import { ScreenHero } from '@/src/components/ui/screen-hero';
+import { useLibrary } from '@/src/providers/library-provider';
+import { useProjects } from '@/src/providers/projects-provider';
+import { useSession } from '@/src/providers/session-provider';
+import { useStash } from '@/src/providers/stash-provider';
+import { tokens } from '@/src/theme/tokens';
+
+type JourneyCardProps = {
+  src: number;
+  title: string;
+  copy: string;
+  action: string;
+  onPress: () => void;
+};
+
+function JourneyCard({ src, title, copy, action, onPress }: JourneyCardProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.journeyCard, pressed ? styles.pressed : null]}>
+      <View style={styles.journeyIcon}>
+        <Image source={src} style={{ width: 22, height: 22 }} />
+      </View>
+      <View style={styles.journeyCopyBlock}>
+        <Text style={styles.journeyTitle}>{title}</Text>
+        <Text style={styles.journeyCopy}>{copy}</Text>
+        <Text style={styles.journeyAction}>{action}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function MiniAction({
+  src,
+  label,
+  onPress,
+}: {
+  src: number;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.miniAction, pressed ? styles.pressed : null]}>
+      <Image source={src} style={{ width: 19, height: 19 }} />
+      <Text style={styles.miniActionLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export default function DashboardScreen() {
+  const router = useRouter();
+  const { user } = useSession();
+  const { patterns } = useLibrary();
+  const { projects } = useProjects();
+  const { items: stashItems } = useStash();
+  const displayName = user?.displayName ?? user?.email ?? 'StitchSense maker';
+  const commandTiles = [
+    {
+      src: require('../../assets/images/Library.png'),
+      label: 'Library',
+      value: 'Master patterns',
+      onPress: () => router.push('/(tabs)/library'),
+    },
+    {
+      src: require('../../assets/images/Projects.png'),
+      label: 'Projects',
+      value: 'Project clones',
+      onPress: () => router.push('/(tabs)/workspace'),
+    },
+    {
+      src: require('../../assets/images/Stash.png'),
+      label: 'Stash',
+      value: 'Supplies',
+      onPress: () => router.push('/(tabs)/stash'),
+    },
+    {
+      src: require('../../assets/images/Chat.png'),
+      label: 'Chat',
+      value: 'Ask anything',
+      onPress: () => router.push('/(tabs)/chat'),
+    },
+    {
+      src: require('../../assets/images/Tools.png'),
+      label: 'Tools',
+      value: 'Helpers',
+      onPress: () => router.push('/(tabs)/tools'),
+    },
+    {
+      src: require('../../assets/images/Account.png'),
+      label: 'Account',
+      value: 'Settings',
+      onPress: () => router.push('/(tabs)/account'),
+    },
+  ];
+
+  return (
+    <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
+      <ScreenHero
+        copy="Start with a pattern, your yarn, a current project, a stuck moment, or a general question. StitchSense will keep the next step clear."
+        eyebrow="Home"
+        icon="cog-outline"
+        iconAccessibilityLabel="Manage account"
+        onIconPress={() => router.push('/(tabs)/account')}
+        title={`Welcome back, ${displayName}`}>
+        <View style={styles.heroStats}>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatValue}>{patterns.length}</Text>
+            <Text style={styles.heroStatLabel}>Patterns</Text>
+          </View>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatValue}>{projects.length}</Text>
+            <Text style={styles.heroStatLabel}>Projects</Text>
+          </View>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatValue}>{stashItems.length}</Text>
+            <Text style={styles.heroStatLabel}>Stash</Text>
+          </View>
+        </View>
+      </ScreenHero>
+
+      <AppCard elevated style={styles.cockpitCard}>
+        <View style={styles.cockpitHeader}>
+          <View style={styles.cockpitHeaderCopy}>
+            <Text style={styles.eyebrow}>App navigation</Text>
+            <Text style={styles.foundationTitle}>Choose the area you want to work in</Text>
+          </View>
+        </View>
+        <View style={styles.commandGrid}>
+          {commandTiles.map((tile) => (
+            <Pressable
+              key={`${tile.label}-${tile.value}`}
+              onPress={tile.onPress}
+              style={({ pressed }) => [styles.commandTile, pressed ? styles.pressed : null]}>
+              <Image source={tile.src} style={{ width: 21, height: 21 }} />
+              <Text style={styles.commandLabel}>{tile.label}</Text>
+              <Text numberOfLines={1} style={styles.commandValue}>{tile.value}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </AppCard>
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.eyebrow}>Guided routes</Text>
+        <Text style={styles.sectionTitle}>Quick Starts</Text>
+      </View>
+
+      <View style={styles.journeyGrid}>
+        <JourneyCard
+          src={require('../../assets/images/Pattern.png')}
+          title="I have a pattern"
+          copy="Upload, import, understand difficulty, choose size, and check yarn before starting."
+          action="Open Library"
+          onPress={() => router.push('/(tabs)/library')}
+        />
+        <JourneyCard
+          src={require('../../assets/images/Yarn.png')}
+          title="I have yarn"
+          copy="Record stash, compare what you own, and ask for project ideas from real supplies."
+          action="Open Stash"
+          onPress={() => router.push('/(tabs)/stash')}
+        />
+        <JourneyCard
+          src={require("../../assets/images/I-Am-Stuck.png")}
+          title="I'm stuck"
+          copy="Ask a general question, decode a technique, or use photo help for a tricky stitch."
+          action="Ask StitchSense"
+          onPress={() => router.push('/(tabs)/chat')}
+        />
+        <JourneyCard
+          src={require('../../assets/images/Current-Project.png')}
+          title="I'm actively making"
+          copy="Continue a project, track progress, save photos, and keep counters close."
+          action="Open Projects"
+          onPress={() => router.push('/(tabs)/workspace')}
+        />
+      </View>
+
+      <AppCard style={styles.smartCard}>
+        <Text style={styles.eyebrow}>Smart Assistants</Text>
+        <Text style={styles.sectionTitle}>Focused help when you need it</Text>
+        <Text style={styles.smartCopy}>
+          Calculators and specialist helpers now live together as assistants, so the main app stays simple.
+        </Text>
+        <View style={styles.miniGrid}>
+          <MiniAction src={require('../../assets/images/Gauge.png')} label="Gauge" onPress={() => router.push('/gauge-calculator')} />
+          <MiniAction src={require('../../assets/images/Yarn-Swap.png')} label="Yarn swap" onPress={() => router.push('/(tabs)/tools')} />
+          <MiniAction src={require('../../assets/images/Dictionary.png')} label="Dictionary" onPress={() => router.push('/stitch-dictionary')} />
+          <MiniAction src={require('../../assets/images/Stitch-Vision.png')} label="Stitch Vision" onPress={() => router.push('/(tabs)/camera')} />
+        </View>
+      </AppCard>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: tokens.color.background,
+  },
+  content: {
+    padding: tokens.spacing.lg,
+    gap: tokens.spacing.xl2,
+    paddingBottom: tokens.spacing.xxl,
+  },
+  heroStats: {
+    flexDirection: 'row',
+    gap: tokens.spacing.sm,
+  },
+  heroStat: {
+    flex: 1,
+    borderRadius: tokens.radius.large,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.86)',
+    backgroundColor: 'rgba(255,255,255,0.76)',
+    paddingVertical: tokens.spacing.md,
+    alignItems: 'center',
+    gap: 4,
+  },
+  heroStatValue: {
+    color: tokens.color.text,
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  heroStatLabel: {
+    color: tokens.color.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  eyebrow: {
+    color: tokens.color.accent,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  cockpitCard: {
+    gap: tokens.spacing.md,
+    backgroundColor: '#f4fbfb',
+    borderColor: '#c5e1df',
+  },
+  cockpitHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.md,
+  },
+  cockpitHeaderCopy: {
+    flex: 1,
+    gap: tokens.spacing.xs,
+  },
+  healthDial: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 1,
+    borderColor: '#b7d9d5',
+    backgroundColor: tokens.color.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthValue: {
+    color: tokens.color.primary,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  healthLabel: {
+    color: tokens.color.muted,
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  commandGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: tokens.spacing.sm,
+  },
+  commandTile: {
+    width: '48%',
+    minHeight: 96,
+    borderRadius: tokens.radius.large,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.surface,
+    padding: tokens.spacing.md,
+    gap: 5,
+    justifyContent: 'center',
+  },
+  commandLabel: {
+    color: tokens.color.text,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  commandValue: {
+    color: tokens.color.muted,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+  },
+  coachPromptRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: tokens.spacing.sm,
+  },
+  coachPromptChip: {
+    borderRadius: tokens.radius.pill,
+    borderWidth: 1,
+    borderColor: '#b7d9d5',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: 9,
+  },
+  coachPromptText: {
+    color: tokens.color.primary,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  foundationCard: {
+    gap: tokens.spacing.md,
+  },
+  snapshotCard: {
+    gap: tokens.spacing.md,
+    backgroundColor: '#fffaf4',
+    borderColor: '#dbc3ac',
+  },
+  snapshotGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: tokens.spacing.sm,
+  },
+  snapshotTile: {
+    width: '48%',
+    minHeight: 82,
+    borderRadius: tokens.radius.large,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.surface,
+    padding: tokens.spacing.md,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  snapshotValue: {
+    color: tokens.color.text,
+    fontSize: 25,
+    fontWeight: '900',
+  },
+  snapshotLabel: {
+    color: tokens.color.muted,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
+  },
+  cleanupCard: {
+    gap: tokens.spacing.md,
+    backgroundColor: '#fff7ec',
+    borderColor: '#ead7b7',
+  },
+  deadlineCard: {
+    gap: tokens.spacing.md,
+    backgroundColor: '#fff8ec',
+    borderColor: '#ead7b7',
+  },
+  restartPromptCard: {
+    gap: tokens.spacing.md,
+    backgroundColor: '#f2f8f0',
+    borderColor: 'rgba(63, 143, 85, 0.22)',
+  },
+  ravelryPromptCard: {
+    gap: tokens.spacing.md,
+    backgroundColor: '#f4fbfb',
+    borderColor: '#c5e1df',
+  },
+  fullWidth: {
+    width: '100%',
+  },
+  foundationTitle: {
+    color: tokens.color.text,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '900',
+  },
+  foundationList: {
+    gap: tokens.spacing.sm,
+  },
+  foundationRow: {
+    minHeight: 66,
+    borderRadius: tokens.radius.large,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.surfaceWarm,
+    padding: tokens.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.sm,
+  },
+  foundationTextBlock: {
+    flex: 1,
+    gap: 3,
+  },
+  foundationTaskTitle: {
+    color: tokens.color.text,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  foundationCopy: {
+    color: tokens.color.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  nextCard: {
+    gap: tokens.spacing.sm,
+  },
+  nextTitle: {
+    color: tokens.color.text,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  nextCopy: {
+    color: tokens.color.muted,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  planCard: {
+    gap: tokens.spacing.md,
+  },
+  planList: {
+    gap: tokens.spacing.sm,
+  },
+  planRow: {
+    minHeight: 74,
+    borderRadius: tokens.radius.large,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.surfaceWarm,
+    padding: tokens.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.md,
+  },
+  planIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#efe1d3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  planCopyBlock: {
+    flex: 1,
+    gap: 3,
+  },
+  planTitle: {
+    color: tokens.color.text,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  planCopy: {
+    color: tokens.color.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  planAction: {
+    color: tokens.color.primary,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  makingStateCard: {
+    gap: tokens.spacing.md,
+  },
+  makingStateRow: {
+    minHeight: 74,
+    borderRadius: tokens.radius.large,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.surfaceWarm,
+    padding: tokens.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.md,
+  },
+  makingStateIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#efe1d3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  makingStateCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  makingStateTitle: {
+    color: tokens.color.text,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  makingStateText: {
+    color: tokens.color.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  sectionHeader: {
+    gap: tokens.spacing.xs,
+  },
+  sectionTitle: {
+    color: tokens.color.text,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '900',
+  },
+  journeyGrid: {
+    gap: tokens.spacing.md,
+  },
+  journeyCard: {
+    minHeight: 132,
+    borderRadius: tokens.radius.xlarge,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.surface,
+    padding: tokens.spacing.lg,
+    flexDirection: 'row',
+    gap: tokens.spacing.md,
+    alignItems: 'flex-start',
+  },
+  pressed: {
+    opacity: 0.94,
+    transform: [{ translateY: 1 }],
+  },
+  journeyIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: tokens.color.surfaceWarm,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  journeyCopyBlock: {
+    flex: 1,
+    gap: 6,
+  },
+  journeyTitle: {
+    color: tokens.color.text,
+    fontSize: 18,
+    lineHeight: 23,
+    fontWeight: '900',
+  },
+  journeyCopy: {
+    color: tokens.color.muted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  journeyAction: {
+    color: tokens.color.primary,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  smartCard: {
+    gap: tokens.spacing.md,
+  },
+  smartCopy: {
+    color: tokens.color.muted,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  miniGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: tokens.spacing.sm,
+  },
+  miniAction: {
+    width: '48%',
+    minHeight: 84,
+    borderRadius: tokens.radius.large,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.surfaceWarm,
+    padding: tokens.spacing.md,
+    gap: tokens.spacing.sm,
+    justifyContent: 'center',
+  },
+  miniActionLabel: {
+    color: tokens.color.text,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+});

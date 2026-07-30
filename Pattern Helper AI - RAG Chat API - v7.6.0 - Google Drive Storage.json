@@ -1,0 +1,916 @@
+{
+  "name": "Pattern Helper AI - RAG Chat API - v7.6.0 - Google Drive Storage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stitchsense-upload-v5",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "bd07b2c9-617e-4858-b08b-28efbb481641",
+      "name": "Pattern Upload Webhook v5",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3936,
+        272
+      ],
+      "webhookId": "stitchsense-upload-v5-multiformat",
+      "notesInFlow": true,
+      "notes": "Multi-format pattern upload pipeline. Replaces the v3/v4 PDF-only upload workflow while keeping the same endpoint path."
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst headers = item.json.headers || {};\nlet body = item.json.body || item.json || {};\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\nif (body && typeof body.body === 'string') {\n  try { body.body = JSON.parse(body.body); } catch (e) {}\n}\nif (body && typeof body.payload === 'string') {\n  const outerSecret = body.secret || '';\n  try {\n    const parsedPayload = JSON.parse(body.payload);\n    if (parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)) {\n      body = { ...parsedPayload, secret: parsedPayload.secret || outerSecret };\n    }\n  } catch (e) {}\n}\nif (body && body.body && typeof body.body === 'object' && (body.body.secret || body.body.file_data_uri)) {\n  body = body.body;\n}\nconst expectedSecret = $env.STITCHSENSE_UPLOAD_SECRET || 'uigfbwejbCHNRwjrwehrbcvHBWEVENVEKEWVBJWE';\nconst normalisedHeaders = {};\nfor (const key of Object.keys(headers)) normalisedHeaders[key.toLowerCase()] = headers[key];\nconst providedSecret = normalisedHeaders['x-stitchsense-secret'] || body.secret || body.STITCHSENSE_UPLOAD_SECRET || '';\nif (expectedSecret && providedSecret !== expectedSecret) {\n  return [{ json: { ok:false, statusCode:401, error:'Unauthorised upload request.' } }];\n}\nreturn [{ json: { ok:true, body, headers, received_at:new Date().toISOString() }, binary:item.binary }];"
+      },
+      "id": "707b7b05-ea8b-4117-bda7-7843cd2e2dc2",
+      "name": "Validate Secret",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3696,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "secret-ok",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1f90447c-2ce1-42c1-905d-1806c194c321",
+      "name": "Secret OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3456,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success:false, error:$json.error || 'Unauthorised' } }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 401 }}"
+        }
+      },
+      "id": "3ca845db-e09c-4108-bac1-54cba85d7652",
+      "name": "Return Unauthorised",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -3216,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first();\nlet body = item.json.body || item.json || {};\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\nif (body && typeof body.body === 'string') {\n  try { body.body = JSON.parse(body.body); } catch (e) {}\n}\nif (body && typeof body.payload === 'string') {\n  const outerSecret = body.secret || '';\n  try {\n    const parsedPayload = JSON.parse(body.payload);\n    if (parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)) {\n      body = { ...parsedPayload, secret: parsedPayload.secret || outerSecret };\n    }\n  } catch (e) {}\n}\nif (body && body.body && typeof body.body === 'object' && (body.body.file_data_uri || body.body.file_name)) {\n  body = body.body;\n}\nlet binary = item.binary || {};\nlet uploadKey = Object.keys(binary).includes('file') ? 'file' : Object.keys(binary)[0];\n\nfunction normaliseDataUri(value) {\n  const raw = String(value || '').trim();\n  const match = raw.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/i);\n  if (!match) return null;\n  return { mime: (match[1] || '').toLowerCase(), base64: match[2] || '' };\n}\n\n// v7.4.26 accepts JSON/base64 uploads from WordPress/browser as well as legacy multipart.\nif (!uploadKey && body.file_data_uri) {\n  const parsed = normaliseDataUri(body.file_data_uri);\n  if (!parsed || !parsed.base64) {\n    return [{ json:{ ok:false, statusCode:400, error:'The uploaded file payload was not readable. Please try uploading the file again.' } }];\n  }\n  const fileNameFromBody = String(body.file_name || body.filename || 'pattern-upload').trim() || 'pattern-upload';\n  const mimeFromBody = String(body.mime_type || body.mimeType || parsed.mime || 'application/octet-stream').toLowerCase();\n  binary = {\n    file: {\n      data: parsed.base64,\n      mimeType: mimeFromBody,\n      fileName: fileNameFromBody,\n      fileSize: Number(body.file_size || body.fileSize || Math.floor(parsed.base64.length * 0.75) || 0)\n    }\n  };\n  uploadKey = 'file';\n}\n\nconst binaryKeys = Object.keys(binary);\nif (!binaryKeys.length || !uploadKey) return [{ json:{ ok:false, statusCode:400, error:'No file uploaded.' } }];\nconst file = binary[uploadKey];\nconst mimeType = String(file.mimeType || file.mime_type || body.mime_type || body.mimeType || '').toLowerCase();\nconst fileName = file.fileName || file.filename || body.file_name || body.filename || 'pattern-upload';\nconst extMatch = String(fileName).toLowerCase().match(/\\.([a-z0-9]+)$/);\nconst ext = extMatch ? extMatch[1] : '';\nconst supported = ['pdf','docx','txt','rtf','odt','md','html','htm','epub','csv','xlsx','json','xml','jpg','jpeg','png','webp','gif','tif','tiff'];\nif (!supported.includes(ext)) {\n  return [{ json:{ ok:false, statusCode:415, error:`Unsupported file type: ${ext || mimeType || fileName}. Please upload PDF, DOCX, TXT, RTF, ODT, MD, HTML, EPUB, CSV, XLSX, JSON, XML, JPG, PNG, WebP, GIF or TIFF.` } }];\n}\nconst size = Number(file.fileSize || file.fileSizeBytes || file.file_size || body.file_size || 0);\nconst maxSize = 20 * 1024 * 1024;\nif (size > maxSize) return [{ json:{ ok:false, statusCode:413, error:'File too large. Maximum upload size is 20MB.' } }];\nconst directTextExts = ['txt','md','html','htm','json','xml','csv','rtf'];\nconst imageExts = ['jpg','jpeg','png','webp','gif','tif','tiff'];\nconst safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 160);\nconst stamp = Date.now();\nconst projectName = String(body.project_name || body.projectName || safeName.replace(/\\.[^.]+$/, '') || 'Untitled project').trim();\nreturn [{ json:{ ok:true, upload_key:uploadKey, original_filename:fileName, stored_filename:`${stamp}-${safeName}`, mime_type:mimeType || 'application/octet-stream', file_extension:ext, is_pdf:ext === 'pdf' || mimeType === 'application/pdf', is_direct_text:directTextExts.includes(ext), is_image:imageExts.includes(ext), file_size:size, project_name:projectName, craft_type:String(body.craft_type || body.craftType || '').trim(), project_type:String(body.project_type || body.projectType || 'uploaded_pattern').trim(), user_email:String(body.email || body.user_email || '').trim(), wp_user_id:body.wp_user_id || body.wpUserId || null, storage_path:`/opt/stitchsense/uploads/${stamp}-${safeName}`, received_at:item.json.received_at || new Date().toISOString() }, binary }];\n"
+      },
+      "id": "b034bb5c-a4a8-4a14-ad32-e3c5c985b97d",
+      "name": "Validate File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3216,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "file-ok",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b0f0497e-5bcd-4607-add2-1a71b1d141f7",
+      "name": "File OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2976,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success:false, error:$json.error || 'Upload validation failed.' } }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 400 }}"
+        }
+      },
+      "id": "b634bbb5-5bc1-44aa-af4a-066771f19d88",
+      "name": "Return Upload Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2736,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ `\nWITH selected_user AS (\n  INSERT INTO users (wp_user_id, email, display_name)\n  VALUES (\n    ${$json.wp_user_id ? Number($json.wp_user_id) : 'NULL'},\n    ${$json.user_email ? `'${String($json.user_email).replace(/'/g, \"''\")}'` : 'NULL'},\n    ${$json.user_email ? `'${String($json.user_email).replace(/'/g, \"''\")}'` : 'NULL'}\n  )\n  ON CONFLICT (wp_user_id) DO UPDATE\n  SET email = EXCLUDED.email,\n      display_name = COALESCE(EXCLUDED.display_name, users.display_name),\n      updated_at = NOW()\n  RETURNING id\n),\nfallback_user AS (\n  INSERT INTO users (email, display_name)\n  SELECT\n    ${$json.user_email ? `'${String($json.user_email).replace(/'/g, \"''\")}'` : 'NULL'},\n    ${$json.user_email ? `'${String($json.user_email).replace(/'/g, \"''\")}'` : 'NULL'}\n  WHERE NOT EXISTS (SELECT 1 FROM selected_user)\n  RETURNING id\n),\nfinal_user AS (\n  SELECT id FROM selected_user\n  UNION ALL\n  SELECT id FROM fallback_user\n  LIMIT 1\n),\ncreated_project AS (\n  INSERT INTO projects (user_id, name, project_type, craft_type, status)\n  SELECT\n    id,\n    '${String($json.project_name).replace(/'/g, \"''\")}',\n    ${$json.project_type ? `'${String($json.project_type).replace(/'/g, \"''\")}'` : 'NULL'},\n    ${$json.craft_type ? `'${String($json.craft_type).replace(/'/g, \"''\")}'` : 'NULL'},\n    'processing'\n  FROM final_user\n  RETURNING id\n),\ncreated_file AS (\n  INSERT INTO project_files (project_id, original_filename, stored_filename, mime_type, file_size, storage_path, upload_status)\n  SELECT id, '${String($json.original_filename).replace(/'/g, \"''\")}', '${String($json.stored_filename).replace(/'/g, \"''\")}', '${String($json.mime_type).replace(/'/g, \"''\")}', ${Number($json.file_size || 0)}, '${String($json.storage_path).replace(/'/g, \"''\")}', 'uploaded' FROM created_project\n  RETURNING id, project_id\n),\ncreated_job AS (\n  INSERT INTO processing_jobs (project_id, file_id, job_type, status, progress)\n  SELECT project_id, id, 'pattern_upload_ingestion', 'processing', 10 FROM created_file\n  RETURNING id, project_id, file_id\n)\nSELECT id AS job_id, project_id, file_id FROM created_job;\n` }}",
+        "options": {}
+      },
+      "id": "2850c92d-e1e5-4c78-be87-37ef562a77fe",
+      "name": "Create DB Records",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -2736,
+        112
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "BnqdD57TF2juMQUD",
+          "name": "stitchsense-postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const validation = $('Validate File').first().json;\nconst db = $json;\nreturn [{ json: { ...validation, project_id: db.project_id, file_id: db.file_id, job_id: db.job_id }, binary: $('Validate File').first().binary }];"
+      },
+      "id": "2cf245dd-d397-4557-8b40-0efe71948ad1",
+      "name": "Merge DB IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2496,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "direct",
+              "leftValue": "={{ $json.is_direct_text }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7ed4511f-19c4-43a1-a019-4127033a1a08",
+      "name": "Is Direct Text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2256,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Merge DB IDs').first().json;\nlet raw = '';\ntry {\n  const buffer = await this.helpers.getBinaryDataBuffer(0, source.upload_key);\n  raw = buffer.toString('utf8');\n} catch (error) {\n  const bin = $input.first().binary?.[source.upload_key];\n  raw = bin?.data ? Buffer.from(bin.data, 'base64').toString('utf8') : '';\n}\nconst ext = String(source.file_extension || '').toLowerCase();\nif (ext === 'json') {\n  try { raw = JSON.stringify(JSON.parse(raw), null, 2); } catch (e) {}\n}\nif (ext === 'html' || ext === 'htm' || ext === 'xml') {\n  raw = raw.replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ').replace(/<[^>]+>/g, ' ');\n}\nif (ext === 'rtf') {\n  raw = raw.replace(/\\\\'[0-9a-fA-F]{2}/g, ' ').replace(/\\\\[a-zA-Z]+-?\\d* ?/g, ' ').replace(/[{}]/g, ' ');\n}\nreturn [{ json: { ...source, text: raw }, binary: $input.first().binary }];"
+      },
+      "id": "129ad493-98cb-4428-8d27-43ea1310b0b3",
+      "name": "Extract Direct Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2016,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "pdf",
+              "leftValue": "={{ $json.is_pdf }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3ebb7a4a-bd1c-41c2-986b-4a18f6329512",
+      "name": "Is PDF?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2016,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "image",
+              "leftValue": "={{ $json.is_image }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4e3c2b72-afa6-48f4-92a8-dec59206b27d",
+      "name": "Is Image?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1776,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://173.249.40.161:8990/api/v1/misc/ocr-pdf",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "fileInput",
+              "inputDataFieldName": "={{ $json.upload_key }}"
+            },
+            {
+              "name": "languages",
+              "value": "eng"
+            },
+            {
+              "name": "deskew",
+              "value": "true"
+            },
+            {
+              "name": "ocrType",
+              "value": "skip-text"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "processed_file"
+            }
+          },
+          "timeout": 2400000
+        }
+      },
+      "id": "e51ad3be-41ab-4e11-9fc0-d1bae94a02b0",
+      "name": "OCR PDF with Stirling",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1776,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://173.249.40.161:8990/api/v1/convert/file/pdf",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "fileInput",
+              "inputDataFieldName": "={{ $json.upload_key }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "converted_pdf"
+            }
+          },
+          "timeout": 2400000
+        }
+      },
+      "id": "ac0c70bf-63e7-462a-872a-95ce2ea2c139",
+      "name": "Convert Document to PDF with Stirling",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1536,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://173.249.40.161:8990/api/v1/convert/img/pdf",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "fileInput",
+              "inputDataFieldName": "={{ $json.upload_key }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "converted_pdf"
+            }
+          },
+          "timeout": 2400000
+        }
+      },
+      "id": "88cb2a30-23b1-43f5-b1ec-236b8cd6e4b3",
+      "name": "Convert Image to PDF with Stirling",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1536,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://173.249.40.161:8990/api/v1/misc/ocr-pdf",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "fileInput",
+              "inputDataFieldName": "converted_pdf"
+            },
+            {
+              "name": "languages",
+              "value": "eng"
+            },
+            {
+              "name": "deskew",
+              "value": "true"
+            },
+            {
+              "name": "ocrType",
+              "value": "skip-text"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "processed_file"
+            }
+          },
+          "timeout": 2400000
+        }
+      },
+      "id": "3f8feac0-2160-48c3-b67a-c54619585096",
+      "name": "OCR Converted PDF with Stirling",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1296,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "processed_file",
+        "options": {}
+      },
+      "id": "010b3b9e-458e-41a7-9172-8e7f91a3f2e4",
+      "name": "Extract Text from PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1056,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Merge DB IDs').first().json;\nconst rawText = $json.text || '';\nlet cleaned = String(rawText).replace(/\\\\/g, ' ').replace(/\\r/g, ' ').replace(/\\t/g, ' ').replace(/[\\u0000-\\u001F\\u007F-\\u009F]/g, ' ').replace(/\\s+/g, ' ').trim();\nif (!cleaned || cleaned.length < 100) throw new Error('No usable pattern text extracted. The file may be image-only, corrupted, password-protected or unsupported by the current extractor.');\nconst chunkSize = 1500;\nconst overlap = 200;\nconst chunks = [];\nfunction hash(str) { let h=0; for (let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return Math.abs(h).toString(16); }\nconst contentHash = hash(source.project_id + source.file_id + cleaned.slice(0, 500));\nconst scrapedAt = new Date().toISOString();\nfor (let i=0; i<cleaned.length; i += (chunkSize - overlap)) {\n  const chunk = cleaned.slice(i, i + chunkSize).trim();\n  if (chunk.length > 100) chunks.push({ json:{ ...source, chunk_text:chunk, chunk_index:chunks.length, total_chunks_estimate:Math.ceil(cleaned.length / (chunkSize - overlap)), total_chars:cleaned.length, content_hash:contentHash, scraped_at:scrapedAt, pattern_title_guess:source.project_name, extracted_preview:cleaned.slice(0,2500) } });\n}\nreturn chunks;"
+      },
+      "id": "54caecfb-3284-4aa3-9766-e3447818fe93",
+      "name": "Clean + Chunk Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://173.249.40.161:2010/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: 'nomic-embed-text', prompt: $json.chunk_text } }}",
+        "options": {
+          "timeout": 500000
+        }
+      },
+      "id": "0ba7ce75-84b1-412d-bac1-772c90211311",
+      "name": "Create Embedding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -576,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const embedding = $json.embedding;\nif (!embedding || !Array.isArray(embedding)) throw new Error(`No embedding returned. Response: ${JSON.stringify($json)}`);\nconst chunk = $('Clean + Chunk Text').item.json;\nfunction hashToNumber(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0;} return Math.abs(h); }\nconst pointId = hashToNumber(`${chunk.project_id}:${chunk.file_id}:${chunk.chunk_index}`);\nreturn [{ json:{ ...chunk, embedding, point_id:pointId } }];"
+      },
+      "id": "df6a6c21-e996-456a-85f2-ee7bc116f3d2",
+      "name": "Merge Embedding",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "http://173.249.40.161:6333/collections/knitting_knowledge/points",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "={{ $env.QDRANT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { points: [ { id: $json.point_id, vector: $json.embedding, payload: { title: $json.project_name, source: 'uploaded_pattern', project_id: $json.project_id, file_id: $json.file_id, job_id: $json.job_id, content_hash: $json.content_hash, chunk_index: $json.chunk_index, content: $json.chunk_text, original_filename: $json.original_filename, mime_type: $json.mime_type, file_extension: $json.file_extension, scraped_at: $json.scraped_at } } ] } }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "298c01c7-35bf-4697-be58-c1b05b2ef3c7",
+      "name": "Qdrant Upsert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const chunk = $('Merge Embedding').item.json;\nreturn [{ json:{ project_id:chunk.project_id, file_id:chunk.file_id, job_id:chunk.job_id, title:chunk.project_name, original_filename:chunk.original_filename, mime_type:chunk.mime_type, file_extension:chunk.file_extension, total_chunks_estimate:chunk.total_chunks_estimate, extracted_preview:chunk.extracted_preview, scraped_at:chunk.scraped_at } }];"
+      },
+      "id": "23c755b5-fd6a-405e-9b0d-ec84926381e2",
+      "name": "Track Chunk",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (!items.length) return [];\nconst first = items[0].json;\nconst preview = String(first.extracted_preview || '').replace(/\\s+/g, ' ').trim();\nfunction pick(regex, fallback='') { const match = preview.match(regex); return match ? String(match[1] || match[0]).trim() : fallback; }\nfunction clean(value){ return String(value || '').replace(/\\s+/g, ' ').trim(); }\nconst title = clean(pick(/(?:^|\\s)([A-Z][A-Z\\s-]{3,40}JUMPER|[A-Z][A-Z\\s-]{3,40}CARDIGAN|[A-Z][A-Z\\s-]{3,40}SWEATER|[A-Z][A-Z\\s-]{3,40}TOP|[A-Z][A-Z\\s-]{3,40}SHAWL|[A-Z][A-Z\\s-]{3,40}SCARF)/i) || first.title || first.original_filename || 'Uploaded pattern');\nconst designCode = clean(pick(/\\b(DG\\s*\\d{2,4}-\\d{1,3})\\b/i));\nconst yarn = clean(pick(/YARN\\s+(.+?)\\s+SIZES/i));\nconst sizes = clean(pick(/SIZES\\s+(.+?)\\s+NOTE!/i) || pick(/SIZES\\s+(.+?)\\s+GARMENT MEASUREMENTS/i));\nconst needles = clean(pick(/SUGGESTED NEEDLES\\s+(.+?)\\s+GAUGE/i) || pick(/(?:NEEDLES|HOOK)\\s+(.+?)\\s+(?:GAUGE|TENSION)/i));\nconst gauge = clean(pick(/(?:GAUGE|TENSION)\\s+(.+?)\\s+(?:Check your gauge|ABBREVIATIONS|BODY|PATTERN)/i));\nconst parts=[];\nparts.push(`<b>Pattern uploaded and analysed.</b>`);\nparts.push(`This looks like <b>${title}${designCode ? ' (' + designCode + ')' : ''}</b>.`);\nif (sizes) parts.push(`<b>Sizes:</b> ${sizes}`);\nif (yarn) parts.push(`<b>Yarn:</b> ${yarn}`);\nif (needles) parts.push(`<b>Needles / hook:</b> ${needles}`);\nif (gauge) parts.push(`<b>Gauge / tension:</b> ${gauge}`);\nparts.push(`Ask me about sizing, yarn substitution, gauge, stitch counts, abbreviations or any row/round that looks confusing.`);\nreturn [{ json:{ ...first, total_chunks:items.length, pattern_summary_html:parts.join('<br>'), pattern_summary_text:parts.map(p=>p.replace(/<[^>]+>/g,'')).join('\\n'), detected_title:title, detected_design_code:designCode } }];"
+      },
+      "id": "c0eb1a16-6b8c-4dc7-beb1-e0487f90eb0b",
+      "name": "Summarise Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ `\nINSERT INTO pattern_metadata (project_id, title, extracted_text, created_at)\nVALUES ('${$json.project_id}', '${String($json.title || $json.detected_title || '').replace(/'/g, \"''\")}', '${String($json.extracted_preview || '').replace(/'/g, \"''\")}', NOW());\n\nUPDATE processing_jobs SET status = 'complete', progress = 100, result = '${JSON.stringify({ total_chunks: $json.total_chunks, summary: $json.pattern_summary_text || '', file_extension: $json.file_extension || '', mime_type: $json.mime_type || '' }).replace(/'/g, \"''\")}'::jsonb, updated_at = NOW()\nWHERE id = '${$json.job_id}';\n\nUPDATE projects SET status = 'active', updated_at = NOW()\nWHERE id = '${$json.project_id}';\n\nSELECT\n  '${$json.project_id}' AS project_id,\n  '${$json.file_id}' AS file_id,\n  '${$json.job_id}' AS job_id,\n  ${Number($json.total_chunks || 0)} AS total_chunks,\n  '${String($json.pattern_summary_html || '').replace(/'/g, \"''\")}' AS pattern_summary_html,\n  '${String($json.pattern_summary_text || '').replace(/'/g, \"''\")}' AS pattern_summary_text,\n  '${String($json.detected_title || '').replace(/'/g, \"''\")}' AS detected_title,\n  '${String($json.detected_design_code || '').replace(/'/g, \"''\")}' AS detected_design_code,\n  '${String($json.mime_type || '').replace(/'/g, \"''\")}' AS mime_type,\n  '${String($json.file_extension || '').replace(/'/g, \"''\")}' AS file_extension;\n` }}",
+        "options": {}
+      },
+      "id": "220ea3a4-fd13-4ac1-8dda-ad3cdde8eb31",
+      "name": "Complete DB Job",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        112
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "BnqdD57TF2juMQUD",
+          "name": "stitchsense-postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success:true, project_id:$json.project_id, file_id:$json.file_id, job_id:$json.job_id, total_chunks:$json.total_chunks, pattern_summary_html:$json.pattern_summary_html, pattern_summary_text:$json.pattern_summary_text, detected_title:$json.detected_title, detected_design_code:$json.detected_design_code, mime_type:$json.mime_type, file_extension:$json.file_extension, message:'Pattern uploaded and indexed successfully.' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "cc0ed009-a83f-414c-b46a-1b3d7f0547eb",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        864,
+        112
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Pattern Upload Webhook v5": {
+      "main": [
+        [
+          {
+            "node": "Validate Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Secret": {
+      "main": [
+        [
+          {
+            "node": "Secret OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Secret OK?": {
+      "main": [
+        [
+          {
+            "node": "Validate File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Unauthorised",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate File": {
+      "main": [
+        [
+          {
+            "node": "File OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File OK?": {
+      "main": [
+        [
+          {
+            "node": "Create DB Records",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Upload Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create DB Records": {
+      "main": [
+        [
+          {
+            "node": "Merge DB IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge DB IDs": {
+      "main": [
+        [
+          {
+            "node": "Is Direct Text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Direct Text?": {
+      "main": [
+        [
+          {
+            "node": "Extract Direct Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is PDF?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is PDF?": {
+      "main": [
+        [
+          {
+            "node": "OCR PDF with Stirling",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Image?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Image?": {
+      "main": [
+        [
+          {
+            "node": "Convert Image to PDF with Stirling",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Convert Document to PDF with Stirling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Document to PDF with Stirling": {
+      "main": [
+        [
+          {
+            "node": "OCR Converted PDF with Stirling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Image to PDF with Stirling": {
+      "main": [
+        [
+          {
+            "node": "OCR Converted PDF with Stirling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR PDF with Stirling": {
+      "main": [
+        [
+          {
+            "node": "Extract Text from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR Converted PDF with Stirling": {
+      "main": [
+        [
+          {
+            "node": "Extract Text from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Direct Text": {
+      "main": [
+        [
+          {
+            "node": "Clean + Chunk Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text from PDF": {
+      "main": [
+        [
+          {
+            "node": "Clean + Chunk Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean + Chunk Text": {
+      "main": [
+        [
+          {
+            "node": "Create Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Embedding": {
+      "main": [
+        [
+          {
+            "node": "Merge Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Embedding": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Upsert": {
+      "main": [
+        [
+          {
+            "node": "Track Chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Track Chunk": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise Upload": {
+      "main": [
+        [
+          {
+            "node": "Complete DB Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Complete DB Job": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0dc18f9b-2500-441e-96ea-b84610edf6e0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e6196144e482071e7b431ee2b96cf6f09a5ca39a346f781cd91c66a370f52ea7"
+  },
+  "nodeGroups": [],
+  "id": "qeK1XpiTtSWSnPBA",
+  "tags": []
+}
