@@ -1,50 +1,57 @@
-# Welcome to your Expo app 👋
+# StitchSense Expo
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Parallel Expo / Expo Go mobile client for StitchSense.
 
-## Get started
+This app sits alongside the existing SwiftUI build under `Mobile App/ios` and
+shares the same live API base:
 
-1. Install dependencies
+- API: `https://stitchsense.zu-auto.co.uk`
+- WordPress bridge site: `https://catlowyarns.co.uk`
 
-   ```bash
-   npm install
-   ```
+## Current port scope
 
-2. Start the app
+- Branded Expo Router shell
+- Secure token storage with `expo-secure-store`
+- StitchSense / WordPress credential login
+- Live library loading from the shared API
+- Pattern detail route shell
+- Workspace, camera, tools, and account tab foundations
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run in Expo Go
 
 ```bash
-npm run reset-project
+cd "/Users/andrewmagill/DEV/StitchSense"
+./tools/start-stitchsense-expo.sh
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Then scan the QR code in Expo Go on your iPhone.
 
-## Learn more
+If you see a screen that says:
 
-To learn more about developing your project with Expo, look at the following resources:
+- `There was a problem running "StitchSense Expo"`
+- `Could not connect to development server`
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+that usually means your phone opened an older dev-build shell instead of the
+fresh Expo Go session. In that case:
 
-## Join the community
+1. Fully close the app on the phone.
+2. Open `Expo Go` itself.
+3. Scan the fresh QR code again.
+4. Open the newly scanned session, not an older recent project entry.
 
-Join our community of developers creating universal apps.
+If your local Wi-Fi connection is being fussy, use tunnel mode instead:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+cd "/Users/andrewmagill/DEV/StitchSense"
+./tools/start-stitchsense-expo.sh tunnel
+```
+
+The project is pinned to Node 20 via `.nvmrc`. The helper script loads `nvm`,
+switches to Node 20, clears stale Expo/Metro ports, and starts Expo in a way
+that matches what the phone expects.
+
+## Why this app is separate
+
+The existing native mobile app in this repo is a SwiftUI/Xcode project. Expo Go
+requires an Expo/React Native app, so this folder is the dedicated Expo track
+for direct on-device iteration.
