@@ -16,6 +16,7 @@ import { getPatternFile, putPatternFile, signedPatternUrl } from '../services/st
 import { callUploadWorkflowWithFile, callWorkflow } from '../services/workflows.js';
 import { callWordPressChatProxy, callWordPressUploadProxy } from '../services/wordpressBridge.js';
 import { config } from '../config.js';
+import { configuredWordPressSiteUrl } from '../services/wordpressSite.js';
 
 const patternBody = z.object({
   title: z.string().default('Untitled'),
@@ -598,7 +599,12 @@ export async function patternRoutes(app: FastifyInstance) {
       if (linked.rowCount) {
         const row = linked.rows[0];
         const providerParts = row.provider_user_id.split('|');
-        const siteUrl = String(row.metadata?.siteUrl ?? providerParts[0] ?? config.wordpress.siteUrl ?? '').trim().replace(/\/$/, '');
+        let siteUrl = '';
+        try {
+          siteUrl = configuredWordPressSiteUrl();
+        } catch {
+          siteUrl = '';
+        }
         const wpUserId = String(row.metadata?.wpUserId ?? providerParts[1] ?? '').trim();
 
         if (siteUrl && wpUserId) {
@@ -607,6 +613,7 @@ export async function patternRoutes(app: FastifyInstance) {
 
           const response = await fetch(url.toString(), {
             method: 'DELETE',
+            redirect: 'error',
             headers: {
               accept: 'application/json',
               'x-stitchsense-wordpress-secret': config.wordpress.sharedSecret,

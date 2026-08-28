@@ -1,6 +1,7 @@
 import { query } from '../db/pool.js';
 import { config } from '../config.js';
 import { fetchWithTimeout } from './http.js';
+import { configuredWordPressSiteUrl } from './wordpressSite.js';
 
 type LinkedWordPressAccount = {
   siteUrl: string;
@@ -35,9 +36,12 @@ async function linkedWordPressAccount(userId: string): Promise<LinkedWordPressAc
 
   const row = result.rows[0];
   const providerParts = String(row.provider_user_id ?? '').split('|');
-  const siteUrl = String(row.metadata?.siteUrl ?? providerParts[0] ?? config.wordpress.siteUrl ?? '')
-    .trim()
-    .replace(/\/$/, '');
+  let siteUrl: string;
+  try {
+    siteUrl = configuredWordPressSiteUrl();
+  } catch {
+    return null;
+  }
   const wpUserId = String(row.metadata?.wpUserId ?? providerParts[1] ?? '').trim();
 
   if (!siteUrl || !wpUserId) {
@@ -58,6 +62,7 @@ export async function callWordPressChatProxy(userId: string, payload: Record<str
 
   const response = await fetchWithTimeout(url.toString(), {
     method: 'POST',
+    redirect: 'error',
     timeoutMs: 600000,
     headers: {
       accept: 'application/json',
@@ -117,6 +122,7 @@ async function postWordPressJsonProxy(
 
   const response = await fetchWithTimeout(url.toString(), {
     method: 'POST',
+    redirect: 'error',
     timeoutMs: 600000,
     headers: {
       accept: 'application/json',

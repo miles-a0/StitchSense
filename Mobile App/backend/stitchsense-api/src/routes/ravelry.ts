@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { hasFeature, resolveEntitlement } from '../services/entitlements.js';
 import { syncWordPressLibraryForUser } from '../services/wordpressSync.js';
+import { configuredWordPressSiteUrl } from '../services/wordpressSite.js';
 
 type LinkedWordPressAccountRow = {
   provider_user_id: string;
@@ -69,7 +70,7 @@ async function wordpressBridgeRequest(
   }
 
   const providerParts = linked.provider_user_id.split('|');
-  const siteUrl = String(linked.metadata.siteUrl ?? providerParts[0] ?? config.wordpress.siteUrl ?? '').trim().replace(/\/$/, '');
+  const siteUrl = configuredWordPressSiteUrl();
   const wpUserId = String(linked.metadata.wpUserId ?? providerParts[1] ?? '').trim();
   if (!siteUrl || !wpUserId) {
     throw new Error('The linked WordPress account is missing site or user details.');
@@ -86,6 +87,7 @@ async function wordpressBridgeRequest(
 
   const response = await fetch(url.toString(), {
     method: options.method ?? 'GET',
+    redirect: 'error',
     headers: {
       accept: 'application/json',
       'content-type': 'application/json',

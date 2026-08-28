@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { query } from '../db/pool.js';
 import { config } from '../config.js';
+import { configuredWordPressSiteUrl } from './wordpressSite.js';
 import { fetchWithTimeout } from './http.js';
 
 interface WordPressExportUser {
@@ -272,7 +273,15 @@ export async function wordpressMirrorSnapshotForUser(userId: string): Promise<Wo
 
   const metadata = linked.metadata ?? {};
   const providerParts = linked.provider_user_id.split('|');
-  const siteUrl = String(metadata.siteUrl ?? providerParts[0] ?? '').trim();
+  let siteUrl: string;
+  try {
+    siteUrl = configuredWordPressSiteUrl();
+  } catch {
+    return {
+      available: false,
+      reason: 'wordpress_bridge_not_configured',
+    };
+  }
   const wpUserId = String(metadata.wpUserId ?? providerParts[1] ?? '').trim();
 
   if (!siteUrl || !wpUserId) {
@@ -444,8 +453,10 @@ export async function wordpressPendingSyncForUser(userId: string) {
 }
 
 async function fetchWordPressExport(siteUrl: string, wpUserId: string | number) {
-  const response = await fetchWithTimeout(`${siteUrl.replace(/\/$/, '')}/wp-json/stitchsense/v1/platform-export`, {
+  const safeSiteUrl = configuredWordPressSiteUrl(siteUrl);
+  const response = await fetchWithTimeout(`${safeSiteUrl}/wp-json/stitchsense/v1/platform-export`, {
     method: 'POST',
+    redirect: 'error',
     headers: {
       'content-type': 'application/json',
       accept: 'application/json',
@@ -1005,7 +1016,12 @@ export async function syncWordPressLibraryForUser(userId: string) {
     return { synced: false, reason: 'no_linked_wordpress_account' as const };
   }
 
-  const siteUrl = String(linked.metadata.siteUrl ?? linked.provider_user_id.split('|')[0] ?? '').trim();
+  let siteUrl: string;
+  try {
+    siteUrl = configuredWordPressSiteUrl();
+  } catch {
+    return { synced: false, reason: 'wordpress_bridge_not_configured' as const };
+  }
   const wpUserId = String(linked.metadata.wpUserId ?? linked.provider_user_id.split('|')[1] ?? '').trim();
   if (!siteUrl || !wpUserId) {
     return { synced: false, reason: 'linked_account_missing_site_or_user' as const };

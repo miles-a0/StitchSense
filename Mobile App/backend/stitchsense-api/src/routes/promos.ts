@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
+import { configuredWordPressSiteUrl } from '../services/wordpressSite.js';
 
 type LinkedWordPressAccountRow = {
   provider_user_id: string;
@@ -36,7 +37,12 @@ async function wordpressPromoRequest(userId: string) {
   }
 
   const providerParts = linked.provider_user_id.split('|');
-  const siteUrl = String(linked.metadata.siteUrl ?? providerParts[0] ?? config.wordpress.siteUrl ?? '').trim().replace(/\/$/, '');
+  let siteUrl: string;
+  try {
+    siteUrl = configuredWordPressSiteUrl();
+  } catch {
+    return { promotions: [] };
+  }
   const wpUserId = String(linked.metadata.wpUserId ?? providerParts[1] ?? '').trim();
   if (!siteUrl || !wpUserId) {
     return { promotions: [] };
@@ -47,6 +53,7 @@ async function wordpressPromoRequest(userId: string) {
 
   const response = await fetch(url.toString(), {
     method: 'GET',
+    redirect: 'error',
     headers: {
       accept: 'application/json',
       'x-stitchsense-wordpress-secret': config.wordpress.sharedSecret,

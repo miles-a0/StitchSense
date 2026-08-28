@@ -5,6 +5,7 @@ import { query } from '../db/pool.js';
 import { fetchWithTimeout } from '../services/http.js';
 import { createRefreshToken, rotateRefreshToken, storeRefreshToken } from '../services/tokens.js';
 import { syncWordPressLibraryForUser } from '../services/wordpressSync.js';
+import { configuredWordPressSiteUrl } from '../services/wordpressSite.js';
 
 const authBody = z.object({
   email: z.string().email(),
@@ -138,10 +139,12 @@ export async function authRoutes(app: FastifyInstance) {
     const body = passwordResetRequestBody.parse(request.body);
     if (config.wordpress.sharedSecret && config.wordpress.siteUrl) {
       try {
+        const siteUrl = configuredWordPressSiteUrl();
         await fetchWithTimeout(
-          `${config.wordpress.siteUrl.replace(/\/$/, '')}/wp-json/stitchsense/v1/platform-password-reset/request`,
+          `${siteUrl}/wp-json/stitchsense/v1/platform-password-reset/request`,
           {
             method: 'POST',
+            redirect: 'error',
             headers: {
               'content-type': 'application/json',
               'accept': 'application/json',
@@ -167,10 +170,12 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(503).send({ error: 'Password recovery is not configured' });
     }
 
+    const siteUrl = configuredWordPressSiteUrl();
     const response = await fetchWithTimeout(
-      `${config.wordpress.siteUrl.replace(/\/$/, '')}/wp-json/stitchsense/v1/platform-password-reset/confirm`,
+      `${siteUrl}/wp-json/stitchsense/v1/platform-password-reset/confirm`,
       {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'content-type': 'application/json',
           'accept': 'application/json',
@@ -268,7 +273,12 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const body = wordpressBridgeBody.parse(request.body);
-    return issueWordPressBridgeAuth(app, body);
+    try {
+      const siteUrl = configuredWordPressSiteUrl(body.siteUrl);
+      return issueWordPressBridgeAuth(app, { ...body, siteUrl });
+    } catch {
+      return reply.code(400).send({ error: 'WordPress site URL does not match the configured bridge site' });
+    }
   });
 
   app.post('/auth/wordpress-login', async (request, reply) => {
@@ -277,14 +287,18 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const body = wordpressLoginBody.parse(request.body);
-    const siteUrl = (body.siteUrl ?? config.wordpress.siteUrl).trim().replace(/\/$/, '');
-    if (!siteUrl) {
-      return reply.code(503).send({ error: 'WordPress site URL is not configured' });
+    let siteUrl: string;
+    try {
+      siteUrl = configuredWordPressSiteUrl(body.siteUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'WordPress site URL is not configured';
+      return reply.code(message.includes('does not match') ? 400 : 503).send({ error: message });
     }
     const identifier = (body.identifier ?? body.email ?? '').trim();
     try {
       const response = await fetchWithTimeout(`${siteUrl}/wp-json/stitchsense/v1/platform-login`, {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'content-type': 'application/json',
           'accept': 'application/json',
@@ -311,7 +325,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.code(response.status >= 400 ? response.status : 502).send({ error: message });
       }
 
-      const parsed = wordpressBridgeBody.parse(payload);
+      const parsed = wordpressBridgeBody.parse({ ...(payload as Record<string, unknown>), siteUrl });
       const auth = await issueWordPressBridgeAuth(app, parsed);
       try {
         await syncWordPressLibraryForUser(auth.user.id);
@@ -330,14 +344,18 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const body = wordpressRegisterBody.parse(request.body);
-    const siteUrl = (body.siteUrl ?? config.wordpress.siteUrl).trim().replace(/\/$/, '');
-    if (!siteUrl) {
-      return reply.code(503).send({ error: 'WordPress site URL is not configured' });
+    let siteUrl: string;
+    try {
+      siteUrl = configuredWordPressSiteUrl(body.siteUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'WordPress site URL is not configured';
+      return reply.code(message.includes('does not match') ? 400 : 503).send({ error: message });
     }
 
     try {
       const response = await fetchWithTimeout(`${siteUrl}/wp-json/stitchsense/v1/platform-register`, {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'content-type': 'application/json',
           'accept': 'application/json',
@@ -366,7 +384,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.code(response.status >= 400 ? response.status : 502).send({ error: message });
       }
 
-      const parsed = wordpressBridgeBody.parse(payload);
+      const parsed = wordpressBridgeBody.parse({ ...(payload as Record<string, unknown>), siteUrl });
       const auth = await issueWordPressBridgeAuth(app, parsed);
       return reply.code(201).send(auth);
     } catch {
