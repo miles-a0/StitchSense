@@ -1,0 +1,77 @@
+export const tokens = {
+  color: {
+    background: '#f6f0e8',
+    surface: '#fffdfa',
+    surfaceWarm: '#fbf5ec',
+    text: '#123832',
+    muted: '#56635c',
+    primary: '#2f7d5a',
+    primaryHover: '#256648',
+    accent: '#9a6a21',
+    success: '#3f8f55',
+    warning: '#b27822',
+    danger: '#b84a3f',
+    border: 'rgba(20, 63, 54, 0.13)',
+    shadow: 'rgba(27, 43, 36, 0.16)',
+  },
+  radius: {
+    small: 8,
+    medium: 12,
+    large: 16,
+    xlarge: 20,
+    sheet: 24,
+    pill: 999,
+  },
+  spacing: {
+    xxs: 2,
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl2: 20,
+    xl: 24,
+    xxl: 32,
+  },
+  font: {
+    display: 'Georgia',
+    body: 'Avenir Next',
+  },
+  type: {
+    eyebrow: 12,
+    label: 13,
+    body: 15,
+    bodyLarge: 17,
+    title: 20,
+    heading: 26,
+    display: 32,
+  },
+  component: {
+    controlHeight: 48,
+    compactControlHeight: 40,
+    cardBorderWidth: 1,
+  },
+} as const;
+
+export const shadows = {
+  card: {
+    shadowColor: '#1b2b24',
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 2,
+  },
+  soft: {
+    shadowColor: '#1b2b24',
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  raised: {
+    shadowColor: '#1b2b24',
+    shadowOpacity: 0.12,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 4,
+  },
+} as const;
