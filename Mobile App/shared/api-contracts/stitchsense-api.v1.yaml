@@ -1,0 +1,258 @@
+openapi: 3.1.0
+info:
+  title: StitchSense Platform API
+  version: 0.1.0
+  description: Shared API contract for StitchSense web, iOS, and Android clients.
+servers:
+  - url: https://api.stitchsense.example
+    description: Production placeholder
+  - url: http://localhost:8080
+    description: Local Docker
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+  /auth/register:
+    post:
+      security: []
+      summary: Create a StitchSense account
+      responses:
+        "201":
+          description: Account created
+  /auth/login:
+    post:
+      security: []
+      summary: Sign in and receive access/refresh tokens
+      responses:
+        "200":
+          description: Signed in
+  /auth/refresh:
+    post:
+      security: []
+      summary: Rotate refresh token and receive a new access token
+      responses:
+        "200":
+          description: Token refreshed
+  /me:
+    get:
+      summary: Current user profile
+      responses:
+        "200":
+          description: Current user
+  /me/entitlements:
+    get:
+      summary: Current user access and paywall state
+      responses:
+        "200":
+          description: Current entitlement decision
+  /user/export:
+    get:
+      summary: Export current user's StitchSense data
+      responses:
+        "200":
+          description: Data export
+  /user/delete-data:
+    post:
+      summary: Delete or archive current user's StitchSense data
+      responses:
+        "202":
+          description: Delete accepted
+  /patterns:
+    get:
+      summary: List the current user's patterns
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pattern list
+    post:
+      summary: Create or save pattern metadata
+      responses:
+        "201":
+          description: Pattern saved
+  /patterns/{id}:
+    get:
+      summary: Get pattern detail
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Pattern detail
+    put:
+      summary: Update pattern metadata
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Pattern updated
+    delete:
+      summary: Archive a pattern
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Pattern archived
+  /patterns/{id}/file:
+    post:
+      summary: Upload or replace the pattern file
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "201":
+          description: File stored
+  /patterns/{id}/file-url:
+    get:
+      summary: Get a short-lived signed pattern file URL
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Signed URL
+  /patterns/{id}/chats:
+    get:
+      summary: List chat sessions for a pattern
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Chat sessions
+  /chats:
+    post:
+      summary: Create a chat session
+      responses:
+        "201":
+          description: Chat created
+  /chats/{id}/messages:
+    get:
+      summary: List chat messages
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Messages
+    post:
+      summary: Send a message through the StitchSense workflow engine
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "201":
+          description: Message saved and AI response returned
+  /rewrites:
+    post:
+      summary: Generate and save a rewrite
+      responses:
+        "201":
+          description: Rewrite created
+  /patterns/{id}/rewrites:
+    get:
+      summary: List rewrites for a pattern
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Rewrite list
+  /vision/analyse:
+    post:
+      summary: Analyse a stitch/photo via n8n
+      responses:
+        "201":
+          description: Analysis result
+  /sync:
+    get:
+      summary: Return all changes since a timestamp
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Sync payload
+  /events:
+    post:
+      summary: Record a mobile/web client event for analytics or error reporting
+      responses:
+        "202":
+          description: Event accepted
+  /billing/checkout:
+    post:
+      summary: Create Stripe checkout for web clients
+      responses:
+        "201":
+          description: Checkout session
+  /billing/webhook:
+    post:
+      security: []
+      summary: Stripe webhook endpoint
+      responses:
+        "200":
+          description: Webhook accepted
+  /admin/entitlements:
+    get:
+      summary: List manual entitlement grants
+      responses:
+        "200":
+          description: Grants
+    post:
+      summary: Grant manual lifetime or timed access
+      responses:
+        "201":
+          description: Grant created
+  /admin/entitlements/{id}:
+    delete:
+      summary: Revoke a manual entitlement grant
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Grant revoked
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Entitlement:
+      type: object
+      required: [status, accessSource, features]
+      properties:
+        plan:
+          type: string
+        status:
+          type: string
+          enum: [active, trialing, expired]
+        accessSource:
+          type: string
+          enum: [manual_lifetime, manual_trial, courtesy_access, stripe, apple, google, standard_trial, none]
+        trialEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        features:
+          type: object
+          additionalProperties:
+            type: boolean

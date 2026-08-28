@@ -1,0 +1,32 @@
+Mobile App/backend/stitchsense-api/.env
+Mobile App/backend/stitchsense-api/.env.*
+!Mobile App/backend/stitchsense-api/.env.example
+!Mobile App/backend/stitchsense-api/.env.vps.example
+
+# Workspace-local tooling that is not part of the StitchSense product
+/.codex-relay/
+/.corepack/
+/.n/
+/tools/codex-relay/
+
+# Deprecated native prototype; the supported mobile client is Expo
+/Mobile App/legacy-native-ios-do-not-use/
+
+# Local dependencies, build output, caches, and generated artifacts
+**/node_modules/
+**/dist/
+**/.expo/
+**/.git/
+artifacts/
+BAK/
+REF/
+*.zip
+*.log
+*.backup
+.DS_Store
+
+# Native signing credentials
+*.key
+*.pem
+*.p12
+*.mobileprovision

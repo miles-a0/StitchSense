@@ -1,0 +1,448 @@
+{
+  "name": "StitchSense Chat API - Qdrant RAG + Client History - UK Metric",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pattern-helper-chat",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "dc259434-e9cc-4e3e-8c0c-781d23b354f9",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        3888,
+        -2240
+      ],
+      "webhookId": "e9a61db6-3794-428b-9dc2-61f901793422"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst body = item.json.body || item.json || {};\nconst headers = item.json.headers || {};\n\nconst expectedSecret = 'uigfbwejbCHNRwjrwehrbcvHBWEVENVEKEWVBJWE';\nconst providedSecret = headers['x-pattern-helper-secret'] || headers['X-Pattern-Helper-Secret'] || body.secret || '';\n\nif (expectedSecret && providedSecret !== expectedSecret) {\n  return [{ json: { ok: false, statusCode: 401, error: 'Unauthorised request.' } }];\n}\n\nconst action = String(body.action || '').trim().toLowerCase();\nconst question = String(body.question || body.message || '').trim();\nconst sessionId = String(body.session_id || body.sessionId || body.session || '').trim() || `session_${Date.now()}`;\nconst skillLevel = String(body.skill_level || body.skillLevel || 'beginner').trim().toLowerCase();\nconst clientHistory = Array.isArray(body.history) ? body.history.slice(-8) : [];\nconst toolMode = String(body.tool_mode || '').trim();\nconst imageDataUri = String(body.image_data_uri || '');\nconst mimeType = String(body.mime_type || 'image/jpeg');\nconst originalFilename = String(body.original_filename || 'stitch-photo');\nconst requestedModel = String(body.model || '').trim();\nconst projectId = String(body.project_id || body.projectId || '').trim();\nconst fileId = String(body.file_id || body.fileId || '').trim();\nconst jobId = String(body.job_id || body.jobId || '').trim();\nconst answerMode = String(body.answer_mode || body.answerMode || '').trim();\nconst patternId = String(body.pattern_id || body.patternId || '').trim();\nconst workflowUserId = String(body.user_id || body.userId || '').trim();\nconst platformUserId = String(body.platform_user_id || body.platformUserId || '').trim();\nconst patternAvailable = body.pattern_available === undefined ? undefined : Boolean(body.pattern_available);\nconst uploadedPatternTitle = String(body.uploaded_pattern_title || '').trim();\nconst uploadedPatternSummary = String(body.uploaded_pattern_summary || '').trim();\nconst patternSummaryText = String(body.pattern_summary_text || '').trim();\nconst patternSummaryHtml = String(body.pattern_summary_html || '').trim();\nconst patternSummaryStructured = body.pattern_summary_structured ?? undefined;\nconst patternMetadata = body.pattern_metadata ?? undefined;\nconst patternSource = String(body.pattern_source || '').trim();\nconst patternInstructionText = String(body.pattern_instruction_text || body.patternInstructionText || '').trim();\nconst patternInstructionPrompt = String(body.pattern_instruction_prompt || body.patternInstructionPrompt || '').trim();\nconst patternInstructionContextStatus = String(body.pattern_instruction_context_status || body.patternInstructionContextStatus || '').trim();\nconst patternContextMode = String(body.pattern_context_mode || body.patternContextMode || '').trim();\nconst responseLanguage = String(body.response_language || '').trim();\nconst targetLanguage = String(body.target_language || '').trim();\nconst translationTargetLanguage = String(body.translation_target_language || '').trim();\nconst locale = String(body.locale || '').trim();\nconst systemInstruction = String(body.system_instruction || '').trim();\n\nif (action === 'reset') {\n  return [{ json: { ok: true, action: 'reset', session_id: sessionId, requested_at: new Date().toISOString() } }];\n}\n\nif (!question && !imageDataUri) {\n  return [{ json: { ok: false, statusCode: 400, error: 'Please enter a question or upload a photo.' } }];\n}\n\nif (question.length > 1200) {\n  return [{ json: { ok: false, statusCode: 400, error: 'Please keep questions under 1,200 characters.' } }];\n}\n\nreturn [{\n  json: {\n    ok: true,\n    action: 'chat',\n    question,\n    session_id: sessionId,\n    skill_level: ['beginner','intermediate','advanced'].includes(skillLevel) ? skillLevel : 'beginner',\n    client_history: clientHistory,\n    tool_mode: toolMode || undefined,\n    image_data_uri: imageDataUri || undefined,\n    mime_type: mimeType || undefined,\n    original_filename: originalFilename || undefined,\n    model: requestedModel || undefined,\n    project_id: projectId || undefined,\n    file_id: fileId || undefined,\n    job_id: jobId || undefined,\n    answer_mode: answerMode || undefined,\n    pattern_id: patternId || undefined,\n    user_id: workflowUserId || undefined,\n    platform_user_id: platformUserId || undefined,\n    pattern_available: patternAvailable,\n    uploaded_pattern_title: uploadedPatternTitle || undefined,\n    uploaded_pattern_summary: uploadedPatternSummary || undefined,\n    pattern_summary_text: patternSummaryText || undefined,\n    pattern_summary_html: patternSummaryHtml || undefined,\n    pattern_summary_structured: patternSummaryStructured,\n    pattern_metadata: patternMetadata,\n    pattern_source: patternSource || undefined,\n    pattern_instruction_text: patternInstructionText || undefined,\n    pattern_instruction_prompt: patternInstructionPrompt || undefined,\n    pattern_instruction_context_status: patternInstructionContextStatus || undefined,\n    pattern_context_mode: patternContextMode || undefined,\n    response_language: responseLanguage || undefined,\n    target_language: targetLanguage || undefined,\n    translation_target_language: translationTargetLanguage || undefined,\n    locale: locale || undefined,\n    system_instruction: systemInstruction || undefined,\n    redis_key: `stitchsense:chat:${sessionId}`,\n    requested_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "ef21b701-10bd-4d29-af69-440e0346ccf2",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4128,
+        -2240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c5c691a5-ac0c-40b6-b3a1-3206e38b2890",
+      "name": "Request OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4368,
+        -2240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: $json.error || 'Invalid request.' } }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 400 }}"
+        }
+      },
+      "id": "9180aa1d-033a-4add-8b3c-2b13a4b683d8",
+      "name": "Return Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4608,
+        -2032
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "reset",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "reset",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fc3fd312-d5af-4778-83ae-3db5093906f2",
+      "name": "Is Reset?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4608,
+        -2320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, reset: true, session_id: $('Validate Request').first().json.session_id } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "d31d01f2-297d-4926-80f1-1210b8f4acf8",
+      "name": "Return Reset",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        5088,
+        -2464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Validate Request').first().json;\n\n// Redis is bypassed in this fixed version because the native n8n Redis credential\n// connection was failing even though raw AUTH/PING works from inside the n8n container.\n// This keeps the chat API working by using client-provided history only.\n\nconst clientHistory = Array.isArray(req.client_history) ? req.client_history : [];\n\nconst memory = clientHistory\n  .filter(m => m && m.role && m.content)\n  .slice(-10);\n\nreturn [{ json: { ...req, memory } }];"
+      },
+      "id": "a5ece84c-7cba-4c2c-84e3-5011a8179d0d",
+      "name": "Prepare Memory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5088,
+        -2240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://173.249.40.161:2010/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: 'nomic-embed-text', prompt: $json.question } }}",
+        "options": {
+          "timeout": 500000
+        }
+      },
+      "id": "5181d48f-aee4-4a10-b0ca-7e0a0e25afe7",
+      "name": "Create Query Embedding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5328,
+        -2240
+      ],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst embedding = $json.embedding;\nif (!embedding || !Array.isArray(embedding)) {\n  throw new Error(`No embedding returned. Response: ${JSON.stringify($json)}`);\n}\nconst req = $('Prepare Memory').first().json;\n\nconst isStepGuide = req.tool_mode === 'pattern_step_guide';\nconst isSummary = req.tool_mode === 'pattern_summary';\nconst patternPriority = req.answer_mode === 'pattern_priority';\n\nfunction buildScopeFilter() {\n  if (req.project_id) {\n    return {\n      must: [{\n        key: 'project_id',\n        match: { value: req.project_id }\n      }]\n    };\n  }\n\n  if (req.file_id) {\n    return {\n      must: [{\n        key: 'file_id',\n        match: { value: req.file_id }\n      }]\n    };\n  }\n\n  if (req.job_id) {\n    return {\n      must: [{\n        key: 'job_id',\n        match: { value: req.job_id }\n      }]\n    };\n  }\n\n  if (patternPriority) {\n    return {\n      must: [{\n        key: 'project_id',\n        match: { value: '__no_pattern_scope_available__' }\n      }]\n    };\n  }\n\n  return null;\n}\n\nconst scopeFilter = buildScopeFilter();\nconst hasPatternScope = Boolean(req.project_id || req.file_id || req.job_id);\n\nlet qdrant_limit = 8;\nlet score_threshold = 0.25;\nlet body = {\n  vector: embedding,\n  limit: qdrant_limit,\n  score_threshold: score_threshold,\n  with_payload: true,\n  with_vector: false\n};\n\nif (scopeFilter) {\n  qdrant_limit = (isStepGuide || isSummary) ? 200 : 40;\n  body = {\n    vector: embedding,\n    limit: qdrant_limit,\n    with_payload: true,\n    with_vector: false,\n    filter: scopeFilter\n  };\n}\n\nconst results = [];\nresults.push({ json: { ...req, embedding, search_body: JSON.stringify(body), qdrant_limit, score_threshold: body.score_threshold || 0, _scroll: false, _scroll_body: null, is_step_guide: isStepGuide, has_pattern_scope: hasPatternScope, scope_filter: scopeFilter } });\n\nif (isStepGuide && scopeFilter) {\n  const scrollBody = {\n    filter: scopeFilter,\n    limit: 200,\n    with_payload: true,\n    with_vector: false\n  };\n  results.push({ json: { ...req, embedding, search_body: JSON.stringify(body), qdrant_limit, score_threshold: 0, _scroll: true, _scroll_body: scrollBody, is_step_guide: true, has_pattern_scope: hasPatternScope, scope_filter: scopeFilter } });\n}\n\nreturn results;\n"
+      },
+      "id": "cef2afb8-3249-4973-9ded-2adf48ab7c1d",
+      "name": "Prepare Qdrant Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5568,
+        -2240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json._scroll ? 'http://173.249.40.161:6333/collections/knitting_knowledge/points/scroll' : 'http://173.249.40.161:6333/collections/knitting_knowledge/points/search' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "={{ $env.QDRANT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json._scroll ? $json._scroll_body : JSON.parse($json.search_body)) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "ea59d472-f07f-4e57-bed4-5cb8ddaa1940",
+      "name": "Search Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5808,
+        -2240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Prepare Qdrant Search').first().json;\n\n// Stitch Camera mode — build a vision-model payload instead of RAG\nif (req.tool_mode === 'stitch_image_analysis' && req.image_data_uri) {\n  const visionPrompt = [\n    'You are StitchSense, a calm, practical knitting and crochet assistant for a UK WordPress website.',\n    '',\n    'What to do:',\n    '- Look at the uploaded photo carefully and describe what the visitor has made.',\n    '- Identify the craft type: knitting, crochet, or unsure.',\n    '- Identify the likely stitch or technique if you can see it.',\n    '- Describe any visible texture, pattern or colour work.',\n    '- Check for common issues: twisted stitches, dropped stitch, missed yarn over, uneven tension, accidental increase or decrease, wrong-side/right-side confusion, crochet stitch height mismatch, gaps, holes, curling, laddering.',\n    '- If the visitor asked a specific question about the photo, answer it directly.',\n    '- Give a practical next step or action the visitor can take.',\n    '- If the image quality is poor, say so politely and ask for a clearer photo.',\n    '',\n    'Language and measurement rules:',\n    '- Always use British English spelling, grammar and terminology.',\n    '- Always default to UK metric measurements: millimetres, centimetres, metres, grams.',\n    '- For needles and hooks, default to UK/EU metric sizing in millimetres.',\n    '- If you mention US terms, explicitly give the UK equivalent.',\n    '',\n    'Style rules:',\n    '- Be honest about uncertainty. Never pretend to see what is not visible.',\n    '- Use plain, friendly UK English.',\n    '- Use short sections with clear headings.',\n    '- Tailor the LANGUAGE complexity to the visitor skill level (' + (req.skill_level || 'beginner') + '). Use simpler words and sentences for beginners, more technical terminology for advanced knitters. NEVER hide, remove, or refuse to provide complex pattern instructions based on skill level — always include the full instructions regardless of declared skill level.',\n    '- Never mention AI, models, prompts, n8n, OpenRouter, tokens or backend systems.',\n    '- Do not invent stitch counts, yarn brands or book titles.',\n    ''\n  ].join('\\n');\n\n  const questionText = req.question || 'What stitch, technique or issue can you see in this photo?';\n\n  const visionPayload = {\n    model: req.model || req.requested_model || 'google/gemini-2.5-flash',\n    messages: [\n      { role: 'system', content: visionPrompt },\n      { role: 'user', content: [\n        { type: 'image_url', image_url: { url: req.image_data_uri } },\n        { type: 'text', text: questionText }\n      ]}\n    ],\n    temperature: 0.3,\n    max_tokens: 900\n  };\n\n  return [{\n    json: {\n      ...req,\n      sources: [],\n      context_count: 0,\n      openrouter_payload: visionPayload,\n      model: req.model || req.requested_model || 'google/gemini-2.5-flash'\n    }\n  }];\n}\n\nconst patternInstructionText = String(req.pattern_instruction_text || '').trim();\nconst patternPriority = req.answer_mode === 'pattern_priority' || req.answer_mode === 'pattern_instruction_text' || Boolean(patternInstructionText);\nconst allItems = $input.all();\nconst seen = new Set();\nconst sources = [];\nconst contextBlocks = [];\n\nfor (const item of allItems) {\n  const json = item.json;\n  const isScroll = json._scroll === true;\n\n  let hits = [];\n  if (isScroll) {\n    const points = (json.result && json.result.points) ? json.result.points : [];\n    hits = points.map(p => ({ payload: p.payload || {}, chunk_index: (p.payload || {}).chunk_index }));\n  } else {\n    hits = Array.isArray(json.result) ? json.result : [];\n  }\n\n  const minScore = patternPriority ? -1.0 : Number(req.score_threshold || 0.25);\n\n  for (const hit of hits) {\n    if (!hit) continue;\n    if (!isScroll && typeof hit.score === 'number' && hit.score < minScore) continue;\n\n    const payload = hit.payload || {};\n    const content = String(payload.content || '').trim();\n    if (!content) continue;\n\n    const chunkIndex = payload.chunk_index ?? 0;\n    const key = `${payload.project_id || payload.file_id || payload.job_id || payload.title || 'Untitled'}::${chunkIndex}`;\n    if (seen.has(key)) continue;\n    seen.add(key);\n\n    const source = {\n      title: payload.title || req.uploaded_pattern_title || 'Selected pattern source',\n      url: payload.url || '',\n      drive_link: payload.drive_link || '',\n      chunk_index: chunkIndex,\n      score: isScroll ? null : (hit.score ?? null)\n    };\n    sources.push(source);\n    contextBlocks.push({ index: chunkIndex, text: [\n      `CHUNK ${chunkIndex}`,\n      content\n    ].join('\\n') });\n  }\n}\n\ncontextBlocks.sort((a, b) => a.index - b.index);\nconst context = contextBlocks.map(b => b.text).join('\\n\\n---\\n\\n');\n\nconst memoryText = (Array.isArray(req.memory) ? req.memory : [])\n  .slice(-8)\n  .map(m => `${m.role === 'assistant' ? 'Assistant' : 'Visitor'}: ${String(m.content || '').slice(0, 800)}`)\n  .join('\\n');\n\nconst isStepGuide = req.tool_mode === 'pattern_step_guide';\nconst hasInlineInstructionText = Boolean(patternInstructionText);\nconst chunkCount = contextBlocks.length + (hasInlineInstructionText ? 1 : 0);\nconst patternSummaryFallback = [\n  req.uploaded_pattern_summary,\n  req.pattern_summary_text,\n  req.pattern_summary_html,\n  req.pattern_summary_structured ? JSON.stringify(req.pattern_summary_structured) : '',\n  req.pattern_metadata ? JSON.stringify(req.pattern_metadata) : ''\n].filter(Boolean).join('\\n\\n');\nconst hasScopedPatternContext = Boolean(req.project_id || req.file_id || req.job_id);\nconst usingPatternSummaryFallback = patternPriority && sources.length === 0 && Boolean(patternSummaryFallback);\n\nconst stepGuidePreamble = isStepGuide\n  ? `\\nCRITICAL: Use the selected pattern context below as primary evidence. If extracted uploaded PDF text is present, it is more authoritative than vector search chunks or summaries. Read through ALL supplied pattern text carefully. Do NOT say you only have a summary or that you need more information when row/round instructions are present. Your job is to expand the instructions into a fully written-out, stitch-by-stitch, row-by-row guide. Never use \"rep Row X\" or \"rep from *\" — write every row in full.\\n`\n  : '';\n\nconst patternNotFoundWarning = (patternPriority && !hasInlineInstructionText && !usingPatternSummaryFallback && sources.length === 0)\n  ? '\\nCRITICAL: This request is for one selected pattern only. If the selected pattern text is missing, do NOT use any other pattern knowledge and do NOT guess. Politely say that the selected pattern content was not available and ask the visitor to re-upload or re-import that exact pattern.\\n'\n  : '';\n\nconst systemPrompt = [\n  'You are StitchSense, a calm, practical knitting and crochet assistant for a WordPress website based in the United Kingdom.',\n  '',\n  'Language and measurement rules:',\n  '- Always use British English spelling, grammar and terminology.',\n  '- Never default to American English spellings, wording or measurements.',\n  '- Always default to UK metric measurements where relevant: millimetres, centimetres, metres, grams and kilograms.',\n  '- For knitting needles and crochet hooks, default to UK/EU metric sizing in millimetres, such as 4 mm, 5 mm or 6.5 mm.',\n  '- For yarn quantities, default to grams rather than ounces.',\n  '- For lengths, default to centimetres or metres rather than inches or yards.',\n  '- Only mention imperial measurements if the visitor specifically asks for them or if converting a US pattern.',\n  '- If the source material uses US or imperial terms, explain them in UK-friendly metric terms.',\n  '- If stitch terminology could be US or UK crochet terminology, clearly explain the UK equivalent without being patronising.',\n  '',\n  'Style rules:',\n  '- Use plain, natural UK English.',\n  '- Keep answers friendly, practical and easy to follow.',\n  '- Do not use LaTeX, formula blocks or raw markdown asterisks.',\n  '- Use short sections, short paragraphs and clear numbered steps when useful.',\n  '- Make maths readable with worked examples rather than abstract formulas.',\n  '- Never mention Qdrant, embeddings, RAG, n8n, prompts or vector databases.',\n  '- Do not invent pattern instructions, stitch counts, yarn weights, book titles, page numbers or citations.',\n  '- If the context is weak, say what you can infer generally and ask one useful follow-up question.',\n  '- When the visitor asks for a step-by-step row-by-row guide or a pattern rewrite, you MUST fully expand every instruction. Never use \"rep Row X\" or \"rep from *\". Write out every single row in full, stitch by stitch. Replace every abbreviation reference with the complete stitch-by-stitch text. The reader must be able to follow the guide without needing to look up rows in other parts of the pattern. This is NOT optional.',\n  '- Tailor the LANGUAGE complexity to the visitor skill level (' + (req.skill_level || 'beginner') + '). Use simpler words and sentences for beginners, more technical terminology for advanced knitters. NEVER hide, remove, or refuse to provide complex pattern instructions based on skill level — always include the full instructions regardless of declared skill level.',\n  '- If answer_mode is pattern_priority or pattern_instruction_text, use only the selected pattern context supplied in this request. Never pull instructions, titles, stitch counts, sizes, yarn details, or summaries from any other pattern.',\n  '- General knitting knowledge may help explain techniques, but it must never replace or override the selected pattern context.',\n  stepGuidePreamble,\n  patternNotFoundWarning,\n  req.system_instruction || ''\n].filter(Boolean).join('\\n');\n\nconst selectedPatternContextText = hasInlineInstructionText\n  ? `Extracted uploaded PDF instruction text from the selected pattern. Treat this as the primary source for row-by-row and step-by-step requests.\\n${req.pattern_instruction_prompt || ''}\\n\\n${patternInstructionText}`\n  : (usingPatternSummaryFallback\n      ? `Selected pattern fallback context:\\n${patternSummaryFallback}`\n      : (context || (patternPriority\n          ? 'The selected pattern content was not available. Do not answer using any other pattern. Ask the visitor to re-upload or re-import the selected pattern.'\n          : 'No strong matching context was found.')));\n\nconst userPrompt = [\n  `Visitor skill level: ${req.skill_level}`,\n  patternPriority ? `Selected pattern title: ${req.uploaded_pattern_title || 'Unknown pattern'}` : '',\n  patternPriority ? `Pattern source: ${req.pattern_source || 'Unknown source'}` : '',\n  patternPriority ? `Scoped retrieval available: ${hasScopedPatternContext ? 'yes' : 'no'}` : '',\n  '',\n  'Recent conversation:',\n  memoryText || 'No previous messages.',\n  '',\n  'Visitor question:',\n  req.question,\n  '',\n  patternPriority ? 'Selected pattern context:' : 'Knowledge-base context:',\n  selectedPatternContextText,\n  '',\n  'Return only the helpful answer. Do not include visible source links.'\n].filter(Boolean).join('\\n');\n\nconst stepGuideModel = 'google/gemini-2.5-flash';\nconst defaultModel = req.model || req.requested_model || 'qwen/qwen-2.5-72b-instruct';\n\nconst payload = {\n  model: isStepGuide ? stepGuideModel : defaultModel,\n  messages: [\n    { role: 'system', content: systemPrompt },\n    { role: 'user', content: userPrompt }\n  ],\n  temperature: 0.3,\n  max_tokens: (isStepGuide || req.tool_mode === 'pattern_rewrite' || req.tool_mode === 'pattern_summary') ? 12000 : 700\n};\n\nreturn [{\n  json: {\n    ...req,\n    sources,\n    context_count: sources.length,\n    openrouter_payload: payload,\n    model: isStepGuide ? stepGuideModel : defaultModel,\n    using_pattern_summary_fallback: usingPatternSummaryFallback,\n    using_inline_instruction_text: hasInlineInstructionText,\n    has_scoped_pattern_context: hasScopedPatternContext\n  }\n}];"
+      },
+      "id": "31428181-747f-446b-91bb-45fe64bfa205",
+      "name": "Build RAG Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6048,
+        -2240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + $env.OPENROUTER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $env.SITE_URL || \"https://your-website-domain.co.uk\" }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "StitchSense Craft Hub"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.openrouter_payload }}",
+        "options": {
+          "timeout": 240000
+        }
+      },
+      "id": "a803b5d0-1ef6-4f02-ade2-7a99556434b1",
+      "name": "Generate Answer - OpenRouter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6288,
+        -2240
+      ],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const rag = $('Build RAG Prompt').first().json;\nlet answer = '';\n\nif (Array.isArray($json.choices) && $json.choices[0]?.message?.content) {\n  answer = String($json.choices[0].message.content).trim();\n} else if ($json.output) {\n  answer = String($json.output).trim();\n} else if ($json.text) {\n  answer = String($json.text).trim();\n}\n\nif (!answer) {\n  answer = 'Sorry, I could not generate a useful answer this time. Please try rewording the question or uploading a clearer photo.';\n}\n\nwhile (answer.includes('\\n\\n\\n')) {\n  answer = answer.replace('\\n\\n\\n', '\\n\\n');\n}\n\nanswer = answer.trim();\n\nconst previous = Array.isArray(rag.memory) ? rag.memory : [];\nconst updatedMemory = [\n  ...previous,\n  { role: 'user', content: rag.question || '(image sent)', at: rag.requested_at },\n  { role: 'assistant', content: answer, at: new Date().toISOString() }\n].slice(-12);\n\nconst modelName = rag.model || 'qwen/qwen-2.5-72b-instruct';\n\nreturn [{\n  json: {\n    success: true,\n    provider: 'openrouter',\n    model: modelName,\n    answer,\n    sources: [],\n    context_count: rag.context_count,\n    session_id: rag.session_id,\n    redis_key: rag.redis_key,\n    memory_json: JSON.stringify(updatedMemory),\n    answered_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "d2e4d2aa-83e4-4ffc-95d3-c48d15ff79cf",
+      "name": "Format Chat Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6528,
+        -2240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, provider: $('Format Chat Response').first().json.provider, model: $('Format Chat Response').first().json.model, answer: $('Format Chat Response').first().json.answer, sources: [], context_count: $('Format Chat Response').first().json.context_count, session_id: $('Format Chat Response').first().json.session_id, answered_at: $('Format Chat Response').first().json.answered_at } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "8a1e5370-4f37-4b99-ac37-1c6f7431e553",
+      "name": "Return Answer",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        7008,
+        -2240
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Request OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request OK?": {
+      "main": [
+        [
+          {
+            "node": "Is Reset?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Reset?": {
+      "main": [
+        [
+          {
+            "node": "Return Reset",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Memory": {
+      "main": [
+        [
+          {
+            "node": "Create Query Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Query Embedding": {
+      "main": [
+        [
+          {
+            "node": "Prepare Qdrant Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Qdrant Search": {
+      "main": [
+        [
+          {
+            "node": "Search Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Build RAG Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build RAG Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Answer - OpenRouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Answer - OpenRouter": {
+      "main": [
+        [
+          {
+            "node": "Format Chat Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Chat Response": {
+      "main": [
+        [
+          {
+            "node": "Return Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "46852f22-5ed4-4b67-a4e0-ae67b734ab69",
+  "meta": {
+    "instanceId": "e6196144e482071e7b431ee2b96cf6f09a5ca39a346f781cd91c66a370f52ea7"
+  },
+  "nodeGroups": [],
+  "id": "1BXg9wjO3kzkvxcV",
+  "tags": []
+}

@@ -1,0 +1,12 @@
+services:
+  api:
+    build:
+      context: ./stitchsense-api
+    container_name: stitchsense-api
+    restart: unless-stopped
+    env_file:
+      - ./stitchsense-api/.env.vps
+    ports:
+      - "4445:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

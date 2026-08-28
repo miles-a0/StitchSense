@@ -1,0 +1,4 @@
+# Copy this to gradle.properties locally or set these values in CI.
+# The public Android SDK key comes from RevenueCat > Project Settings > API keys.
+REVENUECAT_ANDROID_API_KEY=
+REVENUECAT_ENTITLEMENT_ID=pro

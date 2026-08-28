@@ -1,0 +1,119 @@
+{
+  "name": "StitchSense Library API Proxy v2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stitchsense-library-proxy",
+        "responseMode": "lastNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "db44b09f-3f31-49f3-97d7-602e132a1ba9",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -800
+      ],
+      "webhookId": "stitchsense-library-proxy"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst b = raw.body || raw;\nconst action = b.action || '';\nconst uid = Number(b.wp_user_id) || 0;\nconst esc = s => String(s || '').replace(/'/g, \"''\");\n\nif (!uid) return [{ json: { success: false, error: 'Missing wp_user_id' } }];\n\nlet query = '';\n\nif (action === 'list_patterns') {\n  const search = esc(b.search || '');\n  const craft = esc(b.craft || '');\n  const sort = b.sort || 'recent';\n  const page = Math.max(1, Number(b.page) || 1);\n  const per = Math.min(50, Math.max(1, Number(b.per_page) || 20));\n  const offset = (page - 1) * per;\n  const order = sort === 'oldest' ? 'created_at ASC' : (sort === 'title' ? 'title ASC' : 'created_at DESC');\n  let extra = '';\n  if (search) extra += ` AND (up.title ILIKE '%${search}%' OR up.pattern_summary_text ILIKE '%${search}%' OR up.detected_design_code ILIKE '%${search}%')`;\n  if (craft) extra += ` AND up.craft_type = '${craft}'`;\n  query = `SELECT up.*, COALESCE(cc.cnt,0) AS chat_count, COALESCE(rc.cnt,0) AS rewrite_count, COUNT(*) OVER() AS total_count FROM user_patterns up LEFT JOIN (SELECT pattern_id, COUNT(*) AS cnt FROM chat_sessions GROUP BY pattern_id) cc ON cc.pattern_id = up.id LEFT JOIN (SELECT pattern_id, COUNT(*) AS cnt FROM rewrite_sessions GROUP BY pattern_id) rc ON rc.pattern_id = up.id WHERE up.wp_user_id = ${uid} AND up.is_archived = FALSE${extra} ORDER BY ${order} LIMIT ${per} OFFSET ${offset}`;\n  return [{ json: { action, uid, query, extra: { page, per } } }];\n}\n\nif (action === 'save_pattern') {\n  const title = esc(b.title || b.detected_title || 'Untitled');\n  const craft = esc(b.craft_type || b.detected_design_code || '');\n  const fn = esc(b.original_filename || b.filename || '');\n  const furl = esc(b.file_url || b.drive_link || '');\n  const sh = esc(b.pattern_summary_html || '');\n  const st = esc(b.pattern_summary_text || '');\n  const ss = esc(JSON.stringify(b.pattern_summary_structured || b.structured_data || {}));\n  const dc = esc(b.detected_design_code || '');\n  const pid = esc(b.project_id || '');\n  const fid = esc(b.file_id || '');\n  const jid = esc(b.job_id || '');\n  const md = esc(JSON.stringify(b.metadata || {}));\n  const src = esc(b.source || 'upload');\n  const parent = b.parent_pattern_id ? `'${esc(b.parent_pattern_id)}'` : 'NULL';\n  if (pid) {\n    query = `INSERT INTO user_patterns (wp_user_id,title,craft_type,original_filename,file_url,pattern_summary_html,pattern_summary_text,pattern_summary_structured,detected_design_code,project_id,file_id,job_id,metadata,source,parent_pattern_id) VALUES (${uid},'${title}','${craft}','${fn}','${furl}','${sh}','${st}','${ss}','${dc}','${pid}','${fid}','${jid}','${md}','${src}',${parent}) ON CONFLICT (project_id) DO UPDATE SET title=EXCLUDED.title, craft_type=EXCLUDED.craft_type, original_filename=EXCLUDED.original_filename, file_url=EXCLUDED.file_url, pattern_summary_html=EXCLUDED.pattern_summary_html, pattern_summary_text=EXCLUDED.pattern_summary_text, pattern_summary_structured=EXCLUDED.pattern_summary_structured, detected_design_code=EXCLUDED.detected_design_code, file_id=EXCLUDED.file_id, job_id=EXCLUDED.job_id, metadata=EXCLUDED.metadata, source=EXCLUDED.source, parent_pattern_id=EXCLUDED.parent_pattern_id, updated_at=NOW() RETURNING id`;\n  } else {\n    query = `INSERT INTO user_patterns (wp_user_id,title,craft_type,original_filename,file_url,pattern_summary_html,pattern_summary_text,pattern_summary_structured,detected_design_code,file_id,job_id,metadata,source,parent_pattern_id) VALUES (${uid},'${title}','${craft}','${fn}','${furl}','${sh}','${st}','${ss}','${dc}','${fid}','${jid}','${md}','${src}',${parent}) RETURNING id`;\n  }\n  return [{ json: { action, uid, query } }];\n}\n\nif (action === 'get_pattern') {\n  const id = esc(b.id || '');\n  query = `SELECT up.*, COALESCE(cc.cnt,0) AS chat_count, COALESCE(rc.cnt,0) AS rewrite_count FROM user_patterns up LEFT JOIN (SELECT pattern_id, COUNT(*) AS cnt FROM chat_sessions GROUP BY pattern_id) cc ON cc.pattern_id = up.id LEFT JOIN (SELECT pattern_id, COUNT(*) AS cnt FROM rewrite_sessions GROUP BY pattern_id) rc ON rc.pattern_id = up.id WHERE up.id = '${id}' AND up.wp_user_id = ${uid}`;\n  return [{ json: { action, uid, query, pattern_id: id } }];\n}\n\nif (action === 'delete_pattern') {\n  const id = esc(b.id || '');\n  const hard = b.hard === 'true' || b.hard === true;\n  query = hard ? `DELETE FROM user_patterns WHERE id='${id}' AND wp_user_id=${uid}` : `UPDATE user_patterns SET is_archived=TRUE, updated_at=NOW() WHERE id='${id}' AND wp_user_id=${uid}`;\n  return [{ json: { action, uid, query, hard } }];\n}\n\nif (action === 'update_pattern') {\n  const id = esc(b.id || '');\n  const sets = [];\n  if (b.title !== undefined) sets.push(`title='${esc(b.title)}'`);\n  if (b.craft_type !== undefined) sets.push(`craft_type='${esc(b.craft_type)}'`);\n  if (b.metadata !== undefined) sets.push(`metadata='${esc(JSON.stringify(b.metadata))}'`);\n  if (b.is_archived !== undefined) sets.push(`is_archived=${b.is_archived ? 'TRUE' : 'FALSE'}`);\n  if (!sets.length) return [{ json: { success: false, error: 'No fields to update' } }];\n  query = `UPDATE user_patterns SET ${sets.join(', ')}, updated_at=NOW() WHERE id='${id}' AND wp_user_id=${uid}`;\n  return [{ json: { action, uid, query } }];\n}\n\nreturn [{ json: { success: false, error: 'Unknown action: ' + action } }];"
+      },
+      "id": "7c503be3-ec37-476d-a69a-44d0bdfa543a",
+      "name": "Build Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        -800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query || $input.first().json.query }}",
+        "options": {}
+      },
+      "id": "16502fa2-bb7e-435d-b604-39c1064c2817",
+      "name": "Run Query",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2304,
+        -800
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "BnqdD57TF2juMQUD",
+          "name": "stitchsense-postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconst all = rows.map(r => r.json);\nconst patterns = all.filter(p => p && p.id);\nconst first = patterns.length > 0 ? patterns[0] : null;\nconst total = first ? (Number(first.total_count) || 0) : 0;\nreturn [{ json: { success: true, patterns, total, page: 1, pages: Math.max(1, Math.ceil(total / 20)) } }];"
+      },
+      "id": "d1425b06-aa83-48a1-b044-cbc542e1e994",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2544,
+        -800
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Query": {
+      "main": [
+        [
+          {
+            "node": "Run Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Query": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2f14350a-d8ca-4299-a564-35efeea1aa6b",
+  "meta": {
+    "instanceId": "e6196144e482071e7b431ee2b96cf6f09a5ca39a346f781cd91c66a370f52ea7"
+  },
+  "nodeGroups": [],
+  "id": "Gm0voSzEImC4kzfb",
+  "tags": []
+}

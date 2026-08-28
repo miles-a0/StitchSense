@@ -1,0 +1,40 @@
+{
+  "color": {
+    "background": "#fff7ef",
+    "surface": "#ffffff",
+    "surfaceWarm": "#fffaf5",
+    "text": "#2b1f1a",
+    "muted": "#755f55",
+    "primary": "#6f3f25",
+    "primaryHover": "#452717",
+    "accent": "#b2764a",
+    "success": "#3f8f55",
+    "warning": "#b27822",
+    "danger": "#b84a3f",
+    "border": "rgba(104, 64, 42, 0.16)"
+  },
+  "radius": {
+    "small": 8,
+    "medium": 12,
+    "large": 16,
+    "sheet": 24
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "xxl": 32
+  },
+  "typography": {
+    "brand": "Comfortaa",
+    "fallback": "system",
+    "buttonWeight": 700
+  },
+  "component": {
+    "controlHeight": 44,
+    "compactControlHeight": 38,
+    "cardBorderWidth": 1
+  }
+}
