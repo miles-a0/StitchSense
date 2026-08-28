@@ -23,20 +23,20 @@ Close exploitable security and recoverability risks first, then run application 
 
 ### 1. Establish a recoverable baseline — P0
 
-- [ ] Create one project-wide Git repository that includes the Expo app, API, WordPress plugin source, migrations, scripts, and release documentation.
-- [ ] Preserve the current Expo history, remove backup/generated ZIPs from the release source tree, and commit the current known state.
+- [x] Create one project-wide Git repository that includes the Expo app, API, WordPress plugin source, migrations, scripts, and release documentation.
+- [x] Preserve the current Expo history, remove backup/generated ZIPs from the release source tree, and commit the current known state.
 - [ ] Configure a private remote repository, protected main branch, pull-request checks, and secret scanning.
 - [ ] Remove published demo credentials and disable or rotate the live demo account before public testing.
-- [ ] Inventory production services, versions, owners, DNS/proxy configuration, and credential locations without copying secret values into documentation.
+- [x] Inventory production services, versions, owners, DNS/proxy configuration, and credential locations without copying secret values into documentation.
 - [ ] Take and verify a PostgreSQL backup and document the object-storage backup/recovery method.
 
 **Exit gate:** The entire release source is versioned and remotely recoverable; production data has a verified backup; no public reusable credentials remain.
 
 ### 2. Contain and repair critical security risks — P0
 
-- [ ] Remove client control of WordPress bridge destinations in `/auth/wordpress-login` and `/auth/wordpress-register`; use an exact configured-host allowlist and block private/link-local redirects.
+- [x] Remove client control of WordPress bridge destinations in `/auth/wordpress-login` and `/auth/wordpress-register`; use an exact configured-host allowlist and block private/link-local redirects.
 - [ ] Rotate `WORDPRESS_BRIDGE_SHARED_SECRET` after deploying the bridge fix, revoke active refresh tokens as appropriate, and audit linked administrator accounts.
-- [ ] Upgrade or replace the vulnerable Fastify JWT dependency chain and apply safe backend dependency patches.
+- [x] Upgrade or replace the vulnerable Fastify JWT dependency chain and apply safe backend dependency patches.
 - [ ] Triage Expo dependency advisories, apply compatible patches, and record any build-only residual findings with justification and an upgrade target.
 - [ ] Add startup validation that refuses production boot with default, empty, malformed, or development credentials.
 - [ ] Apply authentication-specific rate limits to login, registration, refresh, password reset, and WordPress bridge routes.
