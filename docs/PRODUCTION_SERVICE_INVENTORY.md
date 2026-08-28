@@ -8,15 +8,15 @@
 - Canonical source: private GitHub repository `miles-a0/StitchSense`, default branch `main`.
 - Production API deployment path documented by the project: `/opt/stitchsense-mobile/backend`.
 - API deployment unit: Docker Compose service `api`, container `stitchsense-api`, host port `4445` to container port `8080`, restart policy `unless-stopped`.
-- Production environment file: `/opt/stitchsense-mobile/backend/stitchsense-api/.env.vps`. The file contains operational secrets and must remain owner-readable only; values are not recorded here.
-- Documented host access: SSH to `root@173.249.40.161`. None of the SSH identities currently available on the development machine are authorised by that host.
+- Production environment file: `/opt/stitchsense-mobile/backend/stitchsense-api/.env.vps`. The file contains operational secrets, is owned by `root:root`, and was corrected from mode `0644` to owner-only mode `0600`; values are not recorded here.
+- Host access: SSH to `root@173.249.40.161` using the authorised development-machine key.
 
 ## Public services
 
 | Service | Public endpoint | DNS / host | Evidence |
 |---|---|---|---|
 | Mobile API | `https://stitchsense.zu-auto.co.uk` | `173.249.40.161` | `/health` returned HTTP 200 with service `stitchsense-api` |
-| WordPress site and bridge | `https://stitchsense.co.uk` | `185.151.30.187` | Bridge endpoint is reachable and rejects unauthenticated requests with HTTP 401 |
+| WordPress site and bridge | `https://catlowyarns.co.uk` | `185.151.30.187` | A configured-host bridge smoke test reached WordPress and correctly rejected dummy credentials with HTTP 401 |
 
 The API certificate is a Let's Encrypt certificate for `stitchsense.zu-auto.co.uk`, observed valid from 15 August to 13 November 2026. Renewal ownership and alert routing are not documented in the repository and must be assigned.
 
@@ -54,8 +54,8 @@ Security-relevant observations:
 - The configured endpoint uses the internal hostname `minio`, so it is reachable from the production network but not from the development machine.
 - Configured bucket name: `stitchsense-patterns`.
 - Database references currently identify 70 stored objects: 58 pattern files, 7 project photos, and 5 stash images.
-- Although TCP ports 9000 and 9001 answer on the VPS, the public port 9000 response is not a valid S3 API response. It must not be treated as a backup endpoint.
-- A verified object backup therefore requires SSH/production-network access. The recovery method should use MinIO Client (`mc mirror`) or an S3-compatible versioned replication target, preserve metadata, and validate the resulting object count against both the source bucket and database references.
+- The MinIO container maps API port 9000 to VPS port 9075 and console port 9001 to VPS port 9076. VPS port 9000 belongs to Portainer and must not be treated as an S3 endpoint.
+- The production bucket contains 81 objects (281,857,297 bytes). This is 11 more than the 70 current database file references; preserve them until reconciliation determines whether they are historical, derived, or orphaned.
 
 ## Backup evidence
 
@@ -63,11 +63,21 @@ Security-relevant observations:
 - Source archive SHA-256: `4ec39c21ffd29443f4780b816c3dd834449acc020386b416252af77c4132b282`.
 - Expo history bundle: `expo-history.bundle` in the same protected directory and verified as a readable Git bundle.
 - PostgreSQL custom-format backup: `stitchsense_mobile-20260828-baseline.dump` (1,335,051 bytes), created with PostgreSQL 16.15 client tools against PostgreSQL 16.14. `pg_restore --list` successfully parsed the archive and identified data for all 18 application tables plus sequence state.
-- Object storage backup: blocked until authorised VPS or production-network access is available.
+- Object storage backup: all 81 objects were mirrored with MinIO Client to an owner-only VPS recovery directory, individually SHA-256 verified, copied off-server to the protected local baseline directory, and verified again (81 passed, 0 failed).
+
+## Security deployment evidence
+
+- Release source: private repository commit `ad64f78`; bridge hardening was introduced by commit `6f74a73`.
+- Tested and running Docker image: `sha256:7c937a5b2467f902631e8608ef5a49ab6ff76c654bf383b6b4ca0d7269a9d794`.
+- Rollback image: `backend-api:pre-hardening-20260828`; rollback source and the pre-deployment environment file are retained under `/opt/stitchsense-mobile/backups/20260828-pre-hardening` with owner-only access.
+- Canary and live health checks returned HTTP 200.
+- Canary, local production, and public TLS regression probes all rejected a mismatched WordPress host with HTTP 400 before an outbound request.
+- The configured Catlow Yarns WordPress bridge remained reachable after deployment and rejected deliberately invalid credentials with HTTP 401.
+- Bridge-secret rotation is pending WordPress administrative or hosting access.
 
 ## Ownership and access gaps
 
-Before a production release, assign named owners for the VPS/SSH account, DNS and reverse proxy, TLS renewal alerts, PostgreSQL, MinIO, WordPress administration, GitHub administration, incident alerts, and backup restoration. The immediate operational blocker is access to both the VPS and WordPress administration: both are required for an atomic API deployment and bridge-secret rotation.
+Before a production release, assign named owners for the VPS/SSH account, DNS and reverse proxy, TLS renewal alerts, PostgreSQL, MinIO, WordPress administration, GitHub administration, incident alerts, and backup restoration. VPS access is now available. The remaining immediate blocker is WordPress administrative or hosting access, which is required to rotate the bridge secret on both systems atomically.
 
 ## Restore validation
 

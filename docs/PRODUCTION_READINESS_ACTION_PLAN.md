@@ -2,6 +2,8 @@
 
 **Baseline:** 52% production-ready as of 28 August 2026.
 
+**Execution update:** The bridge host restriction is deployed and verified through the public endpoint; PostgreSQL and MinIO backups are verified and stored off-server. Coordinated bridge-secret rotation remains pending WordPress administrative access.
+
 ## Approach
 
 Close exploitable security and recoverability risks first, then run application hardening, billing, data validation, and store preparation in parallel where dependencies allow. A workstream is complete only when its validation evidence is recorded; implementation alone does not move it to done.
@@ -28,7 +30,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [ ] Configure a private remote repository, protected main branch, pull-request checks, and secret scanning.
 - [ ] Remove published demo credentials and disable or rotate the live demo account before public testing.
 - [x] Inventory production services, versions, owners, DNS/proxy configuration, and credential locations without copying secret values into documentation.
-- [ ] Take and verify a PostgreSQL backup and document the object-storage backup/recovery method.
+- [x] Take and verify a PostgreSQL backup and document the object-storage backup/recovery method.
 
 **Exit gate:** The entire release source is versioned and remotely recoverable; production data has a verified backup; no public reusable credentials remain.
 
