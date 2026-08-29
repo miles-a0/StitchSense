@@ -2,7 +2,7 @@
 
 **Baseline:** 52% production-ready as of 28 August 2026.
 
-**Execution update:** The bridge host restriction is deployed and verified through the public endpoint; PostgreSQL and MinIO backups are verified and stored off-server. Coordinated bridge-secret rotation remains pending WordPress administrative access.
+**Execution update:** The bridge host restriction is deployed and verified through the public endpoint; PostgreSQL, MinIO, and WordPress backups are verified and stored off-server; the shared bridge secret is rotated on both systems; and all pre-rotation refresh tokens are revoked.
 
 ## Approach
 
@@ -37,7 +37,7 @@ Close exploitable security and recoverability risks first, then run application 
 ### 2. Contain and repair critical security risks — P0
 
 - [x] Remove client control of WordPress bridge destinations in `/auth/wordpress-login` and `/auth/wordpress-register`; use an exact configured-host allowlist and block private/link-local redirects.
-- [ ] Rotate `WORDPRESS_BRIDGE_SHARED_SECRET` after deploying the bridge fix, revoke active refresh tokens as appropriate, and audit linked administrator accounts.
+- [x] Rotate `WORDPRESS_BRIDGE_SHARED_SECRET` after deploying the bridge fix, revoke active refresh tokens as appropriate, and audit linked administrator accounts.
 - [x] Upgrade or replace the vulnerable Fastify JWT dependency chain and apply safe backend dependency patches.
 - [ ] Triage Expo dependency advisories, apply compatible patches, and record any build-only residual findings with justification and an upgrade target.
 - [ ] Add startup validation that refuses production boot with default, empty, malformed, or development credentials.

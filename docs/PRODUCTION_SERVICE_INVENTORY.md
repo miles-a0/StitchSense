@@ -20,6 +20,8 @@
 
 The API certificate is a Let's Encrypt certificate for `stitchsense.zu-auto.co.uk`, observed valid from 15 August to 13 November 2026. Renewal ownership and alert routing are not documented in the repository and must be assigned.
 
+The WordPress host is managed through 20i/StackCP. At the security deployment, it ran WordPress 7.0.4 and StitchSense plugin 7.7.39. Versions 7.7.16 and 7.7.39 had both been marked active, with the older version loaded first; 7.7.16 was deactivated after a verified database backup, and runtime inspection confirmed 7.7.39.
+
 ## PostgreSQL
 
 - Database: `stitchsense_mobile`
@@ -45,7 +47,7 @@ Security-relevant observations:
 
 - 1 administrator user.
 - 1 documented demo user.
-- 218 active refresh tokens at observation time.
+- 218 active refresh tokens at initial observation; all 218 were revoked after bridge-secret rotation, leaving 0 active pre-rotation tokens.
 - 29 WordPress-linked accounts; none referenced a non-canonical WordPress host.
 
 ## Object storage
@@ -73,11 +75,14 @@ Security-relevant observations:
 - Canary and live health checks returned HTTP 200.
 - Canary, local production, and public TLS regression probes all rejected a mismatched WordPress host with HTTP 400 before an outbound request.
 - The configured Catlow Yarns WordPress bridge remained reachable after deployment and rejected deliberately invalid credentials with HTTP 401.
-- Bridge-secret rotation is pending WordPress administrative or hosting access.
+- The bridge secret was replaced with a new 96-character random value on WordPress and the API. SHA-256 comparison confirmed both stored values match without exposing them.
+- All 218 active refresh tokens were revoked transactionally after rotation and a `security.bridge_secret_rotated` audit event was recorded.
+- Account audit found 1 established administrator, 1 corresponding WordPress link, 28 standard users, 0 orphaned links, 0 unexpected providers, and 0 non-canonical WordPress links.
+- Temporary plaintext rotation files were removed from the Mac, VPS, and WordPress host after verification.
 
 ## Ownership and access gaps
 
-Before a production release, assign named owners for the VPS/SSH account, DNS and reverse proxy, TLS renewal alerts, PostgreSQL, MinIO, WordPress administration, GitHub administration, incident alerts, and backup restoration. VPS access is now available. The remaining immediate blocker is WordPress administrative or hosting access, which is required to rotate the bridge secret on both systems atomically.
+Before a production release, assign named owners for the VPS/SSH account, DNS and reverse proxy, TLS renewal alerts, PostgreSQL, MinIO, WordPress administration, GitHub administration, incident alerts, and backup restoration. Authorised VPS and WordPress-host SSH access are now available for the current maintenance workflow.
 
 ## Restore validation
 
