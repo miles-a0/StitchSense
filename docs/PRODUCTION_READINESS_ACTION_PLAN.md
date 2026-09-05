@@ -44,7 +44,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [x] Apply authentication-specific rate limits to login, registration, refresh, password reset, and WordPress bridge routes.
 - [x] Restrict browser CORS origins, add security headers, validate proxy/IP handling, and review upload limits and MIME/content validation.
 - [x] Move production secrets to appropriately protected storage and restrict any necessary environment file to owner-only permissions.
-- [ ] Run focused authorization tests for cross-user patterns, projects, files, chats, rewrites, stash items, and admin routes (implemented; awaiting the isolated PostgreSQL CI result).
+- [x] Run focused authorization tests for cross-user patterns, projects, files, chats, rewrites, stash items, and admin routes.
 
 **Exit gate:** No unresolved critical/high exploitable backend finding; bridge-secret exfiltration is impossible; rotated credentials are live; authorization tests pass.
 
@@ -64,6 +64,7 @@ Close exploitable security and recoverability risks first, then run application 
 - Backend production dependencies report zero known vulnerabilities after a clean Node 22 `npm ci`.
 - Expo SDK 54 was updated to its supported patch set (`expo` 54.0.37, `expo-constants` 18.0.14, and `expo-file-system` 19.0.24). Compatible audit fixes were applied.
 - The remaining Expo audit report is 10 moderate and 10 high transitive findings in Metro/Expo build tooling (`image-size`, `postcss`, `uuid`, and related dependency chains), with no critical finding. npm's offered remediation is an unsupported breaking jump to Expo 57, so it is deliberately deferred to the SDK 57 upgrade track. These packages are not backend runtime dependencies; CI blocks any new critical advisory and continues to enforce Expo's supported dependency matrix.
+- GitHub Actions run `33967860092` passed all four required jobs, including the isolated PostgreSQL cross-user authorization suite, Expo checks, PHP syntax, secret scanning, dependency audits, and production container build.
 
 ### 4. Build a launch-level automated test suite — P0/P1
 
