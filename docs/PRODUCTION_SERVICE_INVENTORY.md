@@ -71,7 +71,7 @@ Security-relevant observations:
 
 - Release source: private repository commit `ad64f78`; bridge hardening was introduced by commit `6f74a73`.
 - Tested and running Docker image: `sha256:7c937a5b2467f902631e8608ef5a49ab6ff76c654bf383b6b4ca0d7269a9d794`.
-- Rollback image: `backend-api:pre-hardening-20260828`; rollback source and the pre-deployment environment file are retained under `/opt/stitchsense-mobile/backups/20260828-pre-hardening` with owner-only access.
+- Rollback image repository `backend-api`, tag `pre-hardening-20260828`; rollback source and the pre-deployment environment file are retained under `/opt/stitchsense-mobile/backups/20260828-pre-hardening` with owner-only access.
 - Canary and live health checks returned HTTP 200.
 - Canary, local production, and public TLS regression probes all rejected a mismatched WordPress host with HTTP 400 before an outbound request.
 - The configured Catlow Yarns WordPress bridge remained reachable after deployment and rejected deliberately invalid credentials with HTTP 401.

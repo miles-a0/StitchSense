@@ -70,8 +70,9 @@ npm run migration:wordpress -- --input /root/stitchsense-user-export-1.json --em
 Then verify:
 
 ```bash
+auth_header="authorization: Bearer ${ACCESS_TOKEN}"
 curl -s https://stitchsense.zu-auto.co.uk/patterns \
-  -H "authorization: Bearer YOUR_ACCESS_TOKEN"
+  -H "$auth_header"
 npm run validate:pattern-files -- --email user@example.com --limit 20
 ```
 

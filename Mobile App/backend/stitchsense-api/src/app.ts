@@ -1,9 +1,11 @@
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import rawBody from 'fastify-raw-body';
+import { ZodError } from 'zod';
 import { config } from './config.js';
 import { registerAuth } from './middleware/auth.js';
 import { adminRoutes } from './routes/admin.js';
@@ -21,9 +23,8 @@ import { syncRoutes } from './routes/sync.js';
 import { userRoutes } from './routes/users.js';
 import { visionRoutes } from './routes/vision.js';
 
-const MAX_PATTERN_UPLOAD_BYTES = 110 * 1024 * 1024;
-
 export async function buildApp() {
+  const allowedOrigins = new Set(config.corsOrigins.map((origin) => new URL(origin).origin));
   const app = Fastify({
     logger: {
       redact: {
@@ -42,14 +43,28 @@ export async function buildApp() {
         censor: '[redacted]',
       },
     },
-    bodyLimit: MAX_PATTERN_UPLOAD_BYTES,
+    bodyLimit: config.maxPatternUploadBytes,
+    trustProxy: config.trustProxy.length > 0 ? config.trustProxy : false,
   });
 
-  await app.register(cors, { origin: true });
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false,
+  });
+  await app.register(cors, {
+    origin(origin, callback) {
+      if (!origin || config.nodeEnv !== 'production' || allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
   await app.register(jwt, { secret: config.jwtSecret });
   await app.register(multipart, {
     limits: {
-      fileSize: MAX_PATTERN_UPLOAD_BYTES,
+      fileSize: config.maxPatternUploadBytes,
       files: 1,
     },
   });
@@ -61,6 +76,25 @@ export async function buildApp() {
   });
   await app.register(rateLimit, { max: 600, timeWindow: '1 minute' });
   await registerAuth(app);
+
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof ZodError) {
+      return reply.code(400).send({
+        error: 'Invalid request',
+        issues: error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
+      });
+    }
+
+    const handledError = error as Error & { statusCode?: number };
+    const statusCode = typeof handledError.statusCode === 'number' && handledError.statusCode >= 400
+      ? handledError.statusCode
+      : 500;
+    if (statusCode >= 500) {
+      request.log.error({ err: error }, 'Unhandled request error');
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+    return reply.code(statusCode).send({ error: handledError.message });
+  });
 
   app.get('/health', async () => ({ ok: true, service: 'stitchsense-api' }));
 
