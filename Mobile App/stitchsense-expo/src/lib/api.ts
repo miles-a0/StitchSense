@@ -1790,6 +1790,9 @@ export const stitchSenseAPI = {
       method: 'POST',
       token,
       body,
+      // Ravelry may download a PDF and wait for the analysis workflow before
+      // returning. Keep this aligned with the long-running upload endpoints.
+      timeoutMs: 600000,
     });
     return {
       ...payload,

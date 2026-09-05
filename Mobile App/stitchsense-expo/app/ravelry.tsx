@@ -257,6 +257,7 @@ export default function RavelryScreen() {
   const [isImporting, setIsImporting] = useState(false);
   const [importingPatternId, setImportingPatternId] = useState<string | null>(null);
   const [locallyImportedIds, setLocallyImportedIds] = useState<string[]>([]);
+  const [locallyImportedPatternIds, setLocallyImportedPatternIds] = useState<Record<string, string>>({});
   const [lastConnectUrl, setLastConnectUrl] = useState<string | null>(null);
   const [openFilter, setOpenFilter] = useState<string | null>(null);
   const [lastImportDebug, setLastImportDebug] = useState<string | null>(null);
@@ -541,11 +542,15 @@ export default function RavelryScreen() {
 
   async function importPattern(pattern: RavelryPattern) {
     if (!accessToken) return;
+    const existingLibraryPatternId =
+      patterns.find((candidate) => extractRavelryIdFromMetadata(candidate.metadata) === pattern.id)?.id ??
+      locallyImportedPatternIds[pattern.id];
     setIsImporting(true);
     setImportingPatternId(pattern.id);
     try {
       const response = await stitchSenseAPI.ravelryImport(accessToken, {
         id: pattern.id,
+        libraryPatternId: existingLibraryPatternId,
         pattern: pattern.raw ?? (pattern as unknown as Record<string, unknown>),
       });
       setLocallyImportedIds((current) =>
@@ -583,12 +588,17 @@ export default function RavelryScreen() {
 
       if (matchedImportedPattern) {
         upsertPattern(matchedImportedPattern);
+        setLocallyImportedPatternIds((current) => ({
+          ...current,
+          [pattern.id]: matchedImportedPattern.id,
+        }));
         setLastImportedLibraryPatternId(matchedImportedPattern.id);
       }
 
       setLastImportDebug(
         [
           `requested=${pattern.id}`,
+          `operation=${existingLibraryPatternId ? 're-import' : 'import'}`,
           `responsePattern=${response.pattern ? 'yes' : 'no'}`,
           `responseId=${response.id ?? 'none'}`,
           `matchedLibrary=${matchedImportedPattern ? 'yes' : 'no'}`,
@@ -612,10 +622,14 @@ export default function RavelryScreen() {
           : typeof (response as Record<string, unknown>).visibilityWarning === 'string'
           ? String((response as Record<string, unknown>).visibilityWarning)
           : response.analysisSucceeded
-            ? 'Ravelry pattern imported and summarised.'
+            ? existingLibraryPatternId
+              ? 'Ravelry pattern re-imported and summarised.'
+              : 'Ravelry pattern imported and summarised.'
             : response.downloadError
-              ? `Imported with a PDF issue: ${response.downloadError}`
-              : 'Ravelry pattern imported to your library.',
+              ? `${existingLibraryPatternId ? 'Re-imported' : 'Imported'} with a PDF issue: ${response.downloadError}`
+              : existingLibraryPatternId
+                ? 'Ravelry pattern updated in your library.'
+                : 'Ravelry pattern imported to your library.',
       );
     } catch (error) {
       const message = getUserFacingErrorMessage(error, {
@@ -724,7 +738,8 @@ export default function RavelryScreen() {
   function importedLibraryPatternId(ravelryId: string) {
     return (
       patterns.find((candidate) => extractRavelryIdFromMetadata(candidate.metadata) === ravelryId)?.id ??
-      (lastImportedLibraryPatternId && importedRavelryIds.has(ravelryId) ? lastImportedLibraryPatternId : null)
+      locallyImportedPatternIds[ravelryId] ??
+      null
     );
   }
 
@@ -1007,6 +1022,7 @@ export default function RavelryScreen() {
                       variant="ghost"
                     />
                     <BrandButton
+                      disabled={isImporting}
                       label={
                         isImporting && importingPatternId === pattern.id
                           ? 'Importing…'
@@ -1016,6 +1032,7 @@ export default function RavelryScreen() {
                       }
                       onPress={() => void importPattern(pattern)}
                       style={styles.fullWidth}
+                      variant={importedRavelryIds.has(pattern.id) ? 'success' : 'primary'}
                     />
                     {importedLibraryPatternId(pattern.id) ? (
                       <>

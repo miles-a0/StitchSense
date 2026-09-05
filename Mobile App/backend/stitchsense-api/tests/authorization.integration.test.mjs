@@ -106,6 +106,44 @@ test('authenticated users cannot read, change, or delete another user\'s records
     assert.equal(response.statusCode, 403);
   });
 
+  await t.test('repeated Ravelry creates update the existing library row', async () => {
+    const ravelryId = 'ravelry-idempotency-test';
+    const first = await app.inject({
+      method: 'POST',
+      url: '/patterns',
+      headers: { authorization },
+      payload: {
+        title: 'First Ravelry import',
+        source: 'ravelry',
+        metadata: { external_service: 'ravelry', ravelry_id: ravelryId },
+      },
+    });
+    assert.equal(first.statusCode, 201, first.body);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/patterns',
+      headers: { authorization },
+      payload: {
+        title: 'Updated Ravelry import',
+        source: 'ravelry',
+        metadata: { external_service: 'ravelry', ravelry_id: ravelryId },
+      },
+    });
+    assert.equal(second.statusCode, 201, second.body);
+    assert.equal(second.json().pattern.id, first.json().pattern.id);
+    assert.equal(second.json().pattern.title, 'Updated Ravelry import');
+
+    const rows = await client.query(
+      `SELECT id, title
+       FROM user_patterns
+       WHERE user_id = $1 AND metadata->>'ravelry_id' = $2 AND deleted_at IS NULL`,
+      [attackerId, ravelryId],
+    );
+    assert.equal(rows.rowCount, 1);
+    assert.equal(rows.rows[0].title, 'Updated Ravelry import');
+  });
+
   const unchanged = await client.query(
     `SELECT
        (SELECT title FROM user_patterns WHERE id = $1) AS pattern_title,
