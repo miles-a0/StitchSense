@@ -1,0 +1,130 @@
+name: Production checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend build, test, audit, and image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16.14-alpine3.23@sha256:42b8b8b29c8a4e933d88943e5b03001a78794905cf786e6e7634e9f2abd5a0d3
+        env:
+          POSTGRES_DB: stitchsense_test
+          POSTGRES_USER: stitchsense_test
+          POSTGRES_PASSWORD: integration-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stitchsense_test -d stitchsense_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: Mobile App/backend/stitchsense-api
+    env:
+      TEST_DATABASE_URL: postgres://stitchsense_test:integration-test-only@127.0.0.1:5432/stitchsense_test
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Use Node.js 22.23.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.0
+          cache: npm
+          cache-dependency-path: Mobile App/backend/stitchsense-api/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build and test, including cross-user authorization
+        run: npm test
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Build the production image
+        run: docker build --pull=false --tag stitchsense-api:${{ github.sha }} .
+
+  expo:
+    name: Expo lint, types, dependencies, and Doctor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: Mobile App/stitchsense-expo
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Use Node.js 22.23.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.0
+          cache: npm
+          cache-dependency-path: Mobile App/stitchsense-expo/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify Expo package compatibility
+        run: npx expo install --check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run Expo Doctor
+        run: npx expo-doctor
+
+      - name: Block critical dependency advisories
+        run: npm audit --omit=dev --audit-level=critical
+
+  php:
+    name: PHP syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Lint tracked PHP files
+        shell: bash
+        run: git ls-files -z '*.php' | xargs -0 -n1 php -l
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install pinned Gitleaks
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl --fail --location --silent --show-error \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output "$archive"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+
+      - name: Scan the release tree for secrets
+        run: |
+          "$RUNNER_TEMP/gitleaks" detect --source . --no-git --redact --verbose
