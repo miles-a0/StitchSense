@@ -4,7 +4,9 @@
 
 **Execution update (5 September 2026):** The bridge host restriction is deployed and verified; backups are verified off-server; the bridge secret is rotated; pre-rotation sessions are revoked; the published demo login is retired; backend production configuration, authentication throttling, CORS, headers, proxy handling, and upload validation are hardened; Node 22 builds and CI gates are deterministic; and Expo SDK 54 passes lint, typecheck, dependency compatibility, and all 18 Expo Doctor checks.
 
-**Performance update (5 September 2026):** Mobile library/Ravelry refresh hot paths were reduced, AI chat now calls the workflow directly before WordPress fallback, production API image `sha256:ffee03df2584e87652b2eabb3442f83de3d74debcf2521585b40cf93afac20ab` is live, and the StitchSense Nginx Proxy Manager host has 600 second read/send timeouts for long Ravelry imports.
+**Performance update (5 September 2026):** Mobile library/Ravelry refresh hot paths were reduced, AI chat now calls the workflow directly before WordPress fallback, production API image `sha256:ffee03df2584e87652b2eabb3442f83de3d74debcf2521585b40cf93afac20ab` was deployed, and the StitchSense Nginx Proxy Manager host has 600 second read/send timeouts for long Ravelry imports.
+
+**Operations update (5 September 2026):** Graceful API shutdown and VPS container resource limits passed CI on PR #7 and were deployed as production API image `sha256:d35cbecc63570e6e3c101892c17ef5bb55fdc9f7c101f8e9267e2b67ba62635e`; public and private health checks passed, Docker reported the 768MB memory cap, 256MB reservation, 1.5 CPU cap, and `init: true`, and a canary SIGTERM stop test logged clean Fastify shutdown.
 
 ## Approach
 
@@ -122,7 +124,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [ ] Add versioned migration tracking and a controlled migrate-before-release job with backward-compatible rollout rules.
 - [ ] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels.
 - [x] Run the API container as a non-root user with a health check, minimal production dependencies, localhost-only host binding, and private reverse-proxy networking.
-- [ ] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits. *(Implemented locally on branch `ops/graceful-shutdown-resource-limits`; pending CI and production rollout.)*
+- [x] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits.
 - [ ] Add structured logs, request correlation IDs, crash reporting, uptime checks, latency/error metrics, and alert routing.
 - [ ] Create dashboards and alerts for API availability, authentication failures, workflow failures, webhook failures, database capacity, and storage errors.
 - [ ] Document and rehearse deployment, rollback, database restore, secret rotation, and incident-response runbooks.
