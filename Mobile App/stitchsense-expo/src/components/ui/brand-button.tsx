@@ -18,7 +18,7 @@ import { shadows, tokens } from '@/src/theme/tokens';
 type BrandButtonProps = {
   label: string;
   onPress?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'success' | 'ghost';
   disabled?: boolean;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -62,6 +62,7 @@ export function BrandButton({
           styles.base,
           variant === 'primary' && styles.primary,
           variant === 'secondary' && styles.secondary,
+          variant === 'success' && styles.success,
           variant === 'ghost' && styles.ghost,
           pressed && !disabled && !loading ? styles.pressed : null,
           disabled ? styles.disabled : null,
@@ -97,6 +98,10 @@ const styles = StyleSheet.create({
   },
   secondary: {
     backgroundColor: tokens.color.accent,
+    ...shadows.soft,
+  },
+  success: {
+    backgroundColor: tokens.color.success,
     ...shadows.soft,
   },
   ghost: {

@@ -368,6 +368,20 @@ export async function patternRoutes(app: FastifyInstance) {
       `INSERT INTO user_patterns
        (user_id, title, craft_type, original_filename, file_url, file_key, pattern_summary_html, pattern_summary_text, pattern_summary_structured, source, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ON CONFLICT (user_id, (metadata->>'ravelry_id'))
+         WHERE deleted_at IS NULL AND COALESCE(metadata->>'ravelry_id', '') <> ''
+       DO UPDATE SET
+         title = EXCLUDED.title,
+         craft_type = EXCLUDED.craft_type,
+         original_filename = EXCLUDED.original_filename,
+         file_url = EXCLUDED.file_url,
+         file_key = EXCLUDED.file_key,
+         pattern_summary_html = EXCLUDED.pattern_summary_html,
+         pattern_summary_text = EXCLUDED.pattern_summary_text,
+         pattern_summary_structured = EXCLUDED.pattern_summary_structured,
+         source = EXCLUDED.source,
+         metadata = EXCLUDED.metadata,
+         updated_at = NOW()
        RETURNING *`,
       [
         request.authUser.id,

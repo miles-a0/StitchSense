@@ -550,6 +550,7 @@ export type RavelryImportResponse = {
   success: boolean;
   pattern?: Pattern | null;
   id?: string;
+  action?: 'created' | 'updated';
   pdfSaved?: boolean;
   pdfUrl?: string;
   analysisSucceeded?: boolean;

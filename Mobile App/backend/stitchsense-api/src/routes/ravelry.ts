@@ -33,7 +33,7 @@ const usernameBody = z.object({
 
 const importBody = z.object({
   id: z.string().trim().optional(),
-  libraryPatternId: z.string().trim().optional(),
+  libraryPatternId: z.string().uuid().optional(),
   pattern: z.record(z.unknown()).optional(),
 });
 
@@ -125,6 +125,21 @@ async function importedPatternForUser(userId: string, patternId: string) {
        AND deleted_at IS NULL
      LIMIT 1`,
     [patternId, userId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function importedRavelryPatternForUser(userId: string, ravelryId: string) {
+  const result = await query<UserPatternRow>(
+    `SELECT *
+     FROM user_patterns
+     WHERE user_id = $1
+       AND metadata->>'ravelry_id' = $2
+       AND deleted_at IS NULL
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [userId, ravelryId],
   );
 
   return result.rows[0] ?? null;
@@ -240,11 +255,23 @@ export async function ravelryRoutes(app: FastifyInstance) {
       return reply.code(402).send({ error: 'Subscription required', entitlement });
     }
     const body = importBody.parse(request.body);
+    const existingRavelryPattern = body.id
+      ? await importedRavelryPatternForUser(request.authUser.id, body.id)
+      : null;
+    const libraryPatternId =
+      (typeof existingRavelryPattern?.id === 'string' ? existingRavelryPattern.id : '') ||
+      body.libraryPatternId;
+    if (libraryPatternId && !existingRavelryPattern) {
+      const ownedPattern = await importedPatternForUser(request.authUser.id, libraryPatternId);
+      if (!ownedPattern) {
+        return reply.code(404).send({ error: 'Pattern not found' });
+      }
+    }
     const result = await wordpressBridgeRequest(request.authUser.id, 'platform-ravelry/import', {
       method: 'POST',
       body: {
         id: body.id,
-        library_pattern_id: body.libraryPatternId,
+        library_pattern_id: libraryPatternId,
         pattern: body.pattern,
       },
     });
@@ -253,28 +280,29 @@ export async function ravelryRoutes(app: FastifyInstance) {
       ...result,
     };
 
+    try {
+      await syncWordPressLibraryForUser(request.authUser.id);
+    } catch (error) {
+      responsePayload.syncWarning =
+        error instanceof Error ? error.message : 'WordPress sync after import failed.';
+    }
+
     const importedId = typeof result.id === 'string' ? result.id.trim() : '';
-    if (!responsePayload.pattern && importedId) {
-      const importedPattern = await importedPatternForUser(request.authUser.id, importedId);
-      if (importedPattern) {
-        responsePayload.pattern = importedPattern;
-      } else {
-        const ownerId = await importedPatternOwner(importedId);
-        if (ownerId && ownerId !== request.authUser.id) {
-          responsePayload.visibilityWarning =
-            'Pattern imported successfully, but it is linked to a different StitchSense account than the one currently signed in.';
-        }
+    const importedPattern =
+      (importedId ? await importedPatternForUser(request.authUser.id, importedId) : null) ??
+      (body.id ? await importedRavelryPatternForUser(request.authUser.id, body.id) : null);
+    if (importedPattern) {
+      responsePayload.pattern = importedPattern;
+      responsePayload.id = importedPattern.id;
+      responsePayload.action = libraryPatternId ? 'updated' : 'created';
+    } else if (importedId) {
+      const ownerId = await importedPatternOwner(importedId);
+      if (ownerId && ownerId !== request.authUser.id) {
+        responsePayload.visibilityWarning =
+          'Pattern imported successfully, but it is linked to a different StitchSense account than the one currently signed in.';
       }
     }
 
-    try {
-      await syncWordPressLibraryForUser(request.authUser.id);
-      return responsePayload;
-    } catch (error) {
-      return {
-        ...responsePayload,
-        syncWarning: error instanceof Error ? error.message : 'WordPress sync after import failed.',
-      };
-    }
+    return responsePayload;
   });
 }
