@@ -19,7 +19,6 @@ import {
   View,
 } from 'react-native';
 
-import { AppCard } from '@/src/components/ui/app-card';
 import { BrandButton } from '@/src/components/ui/brand-button';
 import { RichMarkdownText } from '@/src/components/ui/rich-markdown-text';
 import { ScreenHero } from '@/src/components/ui/screen-hero';
@@ -30,7 +29,7 @@ import { usePreferences } from '@/src/providers/preferences-provider';
 import { useSession } from '@/src/providers/session-provider';
 import { shadows, tokens } from '@/src/theme/tokens';
 
-const skillLevels = ['beginner', 'confident', 'expert'] as const;
+type ChatSkillLevel = 'beginner' | 'confident' | 'expert';
 const WORKFLOW_MESSAGE_LIMIT = 1190;
 const VISION_QUESTION_LIMIT = 1150;
 const IMAGE_CONTEXT_PROMPT =
@@ -48,7 +47,7 @@ type UploadedChatContext = {
 
 type UploadOverlayPhase = 'choose' | 'selecting' | 'uploading' | 'processing' | 'done' | 'error';
 
-function preferredChatLevel(defaultSkill: string): (typeof skillLevels)[number] {
+function preferredChatLevel(defaultSkill: string): ChatSkillLevel {
   if (defaultSkill === 'advanced') {
     return 'expert';
   }
@@ -235,10 +234,10 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [session, setSession] = useState<ChatSession | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const [skillLevel, setSkillLevel] = useState<(typeof skillLevels)[number]>(
+  const [skillLevel, setSkillLevel] = useState<ChatSkillLevel>(
     preferredChatLevel(settings.defaultSkill),
   );
-  const [statusMessage, setStatusMessage] = useState(
+  const [, setStatusMessage] = useState(
     'Ask anything about knitting, crochet, yarn, techniques, or what to make next.',
   );
   const [uploadedContext, setUploadedContext] = useState<UploadedChatContext | null>(null);
@@ -489,14 +488,6 @@ export default function ChatScreen() {
       .filter((section) => section.length >= 3 && section.length <= 28)
       .slice(0, 4)
       .map((label) => ({ label }));
-  }
-
-  function startNewChat() {
-    setMessages([]);
-    setSession(null);
-    setDraft('');
-    setUploadedContext(null);
-    setStatusMessage('New chat ready. Ask anything about knitting, crochet, yarn, techniques, or what to make next.');
   }
 
 	  function confirmFileLoaded(context: UploadedChatContext) {

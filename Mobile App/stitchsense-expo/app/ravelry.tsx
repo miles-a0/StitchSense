@@ -248,12 +248,12 @@ export default function RavelryScreen() {
   const [pageSize, setPageSize] = useState(pageSizeFromParam(params.pageSize));
   const [page, setPage] = useState(1);
   const [results, setResults] = useState<RavelryPattern[]>([]);
-  const [selectedPattern, setSelectedPattern] = useState<RavelryPattern | null>(null);
+  const [, setSelectedPattern] = useState<RavelryPattern | null>(null);
   const [accountOverlayOpen, setAccountOverlayOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
-  const [isLoadingPattern, setIsLoadingPattern] = useState(false);
+  const [, setIsLoadingPattern] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importingPatternId, setImportingPatternId] = useState<string | null>(null);
   const [locallyImportedIds, setLocallyImportedIds] = useState<string[]>([]);
@@ -407,6 +407,8 @@ export default function RavelryScreen() {
       sort: optionOrEmpty(paramValue(params.sort), sortOptions),
       pageSize: pageSizeFromParam(params.pageSize),
     });
+  // The parameter snapshot above fully specifies this one-shot deep-link search.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, params.autoRun, params.availability, params.craft, params.pageSize, params.q, params.sort, params.weight]);
 
   async function loadPattern(id: string) {

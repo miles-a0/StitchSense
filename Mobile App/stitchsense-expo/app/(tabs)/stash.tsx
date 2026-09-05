@@ -198,13 +198,6 @@ export default function StashScreen() {
         .includes(needle);
     });
   }, [filter, items, query]);
-  const projectsByTitle = useMemo(() => {
-    return new Map(projects.map((project) => [project.title.trim().toLowerCase(), project.id]));
-  }, [projects]);
-  const reservedItems = useMemo(
-    () => items.filter((item) => Boolean(item.reservedFor)),
-    [items],
-  );
   const availableItems = useMemo(
     () => items.filter((item) => !item.reservedFor),
     [items],
@@ -224,55 +217,6 @@ export default function StashScreen() {
       null,
     [items],
   );
-  const projectReadyStashItem = useMemo(
-    () =>
-      items.find((item) => {
-        if (item.category !== 'yarn' || item.reservedFor) return false;
-        const quantity = numericQuantity(item);
-        if (quantity === null) return false;
-        const unit = item.unit?.trim().toLowerCase() ?? '';
-        if (unit === 'g' || unit === 'gram' || unit === 'grams') return quantity >= 50;
-        if (unit.includes('skein') || unit.includes('ball') || unit.includes('hank')) return quantity >= 1;
-        return quantity >= 1;
-      }) ?? null,
-    [items],
-  );
-  const needsDetailItem = useMemo(
-    () =>
-      items.find((item) => !item.quantity && item.category === 'yarn') ??
-      items.find((item) => !item.imageUri && !item.notes) ??
-      null,
-    [items],
-  );
-  const stashFocusCards = [
-    reservedItems[0]
-      ? {
-          icon: 'basket-check-outline' as const,
-          title: 'Reserved for a project',
-          copy: `${reservedItems[0].name} is set aside for ${reservedItems[0].reservedFor}.`,
-          action: 'Open',
-          onPress: () => openReservedProject(reservedItems[0]),
-        }
-      : null,
-    ideaReadyItem
-      ? {
-          icon: 'lightbulb-on-outline' as const,
-          title: 'Ready for ideas',
-          copy: `Ask what ${describeStashItem(ideaReadyItem)} could become.`,
-          action: 'Ask',
-          onPress: () => askForIdeas(ideaReadyItem),
-        }
-      : null,
-    needsDetailItem
-      ? {
-          icon: 'pencil-outline' as const,
-          title: 'Improve this record',
-          copy: `${needsDetailItem.name} would be more useful with quantity, notes, or a photo.`,
-          action: 'Edit',
-          onPress: () => startEdit(needsDetailItem),
-        }
-      : null,
-  ].filter((card): card is NonNullable<typeof card> => Boolean(card));
   const activeFilterLabel =
     categories.find((entry) => entry.id === filter)?.label ?? 'All';
   const editingItem = editingItemId ? items.find((item) => item.id === editingItemId) ?? null : null;
@@ -459,18 +403,6 @@ export default function StashScreen() {
   async function handleClearReservation(item: StashItem) {
     await updateItem(item.id, { reservedFor: undefined });
     setStatusMessage(`${item.name} is no longer reserved.`);
-  }
-
-  function openReservedProject(item: StashItem) {
-    const projectId = item.reservedFor
-      ? projectsByTitle.get(item.reservedFor.trim().toLowerCase())
-      : null;
-    if (!projectId) {
-      setStatusMessage('That reserved project is not in this app yet.');
-      return;
-    }
-
-    router.push({ pathname: '/project/[id]', params: { id: projectId } });
   }
 
   function askForIdeas(item: StashItem) {

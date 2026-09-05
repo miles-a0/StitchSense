@@ -34,11 +34,11 @@ const responseStages = [
   'Saving the answer to this chat…',
 ] as const;
 
-const skillLevels = ['beginner', 'confident', 'expert'] as const;
+type ChatSkillLevel = 'beginner' | 'confident' | 'expert';
 const OWNED_SOURCE_REQUIRED_MESSAGE =
   'Please purchase the pattern and re-import it before I can answer questions or rewrite it.';
 
-function preferredChatLevel(defaultSkill: string): (typeof skillLevels)[number] {
+function preferredChatLevel(defaultSkill: string): ChatSkillLevel {
   if (defaultSkill === 'advanced') {
     return 'expert';
   }
@@ -101,7 +101,7 @@ export default function PatternChatScreen() {
   const [isSending, setIsSending] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Loading your pattern chat…');
   const [selectedSkillLevel, setSelectedSkillLevel] =
-    useState<(typeof skillLevels)[number]>(preferredChatLevel(settings.defaultSkill));
+    useState<ChatSkillLevel>(preferredChatLevel(settings.defaultSkill));
   const [lastFailedPrompt, setLastFailedPrompt] = useState<string | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [responseStageIndex, setResponseStageIndex] = useState(0);
@@ -161,7 +161,7 @@ export default function PatternChatScreen() {
         }
         setMessages(messagesResponse.messages);
         setSelectedSkillLevel(
-          (latestSession.skillLevel as (typeof skillLevels)[number] | null | undefined) ??
+          (latestSession.skillLevel as ChatSkillLevel | null | undefined) ??
             preferredChatLevel(settings.defaultSkill),
         );
         setStatusMessage(

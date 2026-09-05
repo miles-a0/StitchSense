@@ -229,12 +229,6 @@ export default function PatternDetailScreen() {
     },
   ];
   const readinessCompleteCount = readinessTasks.filter((task) => task.complete).length;
-  const patternStats = [
-    { label: 'Checks ready', value: `${readinessCompleteCount}/${readinessTasks.length}` },
-    { label: 'Stash matches', value: String(stashInsights.length) },
-    { label: 'Saved help', value: String(chatSessions.length + rewrites.length) },
-    { label: 'Source', value: sourceLabel },
-  ];
   const nextBestAction = !hasPatternFile
     ? {
         title: 'Attach or import a pattern file',

@@ -1,6 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppSection } from '@/src/components/ui/app-section';
@@ -145,15 +145,6 @@ export default function AccountScreen() {
     setDraftSettings(settings);
   }, [settings]);
 
-  const shouldShowUpgradeActions = useMemo(() => {
-    if (!entitlement) {
-      return false;
-    }
-    if (entitlement.status === 'expired') {
-      return true;
-    }
-    return ['none', 'standard_trial'].includes(entitlement.accessSource);
-  }, [entitlement]);
   const accountStats = [
     { label: 'Plan', value: entitlement?.plan ?? 'Free' },
     { label: 'Status', value: entitlement?.status ?? 'Unknown' },

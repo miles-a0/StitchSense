@@ -24,9 +24,6 @@ import type { Project } from '@/src/lib/models';
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 const heroImage = require('../../assets/onboarding/functional-setup.webp');
-const patternImage = require('../../assets/onboarding/activation.webp');
-const yarnImage = require('../../assets/onboarding/brand-emotional.webp');
-const makingImage = require('../../assets/onboarding/functional-setup.webp');
 const focusedGaugeImage = require('../../assets/onboarding/focused-gauge.png');
 const focusedDictionaryImage = require('../../assets/onboarding/focused-dictionary.png');
 const focusedStitchVisionImage = require('../../assets/onboarding/focused-stitch-vision.png');

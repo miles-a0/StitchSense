@@ -12,14 +12,14 @@ import { tokens } from '@/src/theme/tokens';
 
 type BillingPlan = 'monthly' | 'annual';
 
-const planOptions: Array<{
+const planOptions: {
   id: BillingPlan;
   label: string;
   price: string;
   cadence: string;
   helper: string;
   badge?: string;
-}> = [
+}[] = [
   {
     id: 'annual',
     label: 'Annual',

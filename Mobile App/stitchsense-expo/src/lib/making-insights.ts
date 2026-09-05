@@ -67,7 +67,7 @@ export function buildProjectFocusCards(projects: Project[]) {
         return days !== null && days >= 7;
       }) ?? null;
 
-  const cards: Array<MakingFocusCard | null> = [
+  const cards: (MakingFocusCard | null)[] = [
     dueFocusProject
       ? {
           kind: 'deadline',
