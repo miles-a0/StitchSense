@@ -65,13 +65,17 @@ function logRewriteRouting(
 export async function rewriteRoutes(app: FastifyInstance) {
   app.get('/patterns/:id/rewrites', { preHandler: app.authenticate }, async (request) => {
     const { id } = request.params as { id: string };
-    const result = await query('SELECT * FROM rewrite_sessions WHERE user_id = $1 AND pattern_id = $2 ORDER BY created_at DESC', [request.authUser.id, id]);
+    const result = await query(
+      'SELECT * FROM rewrite_sessions WHERE user_id = $1 AND pattern_id = $2 ORDER BY created_at DESC',
+      [request.authUser.id, id],
+    );
     return { rewrites: result.rows };
   });
 
   app.post('/rewrites', { preHandler: app.authenticate }, async (request, reply) => {
     const entitlement = await resolveEntitlement(request.authUser.id);
-    if (!hasFeature(entitlement, 'rewrite')) return reply.code(402).send({ error: 'Subscription required', entitlement });
+    if (!hasFeature(entitlement, 'rewrite'))
+      return reply.code(402).send({ error: 'Subscription required', entitlement });
 
     const body = rewriteBody.parse(request.body);
     const patternResult = await query<{
@@ -179,10 +183,17 @@ export async function rewriteRoutes(app: FastifyInstance) {
       locale: 'en-GB',
       system_instruction: englishOnlyInstruction(),
     };
-    const workflow =
-      (await callWordPressChatProxy(request.authUser.id, workflowPayload)) ??
-      (await callWorkflow('chat', workflowPayload));
-    const answer = typeof workflow === 'object' && workflow && 'answer' in workflow ? String((workflow as { answer: unknown }).answer) : JSON.stringify(workflow);
+    let workflow: unknown;
+    try {
+      workflow = await callWorkflow('chat', workflowPayload);
+    } catch (error) {
+      request.log.warn({ error }, 'Direct rewrite workflow failed; trying WordPress chat proxy fallback');
+      workflow = await callWordPressChatProxy(request.authUser.id, workflowPayload);
+    }
+    const answer =
+      typeof workflow === 'object' && workflow && 'answer' in workflow
+        ? String((workflow as { answer: unknown }).answer)
+        : JSON.stringify(workflow);
     const result = await query(
       `INSERT INTO rewrite_sessions (user_id, pattern_id, prompt, rewrite_result)
        VALUES ($1,$2,$3,$4)
@@ -195,7 +206,10 @@ export async function rewriteRoutes(app: FastifyInstance) {
   app.post('/rewrites/import', { preHandler: app.authenticate }, async (request, reply) => {
     const body = importRewriteBody.parse(request.body);
 
-    const pattern = await query<{ id: string }>('SELECT id FROM user_patterns WHERE id = $1 AND user_id = $2', [body.patternId, request.authUser.id]);
+    const pattern = await query<{ id: string }>('SELECT id FROM user_patterns WHERE id = $1 AND user_id = $2', [
+      body.patternId,
+      request.authUser.id,
+    ]);
     if (!pattern.rowCount) {
       return reply.code(404).send({ error: 'Pattern not found' });
     }
