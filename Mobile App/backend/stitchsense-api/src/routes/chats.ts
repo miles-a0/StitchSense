@@ -31,15 +31,17 @@ const messageBody = z.object({
 const WORKFLOW_QUESTION_LIMIT = 1200;
 
 const importMessagesBody = z.object({
-  messages: z.array(
-    z.object({
-      role: z.string().default('user'),
-      content: z.string().min(1),
-      kind: z.string().default('message'),
-      toolMode: z.string().optional(),
-      createdAt: z.string().datetime().optional(),
-    }),
-  ).min(1),
+  messages: z
+    .array(
+      z.object({
+        role: z.string().default('user'),
+        content: z.string().min(1),
+        kind: z.string().default('message'),
+        toolMode: z.string().optional(),
+        createdAt: z.string().datetime().optional(),
+      }),
+    )
+    .min(1),
 });
 
 function resolveClientSurface(request: FastifyRequest) {
@@ -88,13 +90,13 @@ function buildSessionTitleFromPrompt(content: string) {
 
 function compactWorkflowQuestion(content: string) {
   const trimmed = content.trim();
-  return trimmed.length <= WORKFLOW_QUESTION_LIMIT
-    ? trimmed
-    : trimmed.slice(0, WORKFLOW_QUESTION_LIMIT - 1).trimEnd();
+  return trimmed.length <= WORKFLOW_QUESTION_LIMIT ? trimmed : trimmed.slice(0, WORKFLOW_QUESTION_LIMIT - 1).trimEnd();
 }
 
 function isLargeGuideRequest(content: string) {
-  return /row\s*by\s*row|round\s*by\s*round|step\s*by\s*step|detailed\s+guide|complete\s+guide|full\s+guide|how\s+do\s+i\s+make|guide\s+to\s+making/i.test(content);
+  return /row\s*by\s*row|round\s*by\s*round|step\s*by\s*step|detailed\s+guide|complete\s+guide|full\s+guide|how\s+do\s+i\s+make|guide\s+to\s+making/i.test(
+    content,
+  );
 }
 
 function isTransportStatusText(value: string) {
@@ -116,7 +118,10 @@ function extractWorkflowAnswer(value: unknown, depth = 0): string | null {
 
   const directString = stringValue(value);
   if (directString) {
-    if ((directString.startsWith('{') && directString.endsWith('}')) || (directString.startsWith('[') && directString.endsWith(']'))) {
+    if (
+      (directString.startsWith('{') && directString.endsWith('}')) ||
+      (directString.startsWith('[') && directString.endsWith(']'))
+    ) {
       try {
         return extractWorkflowAnswer(JSON.parse(directString), depth + 1) ?? directString;
       } catch {
@@ -139,15 +144,7 @@ function extractWorkflowAnswer(value: unknown, depth = 0): string | null {
   }
 
   const record = value as Record<string, unknown>;
-  const preferredKeys = [
-    'answer',
-    'reply',
-    'response',
-    'content',
-    'text',
-    'output',
-    'completion',
-  ];
+  const preferredKeys = ['answer', 'reply', 'response', 'content', 'text', 'output', 'completion'];
   for (const key of preferredKeys) {
     const answer = extractWorkflowAnswer(record[key], depth + 1);
     if (answer) return answer;
@@ -187,9 +184,10 @@ function hasReliablePatternRetrieval(workflow: unknown) {
   const record = workflowRecord(workflow);
   const contextCount = workflowNumber(record.context_count ?? record.contextCount);
   return Boolean(
-    contextCount && contextCount > 0 &&
-      record.using_pattern_summary_fallback !== true &&
-      record.usingPatternSummaryFallback !== true,
+    contextCount &&
+    contextCount > 0 &&
+    record.using_pattern_summary_fallback !== true &&
+    record.usingPatternSummaryFallback !== true,
   );
 }
 
@@ -215,7 +213,10 @@ function readCachedPatternText(metadata: Record<string, unknown>) {
 export async function chatRoutes(app: FastifyInstance) {
   app.get('/patterns/:id/chats', { preHandler: app.authenticate }, async (request) => {
     const { id } = request.params as { id: string };
-    const result = await query('SELECT * FROM chat_sessions WHERE user_id = $1 AND pattern_id = $2 ORDER BY updated_at DESC', [request.authUser.id, id]);
+    const result = await query(
+      'SELECT * FROM chat_sessions WHERE user_id = $1 AND pattern_id = $2 ORDER BY updated_at DESC',
+      [request.authUser.id, id],
+    );
     return { sessions: result.rows };
   });
 
@@ -265,11 +266,15 @@ export async function chatRoutes(app: FastifyInstance) {
 
   app.post('/chats/:id/messages', { preHandler: app.authenticate }, async (request, reply) => {
     const entitlement = await resolveEntitlement(request.authUser.id);
-    if (!hasFeature(entitlement, 'aiChat')) return reply.code(402).send({ error: 'Subscription required', entitlement });
+    if (!hasFeature(entitlement, 'aiChat'))
+      return reply.code(402).send({ error: 'Subscription required', entitlement });
 
     const { id } = request.params as { id: string };
     const body = messageBody.parse(request.body);
-    const sessionAccess = await query<{ id: string; pattern_id: string | null }>(
+    const sessionAccess = await query<{
+      id: string;
+      pattern_id: string | null;
+    }>(
       `SELECT id, pattern_id
        FROM chat_sessions
        WHERE id = $1
@@ -283,10 +288,7 @@ export async function chatRoutes(app: FastifyInstance) {
     }
 
     const activeSession = sessionAccess.rows[0];
-    if (
-      body.patternId !== undefined &&
-      (activeSession.pattern_id ?? null) !== (body.patternId ?? null)
-    ) {
+    if (body.patternId !== undefined && (activeSession.pattern_id ?? null) !== (body.patternId ?? null)) {
       return reply.code(409).send({
         error: 'This chat session belongs to a different pattern. Please start a fresh chat for the selected pattern.',
       });
@@ -317,13 +319,13 @@ export async function chatRoutes(app: FastifyInstance) {
       project_id: string | null;
       file_id: string | null;
       job_id: string | null;
-	      file_url: string | null;
-	      file_key: string | null;
-	      file_mime_type: string | null;
-	      original_filename: string | null;
-	      source: string | null;
-	      metadata: Record<string, unknown> | null;
-	    }>(
+      file_url: string | null;
+      file_key: string | null;
+      file_mime_type: string | null;
+      original_filename: string | null;
+      source: string | null;
+      metadata: Record<string, unknown> | null;
+    }>(
       `SELECT
          cs.id,
          cs.title,
@@ -370,11 +372,7 @@ export async function chatRoutes(app: FastifyInstance) {
 
     const session = sessionResult.rows[0];
     const patternMetadata = session.metadata ?? {};
-    const scopedWorkflowUserId = buildScopedWorkflowUserId(
-      request.authUser.id,
-      session.pattern_id,
-      session.id,
-    );
+    const scopedWorkflowUserId = buildScopedWorkflowUserId(request.authUser.id, session.pattern_id, session.id);
     const selectedPatternHasScopedContent = !session.pattern_id
       ? true
       : patternHasScopedContent({
@@ -413,7 +411,10 @@ export async function chatRoutes(app: FastifyInstance) {
          RETURNING *`,
         [id, answer, body.kind, body.toolMode],
       );
-      await query('UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1 AND user_id = $2', [id, request.authUser.id]);
+      await query('UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1 AND user_id = $2', [
+        id,
+        request.authUser.id,
+      ]);
       return reply.code(201).send({
         message: saved.rows[0],
         workflow: buildOwnedSourceRequiredResponse(),
@@ -434,7 +435,10 @@ export async function chatRoutes(app: FastifyInstance) {
          RETURNING *`,
         [id, answer, body.kind, body.toolMode],
       );
-      await query('UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1 AND user_id = $2', [id, request.authUser.id]);
+      await query('UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1 AND user_id = $2', [
+        id,
+        request.authUser.id,
+      ]);
       return reply.code(201).send({
         message: saved.rows[0],
         workflow: {
@@ -448,9 +452,7 @@ export async function chatRoutes(app: FastifyInstance) {
     const guideContinuation = session.pattern_id
       ? resolvePatternGuideContinuation(body.content, historyResult.rows)
       : null;
-    const workflowQuestion = compactWorkflowQuestion(
-      guideContinuation?.question ?? body.content,
-    );
+    const workflowQuestion = compactWorkflowQuestion(guideContinuation?.question ?? body.content);
     const workflowToolMode =
       session.pattern_id && (isLargeGuideRequest(body.content) || guideContinuation)
         ? 'pattern_step_guide'
@@ -533,9 +535,9 @@ export async function chatRoutes(app: FastifyInstance) {
         : '';
     const genericPatternTitle = session.pattern_title ? `${session.pattern_title} chat` : null;
     const shouldRetitleSession =
-      (session.title === 'Untitled chat' ||
-        session.title === 'Pattern conversation' ||
-        (genericPatternTitle !== null && session.title === genericPatternTitle));
+      session.title === 'Untitled chat' ||
+      session.title === 'Pattern conversation' ||
+      (genericPatternTitle !== null && session.title === genericPatternTitle);
 
     if (shouldRetitleSession) {
       const nextTitle = buildSessionTitleFromPrompt(body.content);
@@ -579,9 +581,7 @@ export async function chatRoutes(app: FastifyInstance) {
       pattern_summary_structured: session.pattern_summary_structured ?? undefined,
       pattern_metadata: patternMetadata,
       pattern_instruction_text: directPatternText ?? undefined,
-      pattern_instruction_context_status: directPatternText
-        ? 'direct_uploaded_file_text_available'
-        : undefined,
+      pattern_instruction_context_status: directPatternText ? 'direct_uploaded_file_text_available' : undefined,
       pattern_context_mode: directPatternText ? 'pattern_instruction_text' : undefined,
       pattern_instruction_metadata: directPatternTextMeta ?? undefined,
       pattern_instruction_prompt: directPatternText
@@ -612,48 +612,71 @@ export async function chatRoutes(app: FastifyInstance) {
     let answer: string | null = null;
     try {
       try {
-        ai = await callWordPressChatProxy(request.authUser.id, aiPayload);
+        const workflowStartedAt = Date.now();
+        ai = await callWorkflow('chat', aiPayload);
+        request.log.info(
+          {
+            event: 'chat_workflow_attempt',
+            provider: 'direct',
+            durationMs: Date.now() - workflowStartedAt,
+          },
+          'Direct chat workflow completed',
+        );
       } catch (error) {
-        request.log.warn({ error, aiPayload }, 'WordPress chat proxy failed; trying direct workflow fallback');
+        request.log.warn({ error }, 'Direct chat workflow failed; trying WordPress chat proxy fallback');
         ai = null;
       }
-	      answer = workflowAnswerOrNull(ai);
-	      if (!answer) {
-	        request.log.warn({ aiPayload, ai }, 'WordPress chat proxy returned no usable answer; trying direct workflow fallback');
-	        ai = await callWorkflow('chat', aiPayload);
-	        answer = workflowAnswerOrNull(ai);
-	      }
-	      request.log.info(
-	        {
-	          event: 'chat_workflow_context',
-	          patternId: session.pattern_id,
-	          sessionId: session.id,
-	          toolMode: workflowToolMode,
-		          contextCount: workflowNumber(workflowRecord(ai).context_count ?? workflowRecord(ai).contextCount) ?? 0,
-		          directPatternTextChars: directPatternText?.length ?? 0,
-		          usingPatternSummaryFallback: Boolean(
-	            workflowRecord(ai).using_pattern_summary_fallback ??
-	              workflowRecord(ai).usingPatternSummaryFallback,
-	          ),
-	        },
-	        'Resolved chat workflow context quality',
-	      );
-	      if (
-	        session.pattern_id &&
-		        workflowToolMode === 'pattern_step_guide' &&
-		        !hasDirectPatternText(directPatternText) &&
-		        !hasReliablePatternRetrieval(ai)
-		      ) {
-	        request.log.warn({ aiPayload, ai }, 'Pattern step guide blocked because workflow returned no reliable scoped pattern retrieval');
-	        answer = patternEvidenceRequiredMessage();
-	        ai = {
-	          success: true,
-	          answer,
-	          pattern_evidence_required: true,
-	          context_count: workflowNumber(workflowRecord(ai).context_count ?? workflowRecord(ai).contextCount) ?? 0,
-	        };
-	      }
-	    } catch (error) {
+      answer = workflowAnswerOrNull(ai);
+      if (!answer) {
+        request.log.warn(
+          { event: 'chat_workflow_empty', provider: 'direct' },
+          'Direct chat workflow returned no usable answer; trying WordPress chat proxy fallback',
+        );
+        const proxyStartedAt = Date.now();
+        ai = await callWordPressChatProxy(request.authUser.id, aiPayload);
+        request.log.info(
+          {
+            event: 'chat_workflow_attempt',
+            provider: 'wordpress_proxy',
+            durationMs: Date.now() - proxyStartedAt,
+          },
+          'WordPress chat proxy fallback completed',
+        );
+        answer = workflowAnswerOrNull(ai);
+      }
+      request.log.info(
+        {
+          event: 'chat_workflow_context',
+          patternId: session.pattern_id,
+          sessionId: session.id,
+          toolMode: workflowToolMode,
+          contextCount: workflowNumber(workflowRecord(ai).context_count ?? workflowRecord(ai).contextCount) ?? 0,
+          directPatternTextChars: directPatternText?.length ?? 0,
+          usingPatternSummaryFallback: Boolean(
+            workflowRecord(ai).using_pattern_summary_fallback ?? workflowRecord(ai).usingPatternSummaryFallback,
+          ),
+        },
+        'Resolved chat workflow context quality',
+      );
+      if (
+        session.pattern_id &&
+        workflowToolMode === 'pattern_step_guide' &&
+        !hasDirectPatternText(directPatternText) &&
+        !hasReliablePatternRetrieval(ai)
+      ) {
+        request.log.warn(
+          { aiPayload, ai },
+          'Pattern step guide blocked because workflow returned no reliable scoped pattern retrieval',
+        );
+        answer = patternEvidenceRequiredMessage();
+        ai = {
+          success: true,
+          answer,
+          pattern_evidence_required: true,
+          context_count: workflowNumber(workflowRecord(ai).context_count ?? workflowRecord(ai).contextCount) ?? 0,
+        };
+      }
+    } catch (error) {
       const message = error instanceof Error ? error.message : 'Workflow chat failed';
       request.log.error({ error, aiPayload }, 'Chat workflow failed');
       return reply.code(502).send({ error: message });
@@ -671,7 +694,10 @@ export async function chatRoutes(app: FastifyInstance) {
        RETURNING *`,
       [id, answer, body.kind, body.toolMode],
     );
-    await query('UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1 AND user_id = $2', [id, request.authUser.id]);
+    await query('UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1 AND user_id = $2', [
+      id,
+      request.authUser.id,
+    ]);
     return reply.code(201).send({ message: saved.rows[0], workflow: ai });
   });
 
@@ -679,7 +705,10 @@ export async function chatRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = importMessagesBody.parse(request.body);
 
-    const session = await query<{ id: string }>('SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2', [id, request.authUser.id]);
+    const session = await query<{ id: string }>('SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2', [
+      id,
+      request.authUser.id,
+    ]);
     if (!session.rowCount) {
       return reply.code(404).send({ error: 'Session not found' });
     }
@@ -690,19 +719,15 @@ export async function chatRoutes(app: FastifyInstance) {
         `INSERT INTO chat_messages (session_id, role, content, kind, tool_mode, created_at)
          VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, NOW()))
          RETURNING id`,
-        [
-          id,
-          message.role,
-          message.content,
-          message.kind,
-          message.toolMode ?? null,
-          message.createdAt ?? null,
-        ],
+        [id, message.role, message.content, message.kind, message.toolMode ?? null, message.createdAt ?? null],
       );
       savedIds.push(saved.rows[0].id);
     }
 
-    await query('UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1 AND user_id = $2', [id, request.authUser.id]);
+    await query('UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1 AND user_id = $2', [
+      id,
+      request.authUser.id,
+    ]);
     return reply.code(201).send({ ids: savedIds, imported: savedIds.length });
   });
 }

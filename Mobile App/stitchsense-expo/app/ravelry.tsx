@@ -78,12 +78,7 @@ function extractRavelryIdFromMetadata(metadata: Record<string, unknown> | undefi
     }
   }
 
-  const urlCandidates = [
-    metadata.ravelry_url,
-    metadata.ravelryUrl,
-    metadata.source_url,
-    metadata.sourceUrl,
-  ];
+  const urlCandidates = [metadata.ravelry_url, metadata.ravelryUrl, metadata.source_url, metadata.sourceUrl];
 
   for (const candidate of urlCandidates) {
     if (typeof candidate !== 'string' || !candidate.trim()) continue;
@@ -130,9 +125,7 @@ function flattenToolText(value: unknown, depth = 0): string[] {
     return value.flatMap((entry) => flattenToolText(entry, depth + 1));
   }
   if (typeof value === 'object') {
-    return Object.values(value as Record<string, unknown>).flatMap((entry) =>
-      flattenToolText(entry, depth + 1),
-    );
+    return Object.values(value as Record<string, unknown>).flatMap((entry) => flattenToolText(entry, depth + 1));
   }
   return [];
 }
@@ -170,9 +163,7 @@ function stashToolLabel(item: StashItem) {
 
 function stashToolSizes(item: StashItem) {
   return uniqueRoundedSizes(
-    [item.size, item.name, item.material, item.notes].flatMap((value) =>
-      value ? extractMillimetres(value) : [],
-    ),
+    [item.size, item.name, item.material, item.notes].flatMap((value) => (value ? extractMillimetres(value) : [])),
   );
 }
 
@@ -229,6 +220,8 @@ export default function RavelryScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const resultsTopRef = useRef(0);
   const shouldScrollToResultsRef = useRef(false);
+  const statusInFlightRef = useRef<Promise<RavelryStatusResponse | null> | null>(null);
+  const lastStatusLoadedAtRef = useRef(0);
 
   const [status, setStatus] = useState<RavelryStatusResponse | null>(null);
   const [mode, setMode] = useState<(typeof modeOptions)[number]['key']>('search');
@@ -242,9 +235,7 @@ export default function RavelryScreen() {
   const [availability, setAvailability] = useState<(typeof availabilityOptions)[number]>(
     optionOrEmpty(paramValue(params.availability), availabilityOptions),
   );
-  const [sort, setSort] = useState<(typeof sortOptions)[number]>(
-    optionOrEmpty(paramValue(params.sort), sortOptions),
-  );
+  const [sort, setSort] = useState<(typeof sortOptions)[number]>(optionOrEmpty(paramValue(params.sort), sortOptions));
   const [pageSize, setPageSize] = useState(pageSizeFromParam(params.pageSize));
   const [page, setPage] = useState(1);
   const [results, setResults] = useState<RavelryPattern[]>([]);
@@ -284,23 +275,43 @@ export default function RavelryScreen() {
     });
   }, []);
 
-  const loadStatus = useCallback(async () => {
-    if (!accessToken) return null;
-    setIsLoadingStatus(true);
-    try {
-      const response = await stitchSenseAPI.ravelryStatus(accessToken);
-      setStatus(response);
-      setStatusMessage(null);
-      return response;
-    } catch (error) {
-      setStatusMessage(
-        getUserFacingErrorMessage(error, { fallback: 'Could not load Ravelry status.' }),
-      );
-      return null;
-    } finally {
-      setIsLoadingStatus(false);
-    }
-  }, [accessToken]);
+  const loadStatus = useCallback(
+    async (force = false) => {
+      if (!accessToken) return null;
+      const now = Date.now();
+      if (!force && status && now - lastStatusLoadedAtRef.current < 30 * 1000) {
+        return status;
+      }
+      if (statusInFlightRef.current) {
+        return statusInFlightRef.current;
+      }
+
+      const statusPromise = (async () => {
+        setIsLoadingStatus(true);
+        try {
+          const response = await stitchSenseAPI.ravelryStatus(accessToken);
+          setStatus(response);
+          lastStatusLoadedAtRef.current = Date.now();
+          setStatusMessage(null);
+          return response;
+        } catch (error) {
+          setStatusMessage(
+            getUserFacingErrorMessage(error, {
+              fallback: 'Could not load Ravelry status.',
+            }),
+          );
+          return null;
+        } finally {
+          setIsLoadingStatus(false);
+          statusInFlightRef.current = null;
+        }
+      })();
+
+      statusInFlightRef.current = statusPromise;
+      return statusPromise;
+    },
+    [accessToken, status],
+  );
 
   useEffect(() => {
     void loadStatus();
@@ -327,14 +338,18 @@ export default function RavelryScreen() {
     }
   }, [params.availability, params.craft, params.pageSize, params.q, params.sort, params.weight]);
 
-  async function runBrowse(nextPage = 1, nextMode = mode, overrides?: {
-    query?: string;
-    craft?: (typeof craftOptions)[number];
-    weight?: (typeof weightOptions)[number];
-    availability?: (typeof availabilityOptions)[number];
-    sort?: (typeof sortOptions)[number];
-    pageSize?: number;
-  }) {
+  async function runBrowse(
+    nextPage = 1,
+    nextMode = mode,
+    overrides?: {
+      query?: string;
+      craft?: (typeof craftOptions)[number];
+      weight?: (typeof weightOptions)[number];
+      availability?: (typeof availabilityOptions)[number];
+      sort?: (typeof sortOptions)[number];
+      pageSize?: number;
+    },
+  ) {
     if (!accessToken) return;
     const activeQuery = overrides?.query ?? query;
     const activePageSize = overrides?.pageSize ?? pageSize;
@@ -349,7 +364,10 @@ export default function RavelryScreen() {
     try {
       const response =
         nextMode === 'saved'
-          ? await stitchSenseAPI.ravelrySaved(accessToken, { page: nextPage, pageSize: activePageSize })
+          ? await stitchSenseAPI.ravelrySaved(accessToken, {
+              page: nextPage,
+              pageSize: activePageSize,
+            })
           : await stitchSenseAPI.ravelrySearch(accessToken, {
               q: activeQuery.trim(),
               page: nextPage,
@@ -372,7 +390,9 @@ export default function RavelryScreen() {
         setSavedAccessIssue(null);
       }
     } catch (error) {
-      const message = getUserFacingErrorMessage(error, { fallback: 'Ravelry request failed.' });
+      const message = getUserFacingErrorMessage(error, {
+        fallback: 'Ravelry request failed.',
+      });
       setStatusMessage(message);
       if (nextMode === 'saved' && isRavelryReconnectMessage(message)) {
         setSavedAccessIssue(message);
@@ -408,9 +428,18 @@ export default function RavelryScreen() {
       sort: optionOrEmpty(paramValue(params.sort), sortOptions),
       pageSize: pageSizeFromParam(params.pageSize),
     });
-  // The parameter snapshot above fully specifies this one-shot deep-link search.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken, params.autoRun, params.availability, params.craft, params.pageSize, params.q, params.sort, params.weight]);
+    // The parameter snapshot above fully specifies this one-shot deep-link search.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    accessToken,
+    params.autoRun,
+    params.availability,
+    params.craft,
+    params.pageSize,
+    params.q,
+    params.sort,
+    params.weight,
+  ]);
 
   async function loadPattern(id: string) {
     if (!accessToken) return;
@@ -421,7 +450,9 @@ export default function RavelryScreen() {
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage(
-        getUserFacingErrorMessage(error, { fallback: 'Could not load pattern details.' }),
+        getUserFacingErrorMessage(error, {
+          fallback: 'Could not load pattern details.',
+        }),
       );
     } finally {
       setIsLoadingPattern(false);
@@ -434,10 +465,7 @@ export default function RavelryScreen() {
       const response = await stitchSenseAPI.ravelryConnectUrl(accessToken);
       if (!response.url) {
         setStatusMessage('Ravelry could not provide a connection URL yet.');
-        Alert.alert(
-          'Ravelry connect not ready',
-          'The shared API did not return a Ravelry authorisation URL yet.',
-        );
+        Alert.alert('Ravelry connect not ready', 'The shared API did not return a Ravelry authorisation URL yet.');
         return;
       }
       setLastConnectUrl(response.url);
@@ -453,13 +481,9 @@ export default function RavelryScreen() {
         if (attempt > 0) {
           await new Promise((resolve) => setTimeout(resolve, 1500));
         }
-        const latest = await loadStatus();
+        const latest = await loadStatus(true);
         if (latest?.connected) {
-          setStatusMessage(
-            latest.username
-              ? `Ravelry connected as ${latest.username}.`
-              : 'Ravelry connected.',
-          );
+          setStatusMessage(latest.username ? `Ravelry connected as ${latest.username}.` : 'Ravelry connected.');
           setSavedAccessIssue(null);
           return;
         }
@@ -501,10 +525,12 @@ export default function RavelryScreen() {
       setResults([]);
       setSelectedPattern(null);
       setSavedAccessIssue(null);
-      await loadStatus();
+      await loadStatus(true);
     } catch (error) {
       setStatusMessage(
-        getUserFacingErrorMessage(error, { fallback: 'Could not disconnect Ravelry.' }),
+        getUserFacingErrorMessage(error, {
+          fallback: 'Could not disconnect Ravelry.',
+        }),
       );
     }
   }
@@ -525,7 +551,7 @@ export default function RavelryScreen() {
               setResults([]);
               setSelectedPattern(null);
               setSavedAccessIssue(null);
-              await loadStatus();
+              await loadStatus(true);
               await connectRavelry();
             } catch (error) {
               setStatusMessage(
@@ -553,38 +579,13 @@ export default function RavelryScreen() {
         libraryPatternId: existingLibraryPatternId,
         pattern: pattern.raw ?? (pattern as unknown as Record<string, unknown>),
       });
-      setLocallyImportedIds((current) =>
-        current.includes(pattern.id) ? current : [...current, pattern.id],
-      );
+      setLocallyImportedIds((current) => (current.includes(pattern.id) ? current : [...current, pattern.id]));
       if (response.pattern) {
         upsertPattern(response.pattern);
       }
-      await refreshPatterns();
+      void refreshPatterns();
 
       let matchedImportedPattern = response.pattern ?? null;
-      let libraryPatterns = await stitchSenseAPI.patterns(accessToken);
-      matchedImportedPattern =
-        matchedImportedPattern ??
-        libraryPatterns.find((candidate) => {
-          const candidateRavelryId = extractRavelryIdFromMetadata(candidate.metadata);
-          return candidateRavelryId === pattern.id;
-        }) ??
-        null;
-
-      if (!matchedImportedPattern) {
-        try {
-          await stitchSenseAPI.syncWordPress(accessToken);
-          await refreshPatterns();
-          libraryPatterns = await stitchSenseAPI.patterns(accessToken);
-          matchedImportedPattern =
-            libraryPatterns.find((candidate) => {
-              const candidateRavelryId = extractRavelryIdFromMetadata(candidate.metadata);
-              return candidateRavelryId === pattern.id;
-            }) ?? null;
-        } catch {
-          // Keep the optimistic imported state even if the sync fallback fails.
-        }
-      }
 
       if (matchedImportedPattern) {
         upsertPattern(matchedImportedPattern);
@@ -620,16 +621,16 @@ export default function RavelryScreen() {
         !matchedImportedPattern
           ? 'Import request succeeded, but the pattern did not come back into the live library list yet. See the import debug line below.'
           : typeof (response as Record<string, unknown>).visibilityWarning === 'string'
-          ? String((response as Record<string, unknown>).visibilityWarning)
-          : response.analysisSucceeded
-            ? existingLibraryPatternId
-              ? 'Ravelry pattern re-imported and summarised.'
-              : 'Ravelry pattern imported and summarised.'
-            : response.downloadError
-              ? `${existingLibraryPatternId ? 'Re-imported' : 'Imported'} with a PDF issue: ${response.downloadError}`
-              : existingLibraryPatternId
-                ? 'Ravelry pattern updated in your library.'
-                : 'Ravelry pattern imported to your library.',
+            ? String((response as Record<string, unknown>).visibilityWarning)
+            : response.analysisSucceeded
+              ? existingLibraryPatternId
+                ? 'Ravelry pattern re-imported and summarised.'
+                : 'Ravelry pattern imported and summarised.'
+              : response.downloadError
+                ? `${existingLibraryPatternId ? 'Re-imported' : 'Imported'} with a PDF issue: ${response.downloadError}`
+                : existingLibraryPatternId
+                  ? 'Ravelry pattern updated in your library.'
+                  : 'Ravelry pattern imported to your library.',
       );
     } catch (error) {
       const message = getUserFacingErrorMessage(error, {
@@ -696,12 +697,7 @@ export default function RavelryScreen() {
     [stashItems],
   );
   const toolCompatibilityByPatternId = useMemo(() => {
-    return new Map(
-      results.map((pattern) => [
-        pattern.id,
-        toolCompatibilityForPattern(pattern, stashNeedleHookTools),
-      ]),
-    );
+    return new Map(results.map((pattern) => [pattern.id, toolCompatibilityForPattern(pattern, stashNeedleHookTools)]));
   }, [results, stashNeedleHookTools]);
   const rankedResults = useMemo(() => {
     return [...results].sort((left, right) => {
@@ -751,7 +747,8 @@ export default function RavelryScreen() {
             <View style={styles.heroCopy}>
               <Text style={styles.title}>Search and import patterns</Text>
               <Text style={styles.copy}>
-                Connect your Ravelry account, browse saved patterns, and import them into the same shared StitchSense library used by the web app.
+                Connect your Ravelry account, browse saved patterns, and import them into the same shared StitchSense
+                library used by the web app.
               </Text>
             </View>
             <View style={styles.ravelryIconWrap}>
@@ -768,344 +765,351 @@ export default function RavelryScreen() {
           {lastImportDebug ? <Text style={styles.debugBanner}>{lastImportDebug}</Text> : null}
         </View>
 
-      {sourceFromStash ? (
-        <View style={styles.ideaContextCard}>
-          <Text style={styles.ideaContextEyebrow}>From Stash</Text>
-          <Text style={styles.ideaContextTitle}>
-            {ideaName ? `Patterns for ${ideaName}` : 'Compatible pattern ideas'}
-          </Text>
-          <Text style={styles.ideaContextCopy}>
-            {stashName
-              ? `Searching Ravelry for likely matches using ${stashName}. Import a pattern, then start a project and keep the stash details attached.`
-              : 'Import a pattern, then start a project from the result.'}
-          </Text>
-          {lastImportedLibraryPatternId ? (
-            <BrandButton
-              label="Start project from imported pattern"
-              onPress={() =>
-                router.push({
-                  pathname: '/project/new',
-                  params: projectLaunchParams(lastImportedLibraryPatternId),
-                })
-              }
-              style={styles.fullWidth}
-            />
-          ) : null}
-        </View>
-      ) : null}
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Browse</Text>
-        {status?.connected ? (
-          <Text style={styles.meta}>
-            Connected{status.username ? ` as ${status.username}` : ''}. Search is ready.
-          </Text>
-        ) : null}
-        <View style={styles.modeRow}>
-          {modeOptions.map((option) => {
-            const active = mode === option.key;
-            return (
-              <Pressable
-                key={option.key}
-                onPress={() => {
-                  setMode(option.key);
-                  setResults([]);
-                  setSelectedPattern(null);
-                  setPage(1);
-                  if (option.key === 'saved') {
-                    void runBrowse(1, 'saved');
-                  }
-                }}
-                style={({ pressed }) => [
-                  styles.modePill,
-                  active ? styles.modePillActive : null,
-                  pressed ? styles.pressed : null,
-                ]}>
-                <Text style={[styles.modeLabel, active ? styles.modeLabelActive : null]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        {mode === 'search' ? (
-          <>
-            <TextInput
-              autoCapitalize="words"
-              autoCorrect={false}
-              blurOnSubmit
-              onChangeText={setQuery}
-              onSubmitEditing={() => void runBrowse(1)}
-              placeholder="Sweater, socks, shawl..."
-              placeholderTextColor="#9b867d"
-              returnKeyType="search"
-              style={styles.input}
-              value={query}
-            />
-            <View style={styles.filterGrid}>
-              <FilterSelect
-                label="Craft"
-                options={craftOptions}
-                value={craft}
-                onChange={setCraft}
-                expanded={openFilter === 'craft'}
-                onToggle={() => setOpenFilter((current) => (current === 'craft' ? null : 'craft'))}
-              />
-              <FilterSelect
-                label="Weight"
-                options={weightOptions}
-                value={weight}
-                onChange={setWeight}
-                expanded={openFilter === 'weight'}
-                onToggle={() => setOpenFilter((current) => (current === 'weight' ? null : 'weight'))}
-              />
-              <FilterSelect
-                label="Price"
-                options={availabilityOptions}
-                value={availability}
-                onChange={setAvailability}
-                expanded={openFilter === 'availability'}
-                onToggle={() => setOpenFilter((current) => (current === 'availability' ? null : 'availability'))}
-              />
-              <FilterSelect
-                label="Sort"
-                options={sortOptions}
-                value={sort}
-                onChange={setSort}
-                expanded={openFilter === 'sort'}
-                onToggle={() => setOpenFilter((current) => (current === 'sort' ? null : 'sort'))}
-              />
-            </View>
-            {activeFilterSummary.length ? (
-              <View style={styles.activeFilterRow}>
-                {activeFilterSummary.map((filterLabel) => (
-                  <View key={filterLabel} style={styles.activeFilterPill}>
-                    <Text style={styles.activeFilterText}>{filterLabel}</Text>
-                  </View>
-                ))}
-                <Pressable
-                  onPress={() => {
-                    setCraft('');
-                    setWeight('');
-                    setAvailability('');
-                    setSort('');
-                  }}
-                  style={styles.clearFiltersButton}>
-                  <Text style={styles.clearFiltersText}>Clear filters</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <View style={styles.savedModeHelp}>
-            <Text style={styles.meta}>
-              Patterns saved in your Ravelry library load automatically from your connected personal account.
+        {sourceFromStash ? (
+          <View style={styles.ideaContextCard}>
+            <Text style={styles.ideaContextEyebrow}>From Stash</Text>
+            <Text style={styles.ideaContextTitle}>
+              {ideaName ? `Patterns for ${ideaName}` : 'Compatible pattern ideas'}
             </Text>
-            {isLoadingResults ? <ActivityIndicator color={tokens.color.primary} /> : null}
-          </View>
-        )}
-
-        {mode === 'search' || results.length > 0 ? (
-          <View style={styles.actionStack}>
-            {mode === 'search' ? (
+            <Text style={styles.ideaContextCopy}>
+              {stashName
+                ? `Searching Ravelry for likely matches using ${stashName}. Import a pattern, then start a project and keep the stash details attached.`
+                : 'Import a pattern, then start a project from the result.'}
+            </Text>
+            {lastImportedLibraryPatternId ? (
               <BrandButton
-                label={isLoadingResults ? 'Loading…' : 'Search Ravelry'}
-                onPress={() => void runBrowse(1)}
-                loading={isLoadingResults}
+                label="Start project from imported pattern"
+                onPress={() =>
+                  router.push({
+                    pathname: '/project/new',
+                    params: projectLaunchParams(lastImportedLibraryPatternId),
+                  })
+                }
                 style={styles.fullWidth}
               />
             ) : null}
-          {results.length > 0 ? (
-            <BrandButton
-              label="Import shown"
-              onPress={() => void importShown()}
-              style={styles.fullWidth}
-              variant="ghost"
-            />
-          ) : null}
           </View>
         ) : null}
-        {results.length > 0 ? (
-          <Text style={styles.meta}>
-            Showing {pagination.returnedCount || results.length} of {pagination.totalCount || results.length} result{(pagination.totalCount || results.length) === 1 ? '' : 's'}.
-          </Text>
-        ) : null}
-      </View>
 
-      {results.length > 0 ? (
-        <View
-          onLayout={(event) => {
-            resultsTopRef.current = event.nativeEvent.layout.y;
-            if (shouldScrollToResultsRef.current) {
-              shouldScrollToResultsRef.current = false;
-              scrollToResults();
-            }
-          }}
-          style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Results</Text>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Browse</Text>
+          {status?.connected ? (
             <Text style={styles.meta}>
-              Page {pagination.page}{pagination.pageCount > 1 ? ` of ${pagination.pageCount}` : ''}
+              Connected{status.username ? ` as ${status.username}` : ''}. Search is ready.
             </Text>
-          </View>
-          <View style={styles.list}>
-            {rankedResults.map((pattern) => {
-              const toolCompatibility = toolCompatibilityByPatternId.get(pattern.id);
+          ) : null}
+          <View style={styles.modeRow}>
+            {modeOptions.map((option) => {
+              const active = mode === option.key;
               return (
-                <View
-                  key={pattern.id}
-                  style={[
-                    styles.resultCard,
-                    importedRavelryIds.has(pattern.id) ? styles.importedResultCard : null,
-                    toolCompatibility ? styles.compatibleResultCard : null,
-                  ]}>
-                  <View style={styles.resultHeaderRow}>
-                    <View style={styles.resultThumbnailShell}>
-                      {pattern.thumbnailUrl ? (
-                        <Image
-                          contentFit="cover"
-                          source={{ uri: pattern.thumbnailUrl }}
-                          style={styles.resultThumbnail}
-                        />
-                      ) : (
-                        <View style={styles.resultThumbnailFallback}>
-                          <Text style={styles.resultThumbnailFallbackEyebrow}>Ravelry</Text>
-                          <Text style={styles.resultThumbnailFallbackLabel}>
-                            {(pattern.craftType || 'Pattern').trim()}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.resultContent}>
-                      <Text onPress={() => void loadPattern(pattern.id)} style={styles.resultTitle}>
-                        {pattern.title}
-                      </Text>
-                      <Text style={styles.resultMeta}>
-                        {pattern.designer ? `by ${pattern.designer}` : 'Ravelry pattern'}
-                      </Text>
-                      <View style={styles.tagRow}>
-                        {pattern.craftType ? (
-                          <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{pattern.craftType.toUpperCase()}</Text>
-                          </View>
-                        ) : null}
-                        {pattern.availability ? (
-                          <View style={[styles.badge, styles.sourceBadge]}>
-                            <Text style={[styles.badgeText, styles.sourceBadgeText]}>
-                              {pattern.availability.toUpperCase()}
-                            </Text>
-                          </View>
-                        ) : null}
-                        {toolCompatibility ? (
-                          <View style={[styles.badge, styles.toolMatchBadge]}>
-                            <Text style={[styles.badgeText, styles.toolMatchBadgeText]}>
-                              {toolCompatibility.label.toUpperCase()}
-                            </Text>
-                          </View>
-                        ) : null}
-                        {importedRavelryIds.has(pattern.id) ? (
-                          <View style={[styles.badge, styles.importedBadge]}>
-                            <Text style={[styles.badgeText, styles.importedBadgeText]}>IMPORTED</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      {toolCompatibility ? (
-                        <Text style={styles.compatibilityDetail}>{toolCompatibility.detail}</Text>
-                      ) : null}
-                    </View>
-                  </View>
-                  <View style={styles.resultActions}>
-                    <BrandButton
-                      label="Preview"
-                      onPress={() => void openRavelryListing(pattern)}
-                      style={styles.fullWidth}
-                      variant="ghost"
-                    />
-                    <BrandButton
-                      disabled={isImporting}
-                      label={
-                        isImporting && importingPatternId === pattern.id
-                          ? 'Importing…'
-                          : importedRavelryIds.has(pattern.id)
-                            ? 'Re-import'
-                            : 'Import'
-                      }
-                      onPress={() => void importPattern(pattern)}
-                      style={styles.fullWidth}
-                      variant={importedRavelryIds.has(pattern.id) ? 'success' : 'primary'}
-                    />
-                    {importedLibraryPatternId(pattern.id) ? (
-                      <>
-                        <BrandButton
-                          label="Open in library"
-                          onPress={() =>
-                            router.push({
-                              pathname: '/pattern/[id]',
-                              params: { id: importedLibraryPatternId(pattern.id) ?? '' },
-                            })
-                          }
-                          style={styles.fullWidth}
-                          variant="ghost"
-                        />
-                        <BrandButton
-                          label="Start project"
-                          onPress={() =>
-                            router.push({
-                              pathname: '/project/new',
-                              params: projectLaunchParams(importedLibraryPatternId(pattern.id) ?? ''),
-                            })
-                          }
-                          style={styles.fullWidth}
-                          variant="secondary"
-                        />
-                      </>
-                    ) : null}
-                  </View>
-                </View>
+                <Pressable
+                  key={option.key}
+                  onPress={() => {
+                    setMode(option.key);
+                    setResults([]);
+                    setSelectedPattern(null);
+                    setPage(1);
+                    if (option.key === 'saved') {
+                      void runBrowse(1, 'saved');
+                    }
+                  }}
+                  style={({ pressed }) => [
+                    styles.modePill,
+                    active ? styles.modePillActive : null,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={[styles.modeLabel, active ? styles.modeLabelActive : null]}>{option.label}</Text>
+                </Pressable>
               );
             })}
           </View>
-          {mode === 'saved' && (!status?.connected || savedAccessIssue) ? (
-            <View style={styles.savedResultsActions}>
+          {mode === 'search' ? (
+            <>
+              <TextInput
+                autoCapitalize="words"
+                autoCorrect={false}
+                blurOnSubmit
+                onChangeText={setQuery}
+                onSubmitEditing={() => void runBrowse(1)}
+                placeholder="Sweater, socks, shawl..."
+                placeholderTextColor="#9b867d"
+                returnKeyType="search"
+                style={styles.input}
+                value={query}
+              />
+              <View style={styles.filterGrid}>
+                <FilterSelect
+                  label="Craft"
+                  options={craftOptions}
+                  value={craft}
+                  onChange={setCraft}
+                  expanded={openFilter === 'craft'}
+                  onToggle={() => setOpenFilter((current) => (current === 'craft' ? null : 'craft'))}
+                />
+                <FilterSelect
+                  label="Weight"
+                  options={weightOptions}
+                  value={weight}
+                  onChange={setWeight}
+                  expanded={openFilter === 'weight'}
+                  onToggle={() => setOpenFilter((current) => (current === 'weight' ? null : 'weight'))}
+                />
+                <FilterSelect
+                  label="Price"
+                  options={availabilityOptions}
+                  value={availability}
+                  onChange={setAvailability}
+                  expanded={openFilter === 'availability'}
+                  onToggle={() => setOpenFilter((current) => (current === 'availability' ? null : 'availability'))}
+                />
+                <FilterSelect
+                  label="Sort"
+                  options={sortOptions}
+                  value={sort}
+                  onChange={setSort}
+                  expanded={openFilter === 'sort'}
+                  onToggle={() => setOpenFilter((current) => (current === 'sort' ? null : 'sort'))}
+                />
+              </View>
+              {activeFilterSummary.length ? (
+                <View style={styles.activeFilterRow}>
+                  {activeFilterSummary.map((filterLabel) => (
+                    <View key={filterLabel} style={styles.activeFilterPill}>
+                      <Text style={styles.activeFilterText}>{filterLabel}</Text>
+                    </View>
+                  ))}
+                  <Pressable
+                    onPress={() => {
+                      setCraft('');
+                      setWeight('');
+                      setAvailability('');
+                      setSort('');
+                    }}
+                    style={styles.clearFiltersButton}
+                  >
+                    <Text style={styles.clearFiltersText}>Clear filters</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.savedModeHelp}>
+              <Text style={styles.meta}>
+                Patterns saved in your Ravelry library load automatically from your connected personal account.
+              </Text>
+              {isLoadingResults ? <ActivityIndicator color={tokens.color.primary} /> : null}
+            </View>
+          )}
+
+          {mode === 'search' || results.length > 0 ? (
+            <View style={styles.actionStack}>
+              {mode === 'search' ? (
+                <BrandButton
+                  label={isLoadingResults ? 'Loading…' : 'Search Ravelry'}
+                  onPress={() => void runBrowse(1)}
+                  loading={isLoadingResults}
+                  style={styles.fullWidth}
+                />
+              ) : null}
+              {results.length > 0 ? (
+                <BrandButton
+                  label="Import shown"
+                  onPress={() => void importShown()}
+                  style={styles.fullWidth}
+                  variant="ghost"
+                />
+              ) : null}
+            </View>
+          ) : null}
+          {results.length > 0 ? (
+            <Text style={styles.meta}>
+              Showing {pagination.returnedCount || results.length} of {pagination.totalCount || results.length} result
+              {(pagination.totalCount || results.length) === 1 ? '' : 's'}.
+            </Text>
+          ) : null}
+        </View>
+
+        {results.length > 0 ? (
+          <View
+            onLayout={(event) => {
+              resultsTopRef.current = event.nativeEvent.layout.y;
+              if (shouldScrollToResultsRef.current) {
+                shouldScrollToResultsRef.current = false;
+                scrollToResults();
+              }
+            }}
+            style={styles.card}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Results</Text>
+              <Text style={styles.meta}>
+                Page {pagination.page}
+                {pagination.pageCount > 1 ? ` of ${pagination.pageCount}` : ''}
+              </Text>
+            </View>
+            <View style={styles.list}>
+              {rankedResults.map((pattern) => {
+                const toolCompatibility = toolCompatibilityByPatternId.get(pattern.id);
+                return (
+                  <View
+                    key={pattern.id}
+                    style={[
+                      styles.resultCard,
+                      importedRavelryIds.has(pattern.id) ? styles.importedResultCard : null,
+                      toolCompatibility ? styles.compatibleResultCard : null,
+                    ]}
+                  >
+                    <View style={styles.resultHeaderRow}>
+                      <View style={styles.resultThumbnailShell}>
+                        {pattern.thumbnailUrl ? (
+                          <Image
+                            contentFit="cover"
+                            source={{ uri: pattern.thumbnailUrl }}
+                            style={styles.resultThumbnail}
+                          />
+                        ) : (
+                          <View style={styles.resultThumbnailFallback}>
+                            <Text style={styles.resultThumbnailFallbackEyebrow}>Ravelry</Text>
+                            <Text style={styles.resultThumbnailFallbackLabel}>
+                              {(pattern.craftType || 'Pattern').trim()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.resultContent}>
+                        <Text onPress={() => void loadPattern(pattern.id)} style={styles.resultTitle}>
+                          {pattern.title}
+                        </Text>
+                        <Text style={styles.resultMeta}>
+                          {pattern.designer ? `by ${pattern.designer}` : 'Ravelry pattern'}
+                        </Text>
+                        <View style={styles.tagRow}>
+                          {pattern.craftType ? (
+                            <View style={styles.badge}>
+                              <Text style={styles.badgeText}>{pattern.craftType.toUpperCase()}</Text>
+                            </View>
+                          ) : null}
+                          {pattern.availability ? (
+                            <View style={[styles.badge, styles.sourceBadge]}>
+                              <Text style={[styles.badgeText, styles.sourceBadgeText]}>
+                                {pattern.availability.toUpperCase()}
+                              </Text>
+                            </View>
+                          ) : null}
+                          {toolCompatibility ? (
+                            <View style={[styles.badge, styles.toolMatchBadge]}>
+                              <Text style={[styles.badgeText, styles.toolMatchBadgeText]}>
+                                {toolCompatibility.label.toUpperCase()}
+                              </Text>
+                            </View>
+                          ) : null}
+                          {importedRavelryIds.has(pattern.id) ? (
+                            <View style={[styles.badge, styles.importedBadge]}>
+                              <Text style={[styles.badgeText, styles.importedBadgeText]}>IMPORTED</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        {toolCompatibility ? (
+                          <Text style={styles.compatibilityDetail}>{toolCompatibility.detail}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <View style={styles.resultActions}>
+                      <BrandButton
+                        label="Preview"
+                        onPress={() => void openRavelryListing(pattern)}
+                        style={styles.fullWidth}
+                        variant="ghost"
+                      />
+                      <BrandButton
+                        disabled={isImporting}
+                        label={
+                          isImporting && importingPatternId === pattern.id
+                            ? 'Importing…'
+                            : importedRavelryIds.has(pattern.id)
+                              ? 'Re-import'
+                              : 'Import'
+                        }
+                        onPress={() => void importPattern(pattern)}
+                        style={styles.fullWidth}
+                        variant={importedRavelryIds.has(pattern.id) ? 'success' : 'primary'}
+                      />
+                      {importedLibraryPatternId(pattern.id) ? (
+                        <>
+                          <BrandButton
+                            label="Open in library"
+                            onPress={() =>
+                              router.push({
+                                pathname: '/pattern/[id]',
+                                params: {
+                                  id: importedLibraryPatternId(pattern.id) ?? '',
+                                },
+                              })
+                            }
+                            style={styles.fullWidth}
+                            variant="ghost"
+                          />
+                          <BrandButton
+                            label="Start project"
+                            onPress={() =>
+                              router.push({
+                                pathname: '/project/new',
+                                params: projectLaunchParams(importedLibraryPatternId(pattern.id) ?? ''),
+                              })
+                            }
+                            style={styles.fullWidth}
+                            variant="secondary"
+                          />
+                        </>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+            {mode === 'saved' && (!status?.connected || savedAccessIssue) ? (
+              <View style={styles.savedResultsActions}>
+                <BrandButton
+                  label="Reconnect saved patterns"
+                  onPress={() => void connectRavelry()}
+                  style={styles.fullWidth}
+                  variant="secondary"
+                />
+                <BrandButton
+                  label="Change account"
+                  onPress={() => void changeRavelryAccount()}
+                  style={styles.fullWidth}
+                  variant="ghost"
+                />
+              </View>
+            ) : null}
+            <View style={styles.paginationRow}>
               <BrandButton
-                label="Reconnect saved patterns"
-                onPress={() => void connectRavelry()}
-                style={styles.fullWidth}
-                variant="secondary"
+                label="Previous"
+                disabled={!pagination.hasPrev}
+                onPress={() => void runBrowse(page - 1)}
+                style={styles.paginationButton}
+                variant="ghost"
               />
               <BrandButton
-                label="Change account"
-                onPress={() => void changeRavelryAccount()}
-                style={styles.fullWidth}
+                label="Next"
+                disabled={!pagination.hasNext}
+                onPress={() => void runBrowse(page + 1)}
+                style={styles.paginationButton}
                 variant="ghost"
               />
             </View>
-          ) : null}
-          <View style={styles.paginationRow}>
-            <BrandButton
-              label="Previous"
-              disabled={!pagination.hasPrev}
-              onPress={() => void runBrowse(page - 1)}
-              style={styles.paginationButton}
-              variant="ghost"
-            />
-            <BrandButton
-              label="Next"
-              disabled={!pagination.hasNext}
-              onPress={() => void runBrowse(page + 1)}
-              style={styles.paginationButton}
-              variant="ghost"
-            />
           </View>
-        </View>
-      ) : null}
+        ) : null}
       </ScrollView>
 
       <Modal
         animationType="fade"
         onRequestClose={() => setAccountOverlayOpen(false)}
         transparent
-        visible={accountOverlayOpen}>
+        visible={accountOverlayOpen}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.accountModalCard}>
             <View style={styles.modalHeader}>
@@ -1117,7 +1121,8 @@ export default function RavelryScreen() {
                 accessibilityLabel="Close Ravelry account"
                 accessibilityRole="button"
                 onPress={() => setAccountOverlayOpen(false)}
-                style={({ pressed }) => [styles.closeButton, pressed ? styles.pressed : null]}>
+                style={({ pressed }) => [styles.closeButton, pressed ? styles.pressed : null]}
+              >
                 <Text style={styles.closeButtonText}>×</Text>
               </Pressable>
             </View>
@@ -1220,7 +1225,8 @@ function FilterSelect({
                   onChange(option);
                   onToggle();
                 }}
-                style={[styles.selectOption, active ? styles.selectOptionActive : null]}>
+                style={[styles.selectOption, active ? styles.selectOptionActive : null]}
+              >
                 <Text style={[styles.selectOptionText, active ? styles.selectOptionTextActive : null]}>
                   {formatFilterValue(option)}
                 </Text>

@@ -281,10 +281,7 @@ function extractSummaryPayload(payload: unknown) {
 function renderSummaryHtml(structured: Record<string, unknown> | null, fallbackText: string, fallbackTitle: string) {
   const title = String(structured?.pattern_title ?? structured?.title ?? fallbackTitle).trim();
   const overview = String(
-    structured?.construction_summary ??
-      structured?.overview ??
-      fallbackText ??
-      'Pattern summary refreshed.',
+    structured?.construction_summary ?? structured?.overview ?? fallbackText ?? 'Pattern summary refreshed.',
   ).trim();
 
   return [
@@ -293,7 +290,9 @@ function renderSummaryHtml(structured: Record<string, unknown> | null, fallbackT
     '<span class="ss-summary-label">Pattern summary</span>',
     `<h4>${escapeHtml(title || 'Pattern summary')}</h4>`,
     '</div>',
-    `<div class="ss-summary-overview"><p>${escapeHtml(stripAiMarkup(overview || fallbackText)).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p></div>`,
+    `<div class="ss-summary-overview"><p>${escapeHtml(stripAiMarkup(overview || fallbackText))
+      .replace(/\n{2,}/g, '</p><p>')
+      .replace(/\n/g, '<br>')}</p></div>`,
     '</div>',
   ].join('');
 }
@@ -334,10 +333,7 @@ export async function patternRoutes(app: FastifyInstance) {
     }
     const file = await getPatternFile(fileKey);
     reply.header('content-type', row.file_mime_type ?? file.contentType ?? 'application/pdf');
-    reply.header(
-      'content-disposition',
-      `attachment; filename="${safeDownloadFilename(row.original_filename)}"`,
-    );
+    reply.header('content-disposition', `attachment; filename="${safeDownloadFilename(row.original_filename)}"`);
     if (file.contentLength) {
       reply.header('content-length', String(file.contentLength));
     }
@@ -345,7 +341,8 @@ export async function patternRoutes(app: FastifyInstance) {
   });
 
   app.get('/patterns', { preHandler: app.authenticate }, async (request) => {
-    const search = typeof request.query === 'object' && request.query ? (request.query as { search?: string }).search : '';
+    const search =
+      typeof request.query === 'object' && request.query ? (request.query as { search?: string }).search : '';
     const result = await query(
       `SELECT *
        FROM user_patterns
@@ -361,7 +358,8 @@ export async function patternRoutes(app: FastifyInstance) {
 
   app.post('/patterns', { preHandler: app.authenticate }, async (request, reply) => {
     const entitlement = await resolveEntitlement(request.authUser.id);
-    if (!hasFeature(entitlement, 'patternUploads')) return reply.code(402).send({ error: 'Subscription required', entitlement });
+    if (!hasFeature(entitlement, 'patternUploads'))
+      return reply.code(402).send({ error: 'Subscription required', entitlement });
 
     const body = patternBody.parse(request.body);
     const result = await query(
@@ -402,7 +400,10 @@ export async function patternRoutes(app: FastifyInstance) {
 
   app.get('/patterns/:id', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const result = await query('SELECT * FROM user_patterns WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, request.authUser.id]);
+    const result = await query('SELECT * FROM user_patterns WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [
+      id,
+      request.authUser.id,
+    ]);
     if (!result.rowCount) return reply.code(404).send({ error: 'Pattern not found' });
     return { pattern: result.rows[0] };
   });
@@ -450,7 +451,8 @@ export async function patternRoutes(app: FastifyInstance) {
 
   app.post('/patterns/:id/summary/refresh', { preHandler: app.authenticate }, async (request, reply) => {
     const entitlement = await resolveEntitlement(request.authUser.id);
-    if (!hasFeature(entitlement, 'aiChat')) return reply.code(402).send({ error: 'Subscription required', entitlement });
+    if (!hasFeature(entitlement, 'aiChat'))
+      return reply.code(402).send({ error: 'Subscription required', entitlement });
 
     const { id } = request.params as { id: string };
     const body = refreshSummaryBody.parse(request.body ?? {});
@@ -567,13 +569,16 @@ export async function patternRoutes(app: FastifyInstance) {
 
     let workflow: unknown;
     try {
-      workflow =
-        (await callWordPressChatProxy(request.authUser.id, workflowPayload)) ??
-        (await callWorkflow('chat', workflowPayload));
+      workflow = await callWorkflow('chat', workflowPayload);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Workflow chat failed';
-      request.log.error({ error, workflowPayload }, 'Pattern summary refresh failed');
-      return reply.code(502).send({ error: message });
+      request.log.warn({ error }, 'Direct pattern summary workflow failed; trying WordPress chat proxy fallback');
+      try {
+        workflow = await callWordPressChatProxy(request.authUser.id, workflowPayload);
+      } catch (fallbackError) {
+        const message = fallbackError instanceof Error ? fallbackError.message : 'Workflow chat failed';
+        request.log.error({ error: fallbackError }, 'Pattern summary refresh failed');
+        return reply.code(502).send({ error: message });
+      }
     }
 
     const extracted = extractSummaryPayload(workflow);
@@ -589,7 +594,7 @@ export async function patternRoutes(app: FastifyInstance) {
        WHERE id = $1
          AND user_id = $2
        RETURNING *`,
-      [id, request.authUser.id, nextHtml, nextText, extracted.structured ?? {},],
+      [id, request.authUser.id, nextHtml, nextText, extracted.structured ?? {}],
     );
 
     return { pattern: result.rows[0], workflow };
@@ -688,7 +693,8 @@ export async function patternRoutes(app: FastifyInstance) {
 
   app.post('/patterns/:id/file', { preHandler: app.authenticate }, async (request, reply) => {
     const entitlement = await resolveEntitlement(request.authUser.id);
-    if (!hasFeature(entitlement, 'patternUploads')) return reply.code(402).send({ error: 'Subscription required', entitlement });
+    if (!hasFeature(entitlement, 'patternUploads'))
+      return reply.code(402).send({ error: 'Subscription required', entitlement });
 
     const { id } = request.params as { id: string };
     const patternResult = await query<{
@@ -833,9 +839,7 @@ export async function patternRoutes(app: FastifyInstance) {
       const extracted = extractSummaryPayload(workflowRecord);
       summaryText = extracted.answer || null;
       summaryStructured = extracted.structured;
-      summaryHtml = summaryText
-        ? renderSummaryHtml(summaryStructured, summaryText, pattern.title ?? filename)
-        : null;
+      summaryHtml = summaryText ? renderSummaryHtml(summaryStructured, summaryText, pattern.title ?? filename) : null;
       workflowPatch = {
         project_id: readWorkflowString(workflowRecord, ['project_id', 'projectId']),
         file_id: readWorkflowString(workflowRecord, ['file_id', 'fileId']),
@@ -905,27 +909,46 @@ export async function patternRoutes(app: FastifyInstance) {
 
   app.post('/workflows/upload', { preHandler: app.authenticate }, async (request, reply) => {
     const entitlement = await resolveEntitlement(request.authUser.id);
-    if (!hasFeature(entitlement, 'patternUploads')) return reply.code(402).send({ error: 'Subscription required', entitlement });
-    const result = await callWorkflow('upload', { userId: request.authUser.id, payload: request.body });
+    if (!hasFeature(entitlement, 'patternUploads'))
+      return reply.code(402).send({ error: 'Subscription required', entitlement });
+    const result = await callWorkflow('upload', {
+      userId: request.authUser.id,
+      payload: request.body,
+    });
     return { result };
   });
 
   app.post('/workflows/library-proxy', { preHandler: app.authenticate }, async (request, reply) => {
     const entitlement = await resolveEntitlement(request.authUser.id);
-    if (!hasFeature(entitlement, 'patternUploads')) return reply.code(402).send({ error: 'Subscription required', entitlement });
-    const result = await callWorkflow('library', { userId: request.authUser.id, payload: request.body });
+    if (!hasFeature(entitlement, 'patternUploads'))
+      return reply.code(402).send({ error: 'Subscription required', entitlement });
+    const result = await callWorkflow('library', {
+      userId: request.authUser.id,
+      payload: request.body,
+    });
     return { result };
   });
 
   app.get('/patterns/:id/file-url', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const result = await query('SELECT file_url, file_key FROM user_patterns WHERE id = $1 AND user_id = $2', [id, request.authUser.id]);
+    const result = await query('SELECT file_url, file_key FROM user_patterns WHERE id = $1 AND user_id = $2', [
+      id,
+      request.authUser.id,
+    ]);
     if (!result.rowCount) return reply.code(404).send({ error: 'Pattern not found' });
     const row = result.rows[0];
     if (row.file_key) {
-      return { fileUrl: await signedPatternUrl(row.file_key, 900), fileKey: row.file_key, expiresIn: 900 };
+      return {
+        fileUrl: await signedPatternUrl(row.file_key, 900),
+        fileKey: row.file_key,
+        expiresIn: 900,
+      };
     }
-    return { fileUrl: row.file_url, fileKey: null, expiresIn: row.file_url ? null : 0 };
+    return {
+      fileUrl: row.file_url,
+      fileKey: null,
+      expiresIn: row.file_url ? null : 0,
+    };
   });
 
   app.get('/patterns/:id/file', { preHandler: app.authenticate }, async (request, reply) => {
@@ -943,10 +966,7 @@ export async function patternRoutes(app: FastifyInstance) {
     if (row.file_key) {
       const file = await getPatternFile(row.file_key);
       reply.header('content-type', row.file_mime_type ?? file.contentType ?? 'application/pdf');
-      reply.header(
-        'content-disposition',
-        `attachment; filename="${safeDownloadFilename(row.original_filename)}"`,
-      );
+      reply.header('content-disposition', `attachment; filename="${safeDownloadFilename(row.original_filename)}"`);
       if (file.contentLength) {
         reply.header('content-length', String(file.contentLength));
       }
@@ -981,9 +1001,7 @@ export async function patternRoutes(app: FastifyInstance) {
     const row = result.rows[0];
     const metadata = row.metadata ?? {};
     const thumbnailUrl =
-      (metadata.thumbnail_url as string | undefined) ??
-      (metadata.thumbnailUrl as string | undefined) ??
-      '';
+      (metadata.thumbnail_url as string | undefined) ?? (metadata.thumbnailUrl as string | undefined) ?? '';
 
     if (thumbnailUrl && /^https?:\/\//i.test(thumbnailUrl)) {
       return reply.redirect(thumbnailUrl);

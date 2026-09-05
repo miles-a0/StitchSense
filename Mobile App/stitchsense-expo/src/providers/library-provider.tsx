@@ -37,48 +37,55 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const syncInFlightRef = useRef(false);
   const automaticSyncCheckRef = useRef(false);
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
+  const hasCachedPatternsRef = useRef(false);
+  const lastAutomaticSyncCheckAtRef = useRef(0);
+  const syncStatusRef = useRef<WordPressSyncStatus | null>(null);
 
-  const decoratePatterns = useCallback((nextPatterns: Pattern[]) => {
-    if (!accessToken) {
-      return nextPatterns;
-    }
+  useEffect(() => {
+    syncStatusRef.current = syncStatus;
+  }, [syncStatus]);
 
-    return nextPatterns.map((pattern) => {
-      const fileMimeType = (pattern.fileMimeType ?? '').toLowerCase();
-      const originalFilename = pattern.originalFilename ?? '';
-      const isPdf = fileMimeType.includes('pdf') || /\.pdf$/i.test(originalFilename);
-      const hasRemoteThumbnail =
-        typeof pattern.thumbnailUrl === 'string' &&
-        (/^https?:\/\//i.test(pattern.thumbnailUrl) || /^data:image\//i.test(pattern.thumbnailUrl));
-      const hasProtectedGeneratedThumbnail =
-        typeof pattern.thumbnailUrl === 'string' &&
-        pattern.thumbnailUrl.includes(`/patterns/${encodeURIComponent(pattern.id)}/thumbnail`);
-
-      if (!isPdf || (hasRemoteThumbnail && !hasProtectedGeneratedThumbnail)) {
-        return pattern;
+  const decoratePatterns = useCallback(
+    (nextPatterns: Pattern[]) => {
+      if (!accessToken) {
+        return nextPatterns;
       }
 
-      return {
-        ...pattern,
-        thumbnailUrl: buildPatternThumbnailUrl(pattern.id, accessToken, pattern.updatedAt ?? null),
-      };
-    });
-  }, [accessToken]);
+      return nextPatterns.map((pattern) => {
+        const fileMimeType = (pattern.fileMimeType ?? '').toLowerCase();
+        const originalFilename = pattern.originalFilename ?? '';
+        const isPdf = fileMimeType.includes('pdf') || /\.pdf$/i.test(originalFilename);
+        const hasRemoteThumbnail =
+          typeof pattern.thumbnailUrl === 'string' &&
+          (/^https?:\/\//i.test(pattern.thumbnailUrl) || /^data:image\//i.test(pattern.thumbnailUrl));
+        const hasProtectedGeneratedThumbnail =
+          typeof pattern.thumbnailUrl === 'string' &&
+          pattern.thumbnailUrl.includes(`/patterns/${encodeURIComponent(pattern.id)}/thumbnail`);
+
+        if (!isPdf || (hasRemoteThumbnail && !hasProtectedGeneratedThumbnail)) {
+          return pattern;
+        }
+
+        return {
+          ...pattern,
+          thumbnailUrl: buildPatternThumbnailUrl(pattern.id, accessToken, pattern.updatedAt ?? null),
+        };
+      });
+    },
+    [accessToken],
+  );
 
   const mergePatterns = useCallback((nextPatterns: Pattern[]) => {
-    return [...nextPatterns].sort((left, right) =>
-      (right.updatedAt ?? '').localeCompare(left.updatedAt ?? ''),
-    );
+    return [...nextPatterns].sort((left, right) => (right.updatedAt ?? '').localeCompare(left.updatedAt ?? ''));
   }, []);
 
-  const upsertPattern = useCallback((pattern: Pattern) => {
-    setPatterns((current) =>
-      mergePatterns([
-        pattern,
-        ...current.filter((existing) => existing.id !== pattern.id),
-      ]),
-    );
-  }, [mergePatterns]);
+  const upsertPattern = useCallback(
+    (pattern: Pattern) => {
+      setPatterns((current) => mergePatterns([pattern, ...current.filter((existing) => existing.id !== pattern.id)]));
+    },
+    [mergePatterns],
+  );
 
   const removePattern = useCallback((patternId: string) => {
     setPatterns((current) => current.filter((pattern) => pattern.id !== patternId));
@@ -107,7 +114,9 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
       setSyncStatus(status);
     } catch (error) {
       setSyncMessage(
-        getUserFacingErrorMessage(error, { fallback: 'Could not load sync status.' }),
+        getUserFacingErrorMessage(error, {
+          fallback: 'Could not load sync status.',
+        }),
       );
     }
   }, [accessToken]);
@@ -117,46 +126,61 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
       setPatterns([]);
       setLastSyncedAt(null);
       setSyncStatus(null);
+      syncStatusRef.current = null;
+      hasCachedPatternsRef.current = false;
       return;
     }
 
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const nextPatterns = await stitchSenseAPI.patterns(accessToken);
-      const cachedPatterns = nextPatterns.map((pattern) => ({
-        ...pattern,
-        activityCounts: {
-          chats: pattern.activityCounts?.chats ?? 0,
-          rewrites: pattern.activityCounts?.rewrites ?? 0,
-        },
-      }));
-      const patternsForLibrary = decoratePatterns(cachedPatterns).map((pattern) => ({
-        ...pattern,
-        activityCounts: {
-          chats: pattern.activityCounts?.chats ?? 0,
-          rewrites: pattern.activityCounts?.rewrites ?? 0,
-        },
-      }));
-      setPatterns(mergePatterns(patternsForLibrary));
-      const nextLastSyncedAt = new Date().toISOString();
-      setLastSyncedAt(nextLastSyncedAt);
-      const status = await stitchSenseAPI.syncStatus(accessToken);
-      setSyncStatus(status);
-      if (user?.id) {
-        await saveLibraryCache(user.id, {
-          patterns: cachedPatterns,
-          lastSyncedAt: nextLastSyncedAt,
-          syncStatus: status,
-        });
-      }
-    } catch (error) {
-      setErrorMessage(
-        getUserFacingErrorMessage(error, { fallback: 'Could not load patterns.' }),
-      );
-    } finally {
-      setIsLoading(false);
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
     }
+
+    const refreshPromise = (async () => {
+      if (!hasCachedPatternsRef.current) {
+        setIsLoading(true);
+      }
+      setErrorMessage(null);
+      try {
+        const nextPatterns = await stitchSenseAPI.patterns(accessToken);
+        const cachedPatterns = nextPatterns.map((pattern) => ({
+          ...pattern,
+          activityCounts: {
+            chats: pattern.activityCounts?.chats ?? 0,
+            rewrites: pattern.activityCounts?.rewrites ?? 0,
+          },
+        }));
+        const patternsForLibrary = decoratePatterns(cachedPatterns).map((pattern) => ({
+          ...pattern,
+          activityCounts: {
+            chats: pattern.activityCounts?.chats ?? 0,
+            rewrites: pattern.activityCounts?.rewrites ?? 0,
+          },
+        }));
+        setPatterns(mergePatterns(patternsForLibrary));
+        hasCachedPatternsRef.current = patternsForLibrary.length > 0;
+        const nextLastSyncedAt = new Date().toISOString();
+        setLastSyncedAt(nextLastSyncedAt);
+        if (user?.id) {
+          await saveLibraryCache(user.id, {
+            patterns: cachedPatterns,
+            lastSyncedAt: nextLastSyncedAt,
+            syncStatus: syncStatusRef.current,
+          });
+        }
+      } catch (error) {
+        setErrorMessage(
+          getUserFacingErrorMessage(error, {
+            fallback: 'Could not load patterns.',
+          }),
+        );
+      } finally {
+        setIsLoading(false);
+        refreshInFlightRef.current = null;
+      }
+    })();
+
+    refreshInFlightRef.current = refreshPromise;
+    return refreshPromise;
   }, [accessToken, decoratePatterns, mergePatterns, user?.id]);
 
   const syncFromWordPress = useCallback(async () => {
@@ -175,7 +199,9 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
       );
     } catch (error) {
       setSyncMessage(
-        getUserFacingErrorMessage(error, { fallback: 'WordPress sync failed.' }),
+        getUserFacingErrorMessage(error, {
+          fallback: 'WordPress sync failed.',
+        }),
       );
     } finally {
       syncInFlightRef.current = false;
@@ -188,6 +214,11 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
       return;
     }
 
+    const now = Date.now();
+    if (now - lastAutomaticSyncCheckAtRef.current < 5 * 60 * 1000) {
+      return;
+    }
+    lastAutomaticSyncCheckAtRef.current = now;
     automaticSyncCheckRef.current = true;
     try {
       const pending = await stitchSenseAPI.pendingWordPressSync(accessToken);
@@ -215,9 +246,11 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
         if (!snapshot) {
           return;
         }
+        hasCachedPatternsRef.current = snapshot.patterns.length > 0;
         setPatterns(decoratePatterns(snapshot.patterns));
         setLastSyncedAt(snapshot.lastSyncedAt);
         setSyncStatus(snapshot.syncStatus);
+        syncStatusRef.current = snapshot.syncStatus;
       } catch {
         // Cached library restore is best-effort; a live refresh follows immediately.
       }
