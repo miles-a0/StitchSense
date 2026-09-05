@@ -86,7 +86,7 @@ else
   exit 1
 fi
 
-nvm use 20 >/dev/null
+nvm use 22.23.0 >/dev/null
 
 pkill -f "expo start" 2>/dev/null || true
 pkill -f "node .*expo" 2>/dev/null || true

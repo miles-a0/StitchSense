@@ -46,8 +46,8 @@ cd "/Users/andrewmagill/DEV/StitchSense"
 ./tools/start-stitchsense-expo.sh tunnel
 ```
 
-The project is pinned to Node 20 via `.nvmrc`. The helper script loads `nvm`,
-switches to Node 20, clears stale Expo/Metro ports, and starts Expo in a way
+The project is pinned to Node 22.23.0 via `.nvmrc`. The helper script loads `nvm`,
+switches to Node 22.23.0, clears stale Expo/Metro ports, and starts Expo in a way
 that matches what the phone expects.
 
 ## Why this app is separate
