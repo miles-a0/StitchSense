@@ -2,7 +2,7 @@
 
 **Baseline:** 52% production-ready as of 28 August 2026.
 
-**Execution update:** The bridge host restriction is deployed and verified through the public endpoint; PostgreSQL, MinIO, and WordPress backups are verified and stored off-server; the shared bridge secret is rotated on both systems; and all pre-rotation refresh tokens are revoked.
+**Execution update (5 September 2026):** The bridge host restriction is deployed and verified; backups are verified off-server; the bridge secret is rotated; pre-rotation sessions are revoked; the published demo login is retired; backend production configuration, authentication throttling, CORS, headers, proxy handling, and upload validation are hardened; Node 22 builds and CI gates are deterministic; and Expo SDK 54 passes lint, typecheck, dependency compatibility, and all 18 Expo Doctor checks.
 
 ## Approach
 
@@ -28,7 +28,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [x] Create one project-wide Git repository that includes the Expo app, API, WordPress plugin source, migrations, scripts, and release documentation.
 - [x] Preserve the current Expo history, remove backup/generated ZIPs from the release source tree, and commit the current known state.
 - [ ] Configure a private remote repository, protected main branch, pull-request checks, and secret scanning.
-- [ ] Remove published demo credentials and disable or rotate the live demo account before public testing.
+- [x] Remove published demo credentials and disable or rotate the live demo account before public testing.
 - [x] Inventory production services, versions, owners, DNS/proxy configuration, and credential locations without copying secret values into documentation.
 - [x] Take and verify a PostgreSQL backup and document the object-storage backup/recovery method.
 
@@ -39,25 +39,32 @@ Close exploitable security and recoverability risks first, then run application 
 - [x] Remove client control of WordPress bridge destinations in `/auth/wordpress-login` and `/auth/wordpress-register`; use an exact configured-host allowlist and block private/link-local redirects.
 - [x] Rotate `WORDPRESS_BRIDGE_SHARED_SECRET` after deploying the bridge fix, revoke active refresh tokens as appropriate, and audit linked administrator accounts.
 - [x] Upgrade or replace the vulnerable Fastify JWT dependency chain and apply safe backend dependency patches.
-- [ ] Triage Expo dependency advisories, apply compatible patches, and record any build-only residual findings with justification and an upgrade target.
-- [ ] Add startup validation that refuses production boot with default, empty, malformed, or development credentials.
-- [ ] Apply authentication-specific rate limits to login, registration, refresh, password reset, and WordPress bridge routes.
-- [ ] Restrict browser CORS origins, add security headers, validate proxy/IP handling, and review upload limits and MIME/content validation.
-- [ ] Move production secrets to appropriately protected storage and restrict any necessary environment file to owner-only permissions.
-- [ ] Run focused authorization tests for cross-user patterns, projects, files, chats, rewrites, stash items, and admin routes.
+- [x] Triage Expo dependency advisories, apply compatible patches, and record any build-only residual findings with justification and an upgrade target.
+- [x] Add startup validation that refuses production boot with default, empty, malformed, or development credentials.
+- [x] Apply authentication-specific rate limits to login, registration, refresh, password reset, and WordPress bridge routes.
+- [x] Restrict browser CORS origins, add security headers, validate proxy/IP handling, and review upload limits and MIME/content validation.
+- [x] Move production secrets to appropriately protected storage and restrict any necessary environment file to owner-only permissions.
+- [x] Run focused authorization tests for cross-user patterns, projects, files, chats, rewrites, stash items, and admin routes.
 
 **Exit gate:** No unresolved critical/high exploitable backend finding; bridge-secret exfiltration is impossible; rotated credentials are live; authorization tests pass.
 
 ### 3. Make builds deterministic and enforce quality gates — P0
 
-- [ ] Fix the current React Hooks lint error and resolve or deliberately suppress all remaining warnings with explanations.
-- [ ] Upgrade local and CI runtimes to supported Node 22 LTS and align Expo SDK patch versions reported by Expo Doctor.
-- [ ] Reconcile `app.json`, `app.config.js`, package version, bundle identifiers, Android package, and deployment documentation.
-- [ ] Use `npm ci` in CI and Docker builds; pin the container base image to an intentional supported version.
-- [ ] Add CI jobs for PHP syntax, backend build/tests, Expo typecheck/lint/Doctor, dependency audit, secret scan, and container build.
+- [x] Fix the current React Hooks lint error and resolve or deliberately suppress all remaining warnings with explanations.
+- [x] Upgrade local and CI runtimes to supported Node 22 LTS and align Expo SDK patch versions reported by Expo Doctor.
+- [x] Reconcile `app.json`, `app.config.js`, package version, bundle identifiers, Android package, and deployment documentation.
+- [x] Use `npm ci` in CI and Docker builds; pin the container base image to an intentional supported version.
+- [x] Add CI jobs for PHP syntax, backend build/tests, Expo typecheck/lint/Doctor, dependency audit, secret scan, and container build.
 - [ ] Block merges and production builds when a required gate fails.
 
 **Exit gate:** A clean checkout passes every CI gate with no manual setup beyond documented environment configuration.
+
+### Dependency triage record
+
+- Backend production dependencies report zero known vulnerabilities after a clean Node 22 `npm ci`.
+- Expo SDK 54 was updated to its supported patch set (`expo` 54.0.37, `expo-constants` 18.0.14, and `expo-file-system` 19.0.24). Compatible audit fixes were applied.
+- The remaining Expo audit report is 10 moderate and 10 high transitive findings in Metro/Expo build tooling (`image-size`, `postcss`, `uuid`, and related dependency chains), with no critical finding. npm's offered remediation is an unsupported breaking jump to Expo 57, so it is deliberately deferred to the SDK 57 upgrade track. These packages are not backend runtime dependencies; CI blocks any new critical advisory and continues to enforce Expo's supported dependency matrix.
+- GitHub Actions run `33967860092` passed all four required jobs, including the isolated PostgreSQL cross-user authorization suite, Expo checks, PHP syntax, secret scanning, dependency audits, and production container build.
 
 ### 4. Build a launch-level automated test suite — P0/P1
 

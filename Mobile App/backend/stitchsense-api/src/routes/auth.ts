@@ -211,7 +211,9 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ message: 'Your password has been reset. You can now sign in.' });
   });
 
-  app.post('/auth/register', async (request, reply) => {
+  app.post('/auth/register', {
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, async (request, reply) => {
     const body = authBody.parse(request.body);
     const trialEnds = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const result = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin' }>(
@@ -225,7 +227,9 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.code(201).send({ user, ...tokens });
   });
 
-  app.post('/auth/login', async (request, reply) => {
+  app.post('/auth/login', {
+    config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+  }, async (request, reply) => {
     const body = authBody.pick({ email: true, password: true }).parse(request.body);
     const result = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin' }>(
       `SELECT id, email, display_name AS "displayName", role
@@ -241,7 +245,9 @@ export async function authRoutes(app: FastifyInstance) {
     return { user, ...tokens };
   });
 
-  app.post('/auth/refresh', async (request, reply) => {
+  app.post('/auth/refresh', {
+    config: { rateLimit: { max: 30, timeWindow: '15 minutes' } },
+  }, async (request, reply) => {
     const body = refreshBody.parse(request.body);
     const rotated = await rotateRefreshToken(body.refreshToken);
     if (!rotated) {
@@ -262,7 +268,9 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/auth/wordpress', async (request, reply) => {
+  app.post('/auth/wordpress', {
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     if (!config.wordpress.sharedSecret) {
       return reply.code(503).send({ error: 'WordPress bridge is not configured' });
     }
@@ -281,7 +289,9 @@ export async function authRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/auth/wordpress-login', async (request, reply) => {
+  app.post('/auth/wordpress-login', {
+    config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+  }, async (request, reply) => {
     if (!config.wordpress.sharedSecret) {
       return reply.code(503).send({ error: 'WordPress bridge is not configured' });
     }
@@ -338,7 +348,9 @@ export async function authRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/auth/wordpress-register', async (request, reply) => {
+  app.post('/auth/wordpress-register', {
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, async (request, reply) => {
     if (!config.wordpress.sharedSecret) {
       return reply.code(503).send({ error: 'WordPress bridge is not configured' });
     }

@@ -16,16 +16,7 @@ import { useSession } from '@/src/providers/session-provider';
 import { useStash } from '@/src/providers/stash-provider';
 import { shadows, tokens } from '@/src/theme/tokens';
 
-const libraryFilters = [
-  { id: 'all', label: 'All' },
-  { id: 'stash-ready', label: 'Stash ready' },
-  { id: 'pdf', label: 'PDFs' },
-  { id: 'needs-details', label: 'Needs details' },
-  { id: 'ravelry', label: 'Ravelry' },
-  { id: 'archived', label: 'Archived' },
-] as const;
-
-type LibraryFilter = (typeof libraryFilters)[number]['id'];
+type LibraryFilter = 'all' | 'stash-ready' | 'pdf' | 'needs-details' | 'ravelry' | 'archived';
 type LibraryStatIcon = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 function patternNeedsDetails(pattern: Pattern) {

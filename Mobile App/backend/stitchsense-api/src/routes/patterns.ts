@@ -45,6 +45,25 @@ function isPdfBuffer(buffer: Buffer) {
   return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
 }
 
+function isPlainTextBuffer(buffer: Buffer) {
+  if (buffer.length === 0 || buffer.includes(0)) return false;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    const disallowedControls = text.match(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g)?.length ?? 0;
+    return disallowedControls <= Math.max(2, Math.floor(text.length * 0.001));
+  } catch {
+    return false;
+  }
+}
+
+function safeDownloadFilename(value: string | null) {
+  const sanitized = (value ?? 'pattern.pdf')
+    .replace(/[\\/\r\n\t"<>:|?*\u0000-\u001F\u007F]/g, '_')
+    .trim()
+    .slice(0, 180);
+  return sanitized || 'pattern.pdf';
+}
+
 function base64Url(input: string) {
   return Buffer.from(input, 'utf8').toString('base64url');
 }
@@ -317,7 +336,7 @@ export async function patternRoutes(app: FastifyInstance) {
     reply.header('content-type', row.file_mime_type ?? file.contentType ?? 'application/pdf');
     reply.header(
       'content-disposition',
-      `inline; filename="${(row.original_filename ?? 'pattern.pdf').replace(/"/g, '')}"`,
+      `attachment; filename="${safeDownloadFilename(row.original_filename)}"`,
     );
     if (file.contentLength) {
       reply.header('content-length', String(file.contentLength));
@@ -681,12 +700,10 @@ export async function patternRoutes(app: FastifyInstance) {
 
     const buffer = await file.toBuffer();
     const filename = file.filename || 'pattern.pdf';
-    const declaredMimeType = file.mimetype || 'application/octet-stream';
     const looksLikePdf = isPdfBuffer(buffer);
-    const isAllowedUpload =
-      looksLikePdf ||
-      declaredMimeType.toLowerCase().includes('pdf') ||
-      /\.(pdf|txt|md)$/i.test(filename);
+    const looksLikeText = /\.(txt|md)$/i.test(filename) && isPlainTextBuffer(buffer);
+    const isAllowedUpload = looksLikePdf || looksLikeText;
+    const validatedMimeType = looksLikePdf ? 'application/pdf' : 'text/plain; charset=utf-8';
 
     if (!isAllowedUpload) {
       return reply.code(415).send({ error: 'Please upload a PDF or text-based pattern file.' });
@@ -696,11 +713,11 @@ export async function patternRoutes(app: FastifyInstance) {
       userId: request.authUser.id,
       patternId: id,
       filename,
-      contentType: looksLikePdf ? 'application/pdf' : declaredMimeType,
+      contentType: validatedMimeType,
       buffer,
     });
 
-    const isPdfUpload = looksLikePdf || declaredMimeType.toLowerCase().includes('pdf') || /\.pdf$/i.test(filename);
+    const isPdfUpload = looksLikePdf;
     let metadataPatch: Record<string, unknown> | null = null;
     if (isPdfUpload) {
       try {
@@ -721,7 +738,7 @@ export async function patternRoutes(app: FastifyInstance) {
     let summaryStructured: Record<string, unknown> | null = null;
     const workflowPayload = {
       file_name: filename,
-      mime_type: looksLikePdf ? 'application/pdf' : declaredMimeType,
+      mime_type: validatedMimeType,
       file_size: stored.size,
       project_name: pattern.title || filename.replace(/\.[^/.]+$/, ''),
       craft_type: pattern.craft_type ?? '',
@@ -743,7 +760,7 @@ export async function patternRoutes(app: FastifyInstance) {
       const dataUriPayload = {
         ...workflowPayload,
         upload_transport: 'stitchsense_platform_file_data_uri',
-        file_data_uri: `data:${looksLikePdf ? 'application/pdf' : declaredMimeType};base64,${buffer.toString('base64')}`,
+        file_data_uri: `data:${validatedMimeType};base64,${buffer.toString('base64')}`,
       };
       const transferToken = signFileTransferToken({
         userId: request.authUser.id,
@@ -773,7 +790,7 @@ export async function patternRoutes(app: FastifyInstance) {
         uploadWorkflow = await callUploadWorkflowWithFile({
           buffer,
           filename,
-          mimeType: looksLikePdf ? 'application/pdf' : declaredMimeType,
+          mimeType: validatedMimeType,
           payload: workflowPayload,
         });
       } catch (multipartError) {
@@ -847,7 +864,7 @@ export async function patternRoutes(app: FastifyInstance) {
         request.authUser.id,
         stored.key,
         filename,
-        looksLikePdf ? 'application/pdf' : declaredMimeType,
+        validatedMimeType,
         stored.size,
         filename.split('.').pop()?.toLowerCase() ?? null,
         stored.provider,
@@ -914,7 +931,7 @@ export async function patternRoutes(app: FastifyInstance) {
       reply.header('content-type', row.file_mime_type ?? file.contentType ?? 'application/pdf');
       reply.header(
         'content-disposition',
-        `inline; filename="${(row.original_filename ?? 'pattern.pdf').replace(/"/g, '')}"`,
+        `attachment; filename="${safeDownloadFilename(row.original_filename)}"`,
       );
       if (file.contentLength) {
         reply.header('content-length', String(file.contentLength));

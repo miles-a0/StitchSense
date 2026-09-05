@@ -1,7 +1,15 @@
 import { pool, query } from '../src/db/pool.js';
 
-const email = (process.env.DEMO_EMAIL ?? 'demo@stitchsense.test').toLowerCase();
-const password = process.env.DEMO_PASSWORD ?? 'StitchSense123!';
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('The demo seed is disabled in production');
+}
+
+if (!process.env.DEMO_EMAIL || (process.env.DEMO_PASSWORD ?? '').length < 12) {
+  throw new Error('Set DEMO_EMAIL and a unique DEMO_PASSWORD of at least 12 characters');
+}
+
+const email = process.env.DEMO_EMAIL.toLowerCase();
+const password = process.env.DEMO_PASSWORD;
 const displayName = process.env.DEMO_DISPLAY_NAME ?? 'Demo Stitcher';
 
 async function main() {
@@ -44,7 +52,6 @@ async function main() {
 
   console.log('Demo user ready');
   console.log(`Email: ${email}`);
-  console.log(`Password: ${password}`);
   console.log(`User ID: ${user.id}`);
   if (patternResult.rowCount) {
     console.log(`Demo pattern ID: ${patternResult.rows[0].id}`);

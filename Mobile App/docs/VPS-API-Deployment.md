@@ -122,22 +122,19 @@ If you see this instead, NPM is still pointing at the wrong service:
 {"status":"ok","timestamp":"..."}
 ```
 
-## Demo Login
+## Local Demo Login
 
-Once the API can reach PostgreSQL, create the demo account:
+Demo seeding is for local development only and is blocked when `NODE_ENV=production`.
+Choose unique, temporary credentials and pass them explicitly:
 
 ```bash
 cd stitchsense-api
-npm install
+DEMO_EMAIL='developer-owned-address@example.test' \
+DEMO_PASSWORD='use-a-unique-random-value' \
 npm run seed:demo
 ```
 
-Demo credentials:
-
-```text
-demo@stitchsense.test
-StitchSense123!
-```
+Never publish, commit, or reuse the temporary password. Retire the account before any public test.
 
 ## n8n Notes
 

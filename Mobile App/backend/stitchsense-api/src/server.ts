@@ -1,5 +1,7 @@
 import { buildApp } from './app.js';
-import { config } from './config.js';
+import { config, validateProductionConfig } from './config.js';
+
+validateProductionConfig();
 
 const app = await buildApp();
 

@@ -1468,7 +1468,7 @@ export default function ProjectDetailScreen() {
     setStatusMessage(`${item.name} reservation cleared.`);
   }
 
-  async function useReservedStash(item: StashItem) {
+  async function consumeReservedStash(item: StashItem) {
     const quantity = stashQuantityNumber(item);
     const amount = projectStashUseAmount(item);
     if (quantity === null || amount === null) {
@@ -2648,7 +2648,7 @@ export default function ProjectDetailScreen() {
                     {reservedHere && projectStashUseAmount(match.item) !== null ? (
                       <BrandButton
                         label={`Use ${projectStashUseAmount(match.item)}${match.item.unit ? ` ${match.item.unit}` : ''}`}
-                        onPress={() => void useReservedStash(match.item)}
+                        onPress={() => void consumeReservedStash(match.item)}
                         style={styles.fullWidth}
                         variant="secondary"
                       />
