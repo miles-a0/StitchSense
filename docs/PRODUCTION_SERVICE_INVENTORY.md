@@ -1,13 +1,15 @@
 # StitchSense Production Service Inventory
 
-**Observed:** 28 August 2026  
+**Observed:** 5 September 2026
+
 **Purpose:** Recovery and deployment inventory. Secret values are deliberately excluded.
 
 ## Source and deployment
 
 - Canonical source: private GitHub repository `miles-a0/StitchSense`, default branch `main`.
 - Production API deployment path documented by the project: `/opt/stitchsense-mobile/backend`.
-- API deployment unit: Docker Compose service `api`, container `stitchsense-api`, host port `4445` to container port `8080`, restart policy `unless-stopped`.
+- API deployment unit: Docker Compose service `api`, container `stitchsense-api`, container port `8080`, restart policy `unless-stopped`. Host port `4445` is bound only to VPS loopback (`127.0.0.1`) and is not publicly reachable.
+- Reverse proxy: Nginx Proxy Manager routes `stitchsense.zu-auto.co.uk` to `stitchsense-api:8080` over the private external Docker network `my-main-net`; the API also remains attached to `backend_default` for database/object-storage service access.
 - Production environment file: `/opt/stitchsense-mobile/backend/stitchsense-api/.env.vps`. The file contains operational secrets, is owned by `root:root`, and was corrected from mode `0644` to owner-only mode `0600`; values are not recorded here.
 - Host access: SSH to `root@173.249.40.161` using the authorised development-machine key.
 
@@ -79,6 +81,17 @@ Security-relevant observations:
 - All 218 active refresh tokens were revoked transactionally after rotation and a `security.bridge_secret_rotated` audit event was recorded.
 - Account audit found 1 established administrator, 1 corresponding WordPress link, 28 standard users, 0 orphaned links, 0 unexpected providers, and 0 non-canonical WordPress links.
 - Temporary plaintext rotation files were removed from the Mac, VPS, and WordPress host after verification.
+
+## P0 hardening deployment evidence
+
+- Release source: private repository commit `1c88c5c294ef33cab67562f15db6da0baa9ed3a8`; GitHub Actions production-check run `33968160241` passed before deployment.
+- Running image: `sha256:03a07dc07c80740712df50cc808b02a875f28b469fa72d45884ef5a67457d10e`, built from the pinned Node 22.23.0 base image with production-only dependencies.
+- The canary and promoted container both reached Docker `healthy`; the promoted container runs as UID/GID 1000 (`node`) and reported zero restarts after deployment.
+- Public `/health` returned HTTP 200. Validation errors returned HTTP 400, the configured Catlow Yarns browser origin received the expected CORS header, an unapproved origin did not, and security headers were present.
+- Direct access to `173.249.40.161:4445` returned no HTTP response after promotion, while the VPS loopback health endpoint and private reverse-proxy route remained healthy.
+- Production CORS, trusted-proxy CIDR, and maximum upload size are explicit. The production environment file remains owned by `root:root` with mode `0600`.
+- The published demo login was retired: its password hash was replaced with unrecoverable random material, associated sessions were revoked, and a `security.demo_credentials_retired` audit event was recorded.
+- Rollback material for this deployment is retained under `/opt/stitchsense-mobile/backups/20260905-p0-hardening` with owner-only access. The previous image is tagged `backend-api:pre-p0-20260905`.
 
 ## Ownership and access gaps
 

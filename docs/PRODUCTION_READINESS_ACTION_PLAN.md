@@ -27,7 +27,8 @@ Close exploitable security and recoverability risks first, then run application 
 
 - [x] Create one project-wide Git repository that includes the Expo app, API, WordPress plugin source, migrations, scripts, and release documentation.
 - [x] Preserve the current Expo history, remove backup/generated ZIPs from the release source tree, and commit the current known state.
-- [ ] Configure a private remote repository, protected main branch, pull-request checks, and secret scanning.
+- [x] Configure a private remote repository, pull-request checks, and secret scanning.
+- [ ] Enable protected-main enforcement for required checks when the GitHub repository plan supports rulesets/branch protection.
 - [x] Remove published demo credentials and disable or rotate the live demo account before public testing.
 - [x] Inventory production services, versions, owners, DNS/proxy configuration, and credential locations without copying secret values into documentation.
 - [x] Take and verify a PostgreSQL backup and document the object-storage backup/recovery method.
@@ -65,6 +66,8 @@ Close exploitable security and recoverability risks first, then run application 
 - Expo SDK 54 was updated to its supported patch set (`expo` 54.0.37, `expo-constants` 18.0.14, and `expo-file-system` 19.0.24). Compatible audit fixes were applied.
 - The remaining Expo audit report is 10 moderate and 10 high transitive findings in Metro/Expo build tooling (`image-size`, `postcss`, `uuid`, and related dependency chains), with no critical finding. npm's offered remediation is an unsupported breaking jump to Expo 57, so it is deliberately deferred to the SDK 57 upgrade track. These packages are not backend runtime dependencies; CI blocks any new critical advisory and continues to enforce Expo's supported dependency matrix.
 - GitHub Actions run `33967860092` passed all four required jobs, including the isolated PostgreSQL cross-user authorization suite, Expo checks, PHP syntax, secret scanning, dependency audits, and production container build.
+- GitHub Actions run `33968160241` passed on protected release source commit `1c88c5c`; the same commit was deployed to production as image `sha256:03a07dc07c80740712df50cc808b02a875f28b469fa72d45884ef5a67457d10e`.
+- GitHub branch-protection enforcement remains unavailable on the repository's current plan. Checks run on every pull request and push to `main`, but GitHub cannot yet prevent an administrator from bypassing them.
 
 ### 4. Build a launch-level automated test suite — P0/P1
 
@@ -116,7 +119,8 @@ Close exploitable security and recoverability risks first, then run application 
 
 - [ ] Add versioned migration tracking and a controlled migrate-before-release job with backward-compatible rollout rules.
 - [ ] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels.
-- [ ] Harden the API container: non-root user, health/readiness checks, graceful shutdown, resource limits, and minimal production dependencies.
+- [x] Run the API container as a non-root user with a health check, minimal production dependencies, localhost-only host binding, and private reverse-proxy networking.
+- [ ] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits.
 - [ ] Add structured logs, request correlation IDs, crash reporting, uptime checks, latency/error metrics, and alert routing.
 - [ ] Create dashboards and alerts for API availability, authentication failures, workflow failures, webhook failures, database capacity, and storage errors.
 - [ ] Document and rehearse deployment, rollback, database restore, secret rotation, and incident-response runbooks.
@@ -172,4 +176,4 @@ Recalculate the production-readiness percentage only when exit-gate evidence is 
 
 ## Immediate Next Task
 
-Start with Workstream 1 and the WordPress bridge portion of Workstream 2. Before modifying the bridge, capture the current repository state and verified backups; then implement host restriction tests, deploy the fix, and rotate the shared secret.
+Build the isolated staging environment in Workstream 5, then expand the automated journey coverage in Workstream 4 against that environment. Branch-protection enforcement should be enabled as soon as the GitHub repository plan permits it.
