@@ -22,6 +22,7 @@ ENV NODE_ENV=production
 RUN apk add --no-cache poppler-utils
 COPY --chown=node:node --from=production-deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/dist ./dist
+COPY --chown=node:node migrations ./migrations
 COPY --chown=node:node package.json ./
 USER node
 EXPOSE 8080

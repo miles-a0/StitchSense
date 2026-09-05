@@ -121,7 +121,7 @@ Close exploitable security and recoverability risks first, then run application 
 
 ### 8. Harden deployment and production operations — P1
 
-- [ ] Add versioned migration tracking and a controlled migrate-before-release job with backward-compatible rollout rules.
+- [ ] Add versioned migration tracking and a controlled migrate-before-release job with backward-compatible rollout rules. *(Implemented locally on branch `ops/versioned-migrations`; pending CI and production migration-record backfill.)*
 - [ ] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels.
 - [x] Run the API container as a non-root user with a health check, minimal production dependencies, localhost-only host binding, and private reverse-proxy networking.
 - [x] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits.

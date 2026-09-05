@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "npm run build && node --test tests/*.test.mjs",
+    "migrate": "node dist/scripts/apply-migrations.js",
     "audit:platform-data": "node dist/scripts/audit-platform-data.js",
     "audit:wordpress-export": "node dist/scripts/audit-wordpress-export.js",
     "migration:wordpress": "node dist/scripts/import-wordpress-library.js",
