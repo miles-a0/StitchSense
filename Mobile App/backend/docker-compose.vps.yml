@@ -7,6 +7,14 @@ services:
     env_file:
       - ./stitchsense-api/.env.vps
     ports:
-      - "4445:8080"
+      - "127.0.0.1:4445:8080"
+    networks:
+      - default
+      - reverse_proxy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+networks:
+  reverse_proxy:
+    external: true
+    name: my-main-net
