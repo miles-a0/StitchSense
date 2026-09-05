@@ -8,6 +8,8 @@
 
 **Operations update (5 September 2026):** Graceful API shutdown and VPS container resource limits passed CI on PR #7 and were deployed as production API image `sha256:d35cbecc63570e6e3c101892c17ef5bb55fdc9f7c101f8e9267e2b67ba62635e`; public and private health checks passed, Docker reported the 768MB memory cap, 256MB reservation, 1.5 CPU cap, and `init: true`, and a canary SIGTERM stop test logged clean Fastify shutdown.
 
+**Migration update (5 September 2026):** Versioned migration tracking passed CI on PR #9 and was deployed as production API image `sha256:781edd8c496b51c41bf5782e8503ad0056f7899efe05e970bd51909ad4d3b39d`; a fresh PostgreSQL backup was taken, `schema_migrations` was backfilled with migrations `001` through `008`, a second migration run skipped all eight as already applied, and public/private API health checks passed after rollout.
+
 ## Approach
 
 Close exploitable security and recoverability risks first, then run application hardening, billing, data validation, and store preparation in parallel where dependencies allow. A workstream is complete only when its validation evidence is recorded; implementation alone does not move it to done.
@@ -121,7 +123,7 @@ Close exploitable security and recoverability risks first, then run application 
 
 ### 8. Harden deployment and production operations — P1
 
-- [ ] Add versioned migration tracking and a controlled migrate-before-release job with backward-compatible rollout rules. *(Implemented locally on branch `ops/versioned-migrations`; pending CI and production migration-record backfill.)*
+- [x] Add versioned migration tracking and a controlled migrate-before-release job with backward-compatible rollout rules.
 - [ ] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels.
 - [x] Run the API container as a non-root user with a health check, minimal production dependencies, localhost-only host binding, and private reverse-proxy networking.
 - [x] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits.
