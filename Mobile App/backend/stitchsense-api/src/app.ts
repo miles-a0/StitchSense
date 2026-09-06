@@ -3,7 +3,8 @@ import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
-import Fastify from 'fastify';
+import Fastify, { LogController } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import rawBody from 'fastify-raw-body';
 import { ZodError } from 'zod';
 import { config } from './config.js';
@@ -26,7 +27,17 @@ import { visionRoutes } from './routes/vision.js';
 export async function buildApp() {
   const allowedOrigins = new Set(config.corsOrigins.map((origin) => new URL(origin).origin));
   const app = Fastify({
+    genReqId(request) {
+      const incomingRequestId = request.headers['x-request-id'];
+      if (typeof incomingRequestId === 'string' && incomingRequestId.trim()) {
+        return incomingRequestId.slice(0, 128);
+      }
+      return randomUUID();
+    },
+    requestIdHeader: 'x-request-id',
+    logController: new LogController({ requestIdLogLabel: 'requestId' }),
     logger: {
+      level: config.logLevel,
       redact: {
         paths: [
           'req.headers.authorization',
@@ -77,6 +88,26 @@ export async function buildApp() {
   await app.register(rateLimit, { max: 600, timeWindow: '1 minute' });
   await registerAuth(app);
 
+  app.addHook('onRequest', async (request, reply) => {
+    reply.header('x-request-id', request.id);
+  });
+
+  app.addHook('onResponse', async (request, reply) => {
+    const responseTimeMs = reply.elapsedTime;
+    const logPayload = {
+      requestId: request.id,
+      method: request.method,
+      url: request.url,
+      statusCode: reply.statusCode,
+      responseTimeMs: Math.round(responseTimeMs),
+      userId: request.authUser?.id,
+    };
+
+    if (responseTimeMs >= config.slowRequestMs) {
+      request.log.warn(logPayload, 'Slow API request');
+    }
+  });
+
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
       return reply.code(400).send({
@@ -90,10 +121,10 @@ export async function buildApp() {
       ? handledError.statusCode
       : 500;
     if (statusCode >= 500) {
-      request.log.error({ err: error }, 'Unhandled request error');
-      return reply.code(500).send({ error: 'Internal server error' });
+      request.log.error({ err: error, requestId: request.id }, 'Unhandled request error');
+      return reply.code(500).send({ error: 'Internal server error', requestId: request.id });
     }
-    return reply.code(statusCode).send({ error: handledError.message });
+    return reply.code(statusCode).send({ error: handledError.message, requestId: request.id });
   });
 
   app.get('/health', async () => ({ ok: true, service: 'stitchsense-api' }));

@@ -14,9 +14,16 @@ function positiveInteger(value: string | undefined, fallback: number) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function logLevel(value: string | undefined) {
+  const candidate = value ?? 'info';
+  return ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'].includes(candidate) ? candidate : 'info';
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: positiveInteger(process.env.PORT, 8080),
+  logLevel: logLevel(process.env.LOG_LEVEL),
+  slowRequestMs: positiveInteger(process.env.SLOW_REQUEST_MS, 3000),
   publicApiBaseUrl: process.env.PUBLIC_API_BASE_URL ?? process.env.API_PUBLIC_URL ?? '',
   corsOrigins: commaSeparated(process.env.CORS_ORIGINS),
   trustProxy: commaSeparated(process.env.TRUST_PROXY),
