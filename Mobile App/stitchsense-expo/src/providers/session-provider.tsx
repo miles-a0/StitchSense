@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { APIError, stitchSenseAPI } from '@/src/lib/api';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import { saveOnboardingPending } from '@/src/lib/onboarding-store';
+import { configureRevenueCat, hasRevenueCatApiKey, revenueCatLogOut, usesRevenueCatStoreBilling } from '@/src/lib/revenuecat';
 import { clearTokens, loadTokens, saveTokens } from '@/src/lib/token-store';
 import type { Entitlement, User } from '@/src/lib/models';
 
@@ -52,6 +53,9 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     setAccessToken(response.accessToken);
     setRefreshToken(response.refreshToken);
     await saveTokens(response.accessToken, response.refreshToken);
+    if (usesRevenueCatStoreBilling() && hasRevenueCatApiKey()) {
+      await configureRevenueCat(response.user.id);
+    }
     const entitlementResponse = await stitchSenseAPI.entitlement(response.accessToken);
     setEntitlement(entitlementResponse.entitlement);
   }, []);
@@ -62,6 +66,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     setAccessToken(null);
     setRefreshToken(null);
     setErrorMessage(null);
+    await revenueCatLogOut();
     await clearTokens();
   }, []);
 

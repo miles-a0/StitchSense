@@ -3,19 +3,20 @@ import * as Linking from 'expo-linking';
 import { useRouter, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BrandButton } from '@/src/components/ui/brand-button';
 import { stitchSenseAPI } from '@/src/lib/api';
 import { config } from '@/src/lib/config';
 import type { Promotion } from '@/src/lib/models';
+import { purchaseRevenueCatPlan, usesRevenueCatStoreBilling } from '@/src/lib/revenuecat';
 import { useSession } from '@/src/providers/session-provider';
 import { tokens } from '@/src/theme/tokens';
 import { getStoredItem, setStoredItem } from '@/src/lib/secure-storage';
 
 const checkoutSuccessUrl = `${config.apiBaseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
 const checkoutCancelUrl = `${config.apiBaseUrl}/billing/cancel`;
-const usesAppleStoreBilling = Platform.OS === 'ios';
+const usesStoreBilling = usesRevenueCatStoreBilling();
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -111,12 +112,13 @@ export function PromoPopup() {
         return;
       }
       if (action.type === 'checkout') {
-        if (usesAppleStoreBilling) {
-          Alert.alert(
-            'App Store subscriptions',
-            'StitchSense subscriptions on iPhone will use Apple in-app purchase in the App Store build. Stripe checkout is disabled on iOS for store compliance.',
-          );
-          router.push('/paywall');
+        if (usesStoreBilling) {
+          if (!user?.id) {
+            throw new Error('Sign in before starting a subscription.');
+          }
+          await purchaseRevenueCatPlan(user.id, action.checkoutPlan === 'monthly' ? 'monthly' : 'annual');
+          await wait(1500);
+          await refreshAccount();
           return;
         }
         const response = await stitchSenseAPI.createCheckout(accessToken, {

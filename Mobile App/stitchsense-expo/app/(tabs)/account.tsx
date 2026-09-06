@@ -1,7 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppSection } from '@/src/components/ui/app-section';
 import { BrandButton } from '@/src/components/ui/brand-button';
@@ -10,6 +10,12 @@ import { InlineBackButton } from '@/src/components/ui/inline-back-button';
 import { stitchSenseAPI } from '@/src/lib/api';
 import { config } from '@/src/lib/config';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
+import {
+  openRevenueCatManagement,
+  purchaseRevenueCatPlan,
+  restoreRevenueCatPurchases,
+  usesRevenueCatStoreBilling,
+} from '@/src/lib/revenuecat';
 import { useLibrary } from '@/src/providers/library-provider';
 import { usePreferences } from '@/src/providers/preferences-provider';
 import { useSession } from '@/src/providers/session-provider';
@@ -18,7 +24,7 @@ import { shadows, tokens } from '@/src/theme/tokens';
 const checkoutSuccessUrl = `${config.apiBaseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
 const checkoutCancelUrl = `${config.apiBaseUrl}/billing/cancel`;
 const billingReturnUrl = `${config.apiBaseUrl}/billing/success`;
-const usesAppleStoreBilling = Platform.OS === 'ios';
+const usesStoreBilling = usesRevenueCatStoreBilling();
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -139,6 +145,7 @@ export default function AccountScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLaunchingCheckout, setIsLaunchingCheckout] = useState<string | null>(null);
   const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
+  const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
   const [lastExportSummary, setLastExportSummary] = useState<string | null>(null);
 
   useEffect(() => {
@@ -223,15 +230,24 @@ export default function AccountScreen() {
 
   async function launchCheckout(plan: 'monthly' | 'annual') {
     if (!accessToken) return;
-    if (usesAppleStoreBilling) {
-      Alert.alert(
-        'App Store subscriptions',
-        'StitchSense subscriptions on iPhone will use Apple in-app purchase in the App Store build. Stripe checkout is disabled on iOS for store compliance.',
-      );
-      return;
-    }
     setIsLaunchingCheckout(plan);
     try {
+      if (usesStoreBilling) {
+        if (!user?.id) {
+          throw new Error('Sign in before starting a subscription.');
+        }
+        const purchase = await purchaseRevenueCatPlan(user.id, plan);
+        setStatusMessage(
+          purchase.hasActiveEntitlement
+            ? 'Purchase complete. Syncing your StitchSense access...'
+            : 'Purchase sent to the store. Syncing your StitchSense access...',
+        );
+        await wait(1500);
+        await refreshAccount();
+        setStatusMessage('Subscription status refreshed.');
+        return;
+      }
+
       const response = await stitchSenseAPI.createCheckout(accessToken, {
         plan,
         successUrl: checkoutSuccessUrl,
@@ -257,6 +273,15 @@ export default function AccountScreen() {
     setIsOpeningBillingPortal(true);
     setStatusMessage(null);
     try {
+      if (usesStoreBilling && user?.id && (entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google')) {
+        await openRevenueCatManagement(user.id);
+        setStatusMessage('Checking your subscription status...');
+        await wait(1500);
+        await refreshAccount();
+        setStatusMessage('Subscription status refreshed.');
+        return;
+      }
+
       const response = await stitchSenseAPI.createBillingPortal(accessToken, {
         returnUrl: billingReturnUrl,
       });
@@ -273,6 +298,31 @@ export default function AccountScreen() {
       );
     } finally {
       setIsOpeningBillingPortal(false);
+    }
+  }
+
+  async function restorePurchases() {
+    if (!user?.id) return;
+    setIsRestoringPurchases(true);
+    setStatusMessage(null);
+    try {
+      const restored = await restoreRevenueCatPurchases(user.id);
+      setStatusMessage(
+        restored.hasActiveEntitlement
+          ? 'Store purchase restored. Syncing your StitchSense access...'
+          : 'No active store subscription was found for this account.',
+      );
+      await wait(1500);
+      await refreshAccount();
+    } catch (error) {
+      setStatusMessage(
+        getUserFacingErrorMessage(error, {
+          fallback:
+            'Could not restore purchases. RevenueCat keys, store products, and an Expo development build are required for real purchase testing.',
+        }),
+      );
+    } finally {
+      setIsRestoringPurchases(false);
     }
   }
 
@@ -338,29 +388,52 @@ export default function AccountScreen() {
               loading={isOpeningBillingPortal}
               style={styles.fullWidth}
             />
+          ) : entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google' ? (
+            <BrandButton
+              label={isOpeningBillingPortal ? 'Opening store settings...' : 'Manage or cancel store subscription'}
+              onPress={() =>
+                Alert.alert(
+                  'Manage subscription',
+                  'This opens the App Store or Google Play subscription management page for your current plan.',
+                  [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Open store settings', onPress: () => void openBillingPortal() },
+                  ],
+                )
+              }
+              loading={isOpeningBillingPortal}
+              style={styles.fullWidth}
+            />
           ) : (
             <>
               <BrandButton
-                label={usesAppleStoreBilling ? 'View App Store billing note' : 'See all plans'}
+                label="See all plans"
                 onPress={() => router.push('/paywall')}
                 style={styles.fullWidth}
               />
               <View style={styles.planButtonRow}>
                 <BrandButton
-                  label={usesAppleStoreBilling ? 'Monthly coming soon' : isLaunchingCheckout === 'monthly' ? 'Opening...' : 'Monthly'}
+                  label={isLaunchingCheckout === 'monthly' ? 'Opening...' : 'Monthly'}
                   onPress={() => void launchCheckout('monthly')}
-                  disabled={usesAppleStoreBilling}
                   style={styles.planButton}
                   variant="ghost"
                 />
                 <BrandButton
-                  label={usesAppleStoreBilling ? 'Annual coming soon' : isLaunchingCheckout === 'annual' ? 'Opening...' : 'Annual'}
+                  label={isLaunchingCheckout === 'annual' ? 'Opening...' : 'Annual'}
                   onPress={() => void launchCheckout('annual')}
-                  disabled={usesAppleStoreBilling}
                   style={styles.planButton}
                   variant="secondary"
                 />
               </View>
+              {usesStoreBilling ? (
+                <BrandButton
+                  label={isRestoringPurchases ? 'Restoring purchases...' : 'Restore purchases'}
+                  onPress={() => void restorePurchases()}
+                  loading={isRestoringPurchases}
+                  style={styles.fullWidth}
+                  variant="ghost"
+                />
+              ) : null}
             </>
           )}
           <BrandButton

@@ -1,5 +1,9 @@
 # StitchSense Stripe Subscriptions Setup
 
+Status: legacy / web-only fallback.
+
+StitchSense mobile subscriptions should now be managed through RevenueCat, with Apple App Store and Google Play handling customer payments and payouts. Keep this Stripe guide only for existing Stripe subscribers, permitted non-store web checkout, or legacy account migration. Do not use Stripe Checkout as the primary iOS or Android digital-subscription purchase path.
+
 This guide sets up StitchSense app subscriptions in a Stripe account that is completely separate from WooCommerce.
 
 The subscription flow is:
