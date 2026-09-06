@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import rawBody from 'fastify-raw-body';
 import { ZodError } from 'zod';
 import { config } from './config.js';
+import { query } from './db/pool.js';
 import { registerAuth } from './middleware/auth.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
@@ -19,6 +20,7 @@ import { projectRoutes } from './routes/projects.js';
 import { promoRoutes } from './routes/promos.js';
 import { ravelryRoutes } from './routes/ravelry.js';
 import { rewriteRoutes } from './routes/rewrites.js';
+import { checkStorageReadiness } from './services/storage.js';
 import { stashRoutes } from './routes/stash.js';
 import { syncRoutes } from './routes/sync.js';
 import { userRoutes } from './routes/users.js';
@@ -128,6 +130,34 @@ export async function buildApp() {
   });
 
   app.get('/health', async () => ({ ok: true, service: 'stitchsense-api' }));
+
+  app.get('/ready', async (_request, reply) => {
+    const checks = {
+      database: false,
+      storage: false,
+    };
+
+    try {
+      await query('SELECT 1');
+      checks.database = true;
+    } catch (error) {
+      app.log.error({ err: error }, 'Database readiness check failed');
+    }
+
+    try {
+      await checkStorageReadiness();
+      checks.storage = true;
+    } catch (error) {
+      app.log.error({ err: error }, 'Object-storage readiness check failed');
+    }
+
+    const ready = checks.database && checks.storage;
+    return reply.code(ready ? 200 : 503).send({
+      ok: ready,
+      service: 'stitchsense-api',
+      checks,
+    });
+  });
 
   await app.register(authRoutes);
   await app.register(userRoutes);

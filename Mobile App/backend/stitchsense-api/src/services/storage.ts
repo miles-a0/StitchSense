@@ -138,6 +138,10 @@ export async function signedPatternUrl(key: string, expiresIn = 900) {
 
 export const signedStorageUrl = signedPatternUrl;
 
+export async function checkStorageReadiness() {
+  await client.send(new HeadBucketCommand({ Bucket: config.storage.bucket }));
+}
+
 export async function getPatternFile(key: string) {
   await ensureBucket();
   const command = new GetObjectCommand({
