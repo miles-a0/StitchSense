@@ -131,6 +131,26 @@ export async function buildApp() {
 
   app.get('/health', async () => ({ ok: true, service: 'stitchsense-api' }));
 
+  async function withReadinessTimeout(name: string, check: Promise<unknown>) {
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        check,
+        new Promise((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`${name} readiness check timed out after ${config.readinessCheckTimeoutMs}ms`)),
+            config.readinessCheckTimeoutMs,
+          );
+        }),
+      ]);
+      return true;
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    }
+  }
+
   app.get('/ready', async (_request, reply) => {
     const checks = {
       database: false,
@@ -138,14 +158,14 @@ export async function buildApp() {
     };
 
     try {
-      await query('SELECT 1');
+      await withReadinessTimeout('Database', query('SELECT 1'));
       checks.database = true;
     } catch (error) {
       app.log.error({ err: error }, 'Database readiness check failed');
     }
 
     try {
-      await checkStorageReadiness();
+      await withReadinessTimeout('Object-storage', checkStorageReadiness());
       checks.storage = true;
     } catch (error) {
       app.log.error({ err: error }, 'Object-storage readiness check failed');
