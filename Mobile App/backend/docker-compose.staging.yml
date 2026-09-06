@@ -1,7 +1,10 @@
+name: stitchsense-staging
+
 services:
   api:
     build:
       context: ./stitchsense-api
+    image: stitchsense-api-staging
     container_name: stitchsense-api-staging
     restart: unless-stopped
     init: true
