@@ -124,7 +124,7 @@ Close exploitable security and recoverability risks first, then run application 
 ### 8. Harden deployment and production operations — P1
 
 - [x] Add versioned migration tracking and a controlled migrate-before-release job with backward-compatible rollout rules.
-- [ ] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels.
+- [ ] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels. *(VPS-local API/Postgres/MinIO staging scaffold added on branch `ops/staging-environment`; pending secret provisioning, deploy, and representative-data validation.)*
 - [x] Run the API container as a non-root user with a health check, minimal production dependencies, localhost-only host binding, and private reverse-proxy networking.
 - [x] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits.
 - [ ] Add structured logs, request correlation IDs, crash reporting, uptime checks, latency/error metrics, and alert routing.

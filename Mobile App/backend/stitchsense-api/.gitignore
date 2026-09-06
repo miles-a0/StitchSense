@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 !.env.vps.example
+!.env.staging.example
 node_modules/
 dist/
 coverage/
