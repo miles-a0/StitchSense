@@ -58,7 +58,8 @@ Security-relevant observations:
 - The configured endpoint uses the internal hostname `minio`, so it is reachable from the production network but not from the development machine.
 - Configured bucket name: `stitchsense-patterns`.
 - Database references currently identify 70 stored objects: 58 pattern files, 7 project photos, and 5 stash images.
-- The MinIO container maps API port 9000 to VPS port 9075 and console port 9001 to VPS port 9076. VPS port 9000 belongs to Portainer and must not be treated as an S3 endpoint.
+- The production MinIO container is managed by `docker-compose.vps.yml`, uses the `backend_stitchsense_minio_data` Docker volume, and is attached to `backend_default` with the internal hostname `minio`.
+- The MinIO container maps API port 9000 to localhost-only VPS port 9075 and console port 9001 to localhost-only VPS port 9076. VPS port 9000 belongs to Portainer and must not be treated as an S3 endpoint.
 - The production bucket contains 81 objects (281,857,297 bytes). This is 11 more than the 70 current database file references; preserve them until reconciliation determines whether they are historical, derived, or orphaned.
 
 ## Backup evidence
