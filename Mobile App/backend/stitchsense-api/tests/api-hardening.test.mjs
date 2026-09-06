@@ -34,6 +34,18 @@ test('API hardening controls', async (t) => {
     assert.equal(denied.headers['access-control-allow-origin'], undefined);
   });
 
+  await t.test('returns a stable request id for API traceability', async () => {
+    const generated = await app.inject({ method: 'GET', url: '/health' });
+    assert.match(generated.headers['x-request-id'], /^[0-9a-f-]{36}$/);
+
+    const supplied = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-request-id': 'stitchsense-test-request' },
+    });
+    assert.equal(supplied.headers['x-request-id'], 'stitchsense-test-request');
+  });
+
   await t.test('rate limits repeated login attempts', async () => {
     let response;
     for (let attempt = 0; attempt < 11; attempt += 1) {

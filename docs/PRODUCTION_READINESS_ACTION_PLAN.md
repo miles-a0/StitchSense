@@ -131,7 +131,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [x] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels. *(VPS-local API/Postgres/MinIO staging stack provisioned on 2026-09-06 with separate generated secrets, localhost-only ports, dedicated Compose project/image identity, schema migrations 001-008 applied, and staging MinIO bucket created. Pending public proxy/app-channel wiring and representative-data validation.)*
 - [x] Run the API container as a non-root user with a health check, minimal production dependencies, localhost-only host binding, and private reverse-proxy networking.
 - [x] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits.
-- [ ] Add structured logs, request correlation IDs, crash reporting, uptime checks, latency/error metrics, and alert routing.
+- [ ] Add structured logs, request correlation IDs, crash reporting, uptime checks, latency/error metrics, and alert routing. *(2026-09-06: API request IDs, `x-request-id` responses, configurable log level, and slow-request warnings added. External uptime checks, crash reporting, dashboards, and alert routing remain.)*
 - [ ] Create dashboards and alerts for API availability, authentication failures, workflow failures, webhook failures, database capacity, and storage errors.
 - [ ] Document and rehearse deployment, rollback, database restore, secret rotation, and incident-response runbooks.
 - [ ] Define retention, deletion, and backup policies for user data, logs, audit events, and uploaded files.
