@@ -24,6 +24,7 @@ export const config = {
   port: positiveInteger(process.env.PORT, 8080),
   logLevel: logLevel(process.env.LOG_LEVEL),
   slowRequestMs: positiveInteger(process.env.SLOW_REQUEST_MS, 3000),
+  readinessCheckTimeoutMs: positiveInteger(process.env.READINESS_CHECK_TIMEOUT_MS, 2000),
   publicApiBaseUrl: process.env.PUBLIC_API_BASE_URL ?? process.env.API_PUBLIC_URL ?? '',
   corsOrigins: commaSeparated(process.env.CORS_ORIGINS),
   trustProxy: commaSeparated(process.env.TRUST_PROXY),
