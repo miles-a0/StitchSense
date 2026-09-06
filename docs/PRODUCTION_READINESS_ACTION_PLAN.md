@@ -101,12 +101,16 @@ Close exploitable security and recoverability risks first, then run application 
 ### 6. Complete compliant native subscriptions — P0
 
 - [ ] Confirm monthly/annual products, trial rules, prices, entitlement identifier, and account ownership in App Store Connect, Play Console, and RevenueCat.
-- [ ] Integrate RevenueCat into the Expo app for Apple StoreKit and Google Play Billing.
-- [ ] Replace iOS “coming soon” and Android Stripe digital-subscription checkout with native purchase flows for store builds.
+- [x] Integrate the RevenueCat SDK into the Expo app as the primary iOS/Android subscription path.
+- [x] Replace iOS “coming soon” and Android Stripe digital-subscription checkout with RevenueCat native store purchase flows for store builds.
 - [ ] Implement purchase, pending purchase, restore, cancellation guidance, expiry, grace period, refund/revocation, and offline/error states.
-- [ ] Preserve Stripe billing only on permitted web/distribution channels and keep entitlement resolution consistent across providers.
+- [x] Preserve Stripe billing only for existing/legacy web subscriptions while keeping entitlement resolution consistent across providers.
 - [ ] Validate RevenueCat webhooks for both stores and verify one StitchSense user cannot receive another user’s entitlement.
 - [ ] Complete Apple sandbox/TestFlight and Google licence-tester/internal-track purchase matrices.
+- [ ] Configure payout banking in App Store Connect and Google Play Console with the Starling Business account; RevenueCat does not hold payout bank details.
+- [ ] Add RevenueCat app-specific public SDK keys to EAS/app build configuration before creating real store builds.
+
+**2026-09-06 update:** Mobile subscriptions now use RevenueCat client-side purchase, restore, and store-management flows. The backend already accepts RevenueCat webhooks and maps Apple/Google subscriptions to StitchSense entitlements by app user ID. Remaining work requires real RevenueCat/App Store/Play Console configuration and sandbox/device validation.
 
 **Exit gate:** Purchase, restore, cancel, expire, and cross-device entitlement refresh pass on real iOS and Android store builds.
 

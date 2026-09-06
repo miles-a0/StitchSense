@@ -71,7 +71,10 @@
     },
     "extra": {
       "apiBaseUrl": "https://stitchsense.zu-auto.co.uk",
-      "wordpressBaseUrl": "https://catlowyarns.co.uk"
+      "wordpressBaseUrl": "https://catlowyarns.co.uk",
+      "revenueCatIosApiKey": "",
+      "revenueCatAndroidApiKey": "",
+      "revenueCatEntitlementId": "pro"
     }
   }
 }
