@@ -36,6 +36,12 @@ jobs:
         working-directory: Mobile App/backend/stitchsense-api
     env:
       TEST_DATABASE_URL: postgres://stitchsense_test:integration-test-only@127.0.0.1:5432/stitchsense_test
+      OBJECT_STORAGE_PROVIDER: minio
+      OBJECT_STORAGE_BUCKET: stitchsense-test-patterns
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ENDPOINT: http://127.0.0.1:9000
+      OBJECT_STORAGE_ACCESS_KEY: stitchsense-test
+      OBJECT_STORAGE_SECRET_KEY: stitchsense-test-password
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -49,6 +55,25 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
+
+      - name: Start isolated object storage
+        shell: bash
+        run: |
+          docker run --detach \
+            --name stitchsense-test-minio \
+            --publish 127.0.0.1:9000:9000 \
+            --env MINIO_ROOT_USER="$OBJECT_STORAGE_ACCESS_KEY" \
+            --env MINIO_ROOT_PASSWORD="$OBJECT_STORAGE_SECRET_KEY" \
+            minio/minio:RELEASE.2025-01-20T14-49-07Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
+          for attempt in {1..20}; do
+            if docker exec stitchsense-test-minio sh -c 'mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && mc mb --ignore-existing local/stitchsense-test-patterns >/dev/null'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs stitchsense-test-minio
+          exit 1
 
       - name: Build and test, including cross-user authorization
         run: npm test
