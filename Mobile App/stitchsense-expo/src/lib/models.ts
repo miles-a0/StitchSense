@@ -379,6 +379,12 @@ export type UserExportResponse = {
   exportedAt: string;
   userId: string;
   patterns: unknown[];
+  projects: unknown[];
+  projectCounters: unknown[];
+  projectWorkLog: unknown[];
+  projectPatternMarks: unknown[];
+  projectPhotos: unknown[];
+  stashItems: unknown[];
   chatSessions: unknown[];
   chatMessages: unknown[];
   rewriteSessions: unknown[];

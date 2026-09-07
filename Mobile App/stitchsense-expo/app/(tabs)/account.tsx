@@ -198,7 +198,7 @@ export default function AccountScreen() {
     try {
       const response = await stitchSenseAPI.userExport(accessToken);
       setLastExportSummary(
-        `${response.patterns.length} patterns, ${response.chatSessions.length} chats, ${response.chatMessages.length} messages, ${response.rewriteSessions.length} rewrites · exported ${new Date(response.exportedAt).toLocaleString()}`,
+        `${response.patterns.length} patterns, ${response.projects.length} projects, ${response.stashItems.length} stash items, ${response.chatSessions.length} chats, ${response.chatMessages.length} messages, ${response.rewriteSessions.length} rewrites · exported ${new Date(response.exportedAt).toLocaleString()}`,
       );
       setStatusMessage('Export prepared. Summary loaded below.');
     } catch (error) {

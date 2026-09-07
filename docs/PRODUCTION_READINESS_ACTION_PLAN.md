@@ -78,11 +78,13 @@ Close exploitable security and recoverability risks first, then run application 
 ### 4. Build a launch-level automated test suite — P0/P1
 
 - [ ] Add backend route/integration tests using isolated PostgreSQL and object-storage services. *(2026-09-07: CI now provisions isolated PostgreSQL and MinIO for backend integration checks; broader route coverage still remains.)*
-- [ ] Cover registration, login, refresh rotation/revocation, password reset, bridge authentication, entitlements, uploads, signed file access, and data deletion/export.
+- [ ] Cover registration, login, refresh rotation/revocation, password reset, bridge authentication, entitlements, uploads, signed file access, and data deletion/export. *(2026-09-07: data export/deletion now has DB-backed integration coverage for user scoping, destructive confirmation, project/stash inclusion, token redaction, and cross-user preservation.)*
 - [ ] Cover Stripe and RevenueCat webhook signatures, replay/idempotency, cancellation, expiry, restore, and user mapping.
 - [ ] Add Expo unit/component tests for session restoration, API errors, entitlement gates, pattern binding, and destructive confirmations.
 - [ ] Add device-level E2E smoke tests for onboarding, login, library, upload, pattern chat/rewrite, project lifecycle, Stitch Vision, stash, logout, and returning-user restoration.
 - [ ] Add regression tests for pattern A/B contamination, metadata-only Ravelry blocking, and deleted-record resurrection.
+
+**2026-09-07 update:** User data export now includes projects, project activity, project photos, pattern marks, counters, and stash items. User data deletion now clears stash items alongside patterns, projects, chats, rewrites, settings, and connections. DB-backed integration coverage was added for user scoping, destructive confirmation, token redaction, and cross-user preservation.
 
 **Exit gate:** Critical user journeys and security boundaries run automatically; the release branch is green; known P0 regressions have tests.
 
