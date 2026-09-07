@@ -77,7 +77,7 @@ Close exploitable security and recoverability risks first, then run application 
 
 ### 4. Build a launch-level automated test suite — P0/P1
 
-- [ ] Add backend route/integration tests using isolated PostgreSQL and object-storage services.
+- [ ] Add backend route/integration tests using isolated PostgreSQL and object-storage services. *(2026-09-07: CI now provisions isolated PostgreSQL and MinIO for backend integration checks; broader route coverage still remains.)*
 - [ ] Cover registration, login, refresh rotation/revocation, password reset, bridge authentication, entitlements, uploads, signed file access, and data deletion/export.
 - [ ] Cover Stripe and RevenueCat webhook signatures, replay/idempotency, cancellation, expiry, restore, and user mapping.
 - [ ] Add Expo unit/component tests for session restoration, API errors, entitlement gates, pattern binding, and destructive confirmations.
