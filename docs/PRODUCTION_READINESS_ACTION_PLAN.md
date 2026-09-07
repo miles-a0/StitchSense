@@ -84,7 +84,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [ ] Add device-level E2E smoke tests for onboarding, login, library, upload, pattern chat/rewrite, project lifecycle, Stitch Vision, stash, logout, and returning-user restoration.
 - [ ] Add regression tests for pattern A/B contamination, metadata-only Ravelry blocking, and deleted-record resurrection.
 
-**2026-09-07 update:** User data export now includes projects, project activity, project photos, pattern marks, counters, and stash items. User data deletion now clears stash items alongside patterns, projects, chats, rewrites, settings, and connections. DB-backed integration coverage was added for user scoping, destructive confirmation, token redaction, and cross-user preservation.
+**2026-09-07 update:** User data export now includes projects, project activity, project photos, pattern marks, counters, and stash items. User data deletion now clears stash items alongside patterns, projects, chats, rewrites, settings, and connections. Full account deletion now has a separate confirmed API/app path that clears synced data, removes refresh tokens, deletes the StitchSense account row, and invalidates future API access. DB-backed integration coverage was added for user scoping, destructive confirmation, token redaction, cross-user preservation, and account deletion.
 
 **Exit gate:** Critical user journeys and security boundaries run automatically; the release branch is green; known P0 regressions have tests.
 

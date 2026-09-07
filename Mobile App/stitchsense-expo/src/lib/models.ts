@@ -394,6 +394,7 @@ export type UserExportResponse = {
 
 export type DeleteDataResponse = {
   deleted: boolean;
+  accountDeleted?: boolean;
 };
 
 export type BillingCheckoutResponse = {

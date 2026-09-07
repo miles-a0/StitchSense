@@ -212,6 +212,76 @@ test('user data export and deletion are scoped to the authenticated user', {
     rewrites: 1,
   });
 
+  const deleteAccountUser = await client.query(
+    `INSERT INTO users (email, display_name, password_hash)
+     VALUES ('delete-account@example.test', 'Delete Account', crypt('delete-account-password', gen_salt('bf')))
+     RETURNING id`,
+  );
+  const deleteAccountUserId = deleteAccountUser.rows[0].id;
+  const deleteAccountPatternId = (
+    await client.query(
+      `INSERT INTO user_patterns (user_id, title, source)
+       VALUES ($1, 'Delete account pattern', 'upload')
+       RETURNING id`,
+      [deleteAccountUserId],
+    )
+  ).rows[0].id;
+  await client.query(
+    `INSERT INTO projects (user_id, pattern_id, title)
+     VALUES ($1, $2, 'Delete account project')`,
+    [deleteAccountUserId, deleteAccountPatternId],
+  );
+  await client.query(
+    `INSERT INTO stash_items (user_id, category, name)
+     VALUES ($1, 'tool', 'Delete account tool')`,
+    [deleteAccountUserId],
+  );
+  const loginResponse = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: { email: 'delete-account@example.test', password: 'delete-account-password' },
+  });
+  assert.equal(loginResponse.statusCode, 200, loginResponse.body);
+  const login = loginResponse.json();
+  const deleteAccountAuthorization = `Bearer ${login.accessToken}`;
+
+  const missingDeleteAccountConfirmation = await app.inject({
+    method: 'POST',
+    url: '/user/delete-account',
+    headers: { authorization: deleteAccountAuthorization },
+    payload: { confirm: 'DELETE' },
+  });
+  assert.equal(missingDeleteAccountConfirmation.statusCode, 400, missingDeleteAccountConfirmation.body);
+
+  const deleteAccountResponse = await app.inject({
+    method: 'POST',
+    url: '/user/delete-account',
+    headers: { authorization: deleteAccountAuthorization },
+    payload: { confirm: 'DELETE_ACCOUNT' },
+  });
+  assert.equal(deleteAccountResponse.statusCode, 202, deleteAccountResponse.body);
+  assert.deepEqual(deleteAccountResponse.json(), { deleted: true, accountDeleted: true });
+
+  const deletedAccountState = await client.query(
+    `SELECT
+       (SELECT COUNT(*)::int FROM users WHERE id = $1) AS users,
+       (SELECT COUNT(*)::int FROM refresh_tokens WHERE user_id = $1) AS refresh_tokens,
+       (SELECT COUNT(*)::int FROM subscriptions WHERE user_id = $1) AS subscriptions`,
+    [deleteAccountUserId],
+  );
+  assert.deepEqual(deletedAccountState.rows[0], {
+    users: 0,
+    refresh_tokens: 0,
+    subscriptions: 0,
+  });
+
+  const meAfterAccountDeletion = await app.inject({
+    method: 'GET',
+    url: '/me',
+    headers: { authorization: deleteAccountAuthorization },
+  });
+  assert.equal(meAfterAccountDeletion.statusCode, 401, meAfterAccountDeletion.body);
+
   await app.close();
   await pool.end();
   await client.end();
