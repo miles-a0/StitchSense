@@ -38,3 +38,16 @@ export async function rotateRefreshToken(token: string) {
     refreshTokenExpiresAt: expiresAt,
   };
 }
+
+export async function revokeRefreshToken(token: string) {
+  const tokenHash = hashRefreshToken(token);
+  const result = await query<{ user_id: string }>(
+    `UPDATE refresh_tokens
+     SET revoked_at = NOW()
+     WHERE token_hash = $1 AND revoked_at IS NULL
+     RETURNING user_id`,
+    [tokenHash],
+  );
+
+  return result.rows[0]?.user_id ?? null;
+}
