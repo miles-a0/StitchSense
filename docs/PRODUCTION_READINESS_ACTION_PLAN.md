@@ -133,7 +133,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [x] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits.
 - [ ] Add structured logs, request correlation IDs, crash reporting, uptime checks, latency/error metrics, and alert routing. *(2026-09-06: API request IDs, `x-request-id` responses, configurable log level, and slow-request warnings added. External uptime checks, crash reporting, dashboards, and alert routing remain.)*
 - [ ] Create dashboards and alerts for API availability, authentication failures, workflow failures, webhook failures, database capacity, and storage errors. *(2026-09-06: `/ready` deep health endpoint added for database and object-storage smoke checks; dashboard/alert routing remains.)*
-- [ ] Document and rehearse deployment, rollback, database restore, secret rotation, and incident-response runbooks.
+- [ ] Document and rehearse deployment, rollback, database restore, secret rotation, and incident-response runbooks. *(2026-09-07: general operations runbook added; live rehearsal evidence still required before this can be marked complete.)*
 - [ ] Define retention, deletion, and backup policies for user data, logs, audit events, and uploaded files.
 
 **Exit gate:** A staging release can be deployed and rolled back automatically; monitoring detects a forced failure; backup restoration is demonstrated.
