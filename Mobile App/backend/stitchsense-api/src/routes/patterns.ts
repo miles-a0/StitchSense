@@ -931,10 +931,10 @@ export async function patternRoutes(app: FastifyInstance) {
 
   app.get('/patterns/:id/file-url', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const result = await query('SELECT file_url, file_key FROM user_patterns WHERE id = $1 AND user_id = $2', [
-      id,
-      request.authUser.id,
-    ]);
+    const result = await query(
+      'SELECT file_url, file_key FROM user_patterns WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      [id, request.authUser.id],
+    );
     if (!result.rowCount) return reply.code(404).send({ error: 'Pattern not found' });
     const row = result.rows[0];
     if (row.file_key) {
