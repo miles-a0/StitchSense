@@ -115,6 +115,8 @@ Close exploitable security and recoverability risks first, then run application 
 
 **2026-09-07 update:** Expo/EAS build profiles and release documentation now cover native development, preview/internal, and production store builds. Mobile runtime config ignores blank app config values, so EAS-provided RevenueCat SDK keys and API URLs can override repository defaults without code changes.
 
+**2026-09-07 update:** RevenueCat webhook handling now refuses to reassign an existing Apple/Google store transaction to a different StitchSense user, preserving the original owner and logging a mismatch audit event. Integration coverage was added for webhook authorization, ignored events, idempotent renewal updates, and cross-user transaction mismatch protection.
+
 **Exit gate:** Purchase, restore, cancel, expire, and cross-device entitlement refresh pass on real iOS and Android store builds.
 
 ### 7. Complete physical-device, accessibility, and UX hardening — P1

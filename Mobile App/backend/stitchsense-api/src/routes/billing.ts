@@ -127,6 +127,18 @@ async function upsertMobileSubscription(input: {
   );
 }
 
+async function existingMobileSubscriptionOwner(input: { provider: 'apple' | 'google'; subscriptionId: string }) {
+  const existing = await query<{ user_id: string }>(
+    `SELECT user_id
+     FROM subscriptions
+     WHERE provider = $1 AND provider_subscription_id = $2
+     LIMIT 1`,
+    [input.provider, input.subscriptionId],
+  );
+
+  return existing.rows[0]?.user_id ?? null;
+}
+
 async function handleStripeSubscription(subscription: Stripe.Subscription) {
   await upsertStripeSubscriptionFromStripe(subscription);
 }
@@ -165,6 +177,26 @@ async function handleRevenueCatWebhook(body: unknown) {
 
   const user = await query<{ id: string }>('SELECT id FROM users WHERE id = $1', [userId]);
   if (!user.rowCount) return { ignored: true, reason: 'unknown_user' };
+
+  const existingOwnerId = await existingMobileSubscriptionOwner({ provider, subscriptionId });
+  if (existingOwnerId && existingOwnerId !== userId) {
+    await query(
+      `INSERT INTO audit_events (actor_user_id, target_user_id, event_type, metadata)
+       VALUES ($1,$2,'billing.revenuecat.webhook.user_mismatch',$3)`,
+      [
+        userId,
+        existingOwnerId,
+        {
+          receivedAt: new Date().toISOString(),
+          revenueCatEventId: event.id,
+          provider,
+          subscriptionId,
+          type: event.type,
+        },
+      ],
+    );
+    return { ignored: true, reason: 'subscription_user_mismatch' };
+  }
 
   await upsertMobileSubscription({
     userId,
