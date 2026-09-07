@@ -61,14 +61,18 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
   }, []);
 
   const signOut = useCallback(async () => {
+    const tokenToRevoke = refreshToken;
     setUser(null);
     setEntitlement(null);
     setAccessToken(null);
     setRefreshToken(null);
     setErrorMessage(null);
+    if (tokenToRevoke) {
+      await stitchSenseAPI.logout(tokenToRevoke).catch(() => undefined);
+    }
     await revenueCatLogOut();
     await clearTokens();
-  }, []);
+  }, [refreshToken]);
 
   const refreshAccount = useCallback(async () => {
     let activeToken = accessToken;

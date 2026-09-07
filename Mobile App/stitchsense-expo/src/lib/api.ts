@@ -932,6 +932,12 @@ export const stitchSenseAPI = {
     });
     return { ...response, user: normalizeUser(response.user) };
   },
+  logout(refreshToken: string) {
+    return request<void>('/auth/logout', {
+      method: 'POST',
+      body: { refreshToken },
+    });
+  },
   async me(token: string) {
     const response = await request<MeResponse>('/me', { token });
     return { user: normalizeUser(response.user) };

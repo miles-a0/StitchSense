@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { fetchWithTimeout } from '../services/http.js';
-import { createRefreshToken, rotateRefreshToken, storeRefreshToken } from '../services/tokens.js';
+import { createRefreshToken, revokeRefreshToken, rotateRefreshToken, storeRefreshToken } from '../services/tokens.js';
 import { syncWordPressLibraryForUser } from '../services/wordpressSync.js';
 import { configuredWordPressSiteUrl } from '../services/wordpressSite.js';
 
@@ -266,6 +266,14 @@ export async function authRoutes(app: FastifyInstance) {
       refreshToken: rotated.refreshToken,
       refreshTokenExpiresAt: rotated.refreshTokenExpiresAt,
     };
+  });
+
+  app.post('/auth/logout', {
+    config: { rateLimit: { max: 30, timeWindow: '15 minutes' } },
+  }, async (request, reply) => {
+    const body = refreshBody.parse(request.body);
+    await revokeRefreshToken(body.refreshToken);
+    return reply.code(204).send();
   });
 
   app.post('/auth/wordpress', {
