@@ -109,8 +109,11 @@ Close exploitable security and recoverability risks first, then run application 
 - [ ] Complete Apple sandbox/TestFlight and Google licence-tester/internal-track purchase matrices.
 - [ ] Configure payout banking in App Store Connect and Google Play Console with the Starling Business account; RevenueCat does not hold payout bank details.
 - [ ] Add RevenueCat app-specific public SDK keys to EAS/app build configuration before creating real store builds.
+- [x] Document Expo/EAS development, preview, and production native build workflow for RevenueCat-capable store testing.
 
 **2026-09-06 update:** Mobile subscriptions now use RevenueCat client-side purchase, restore, and store-management flows. The backend already accepts RevenueCat webhooks and maps Apple/Google subscriptions to StitchSense entitlements by app user ID. Remaining work requires real RevenueCat/App Store/Play Console configuration and sandbox/device validation.
+
+**2026-09-07 update:** Expo/EAS build profiles and release documentation now cover native development, preview/internal, and production store builds. Mobile runtime config ignores blank app config values, so EAS-provided RevenueCat SDK keys and API URLs can override repository defaults without code changes.
 
 **Exit gate:** Purchase, restore, cancel, expire, and cross-device entitlement refresh pass on real iOS and Android store builds.
 

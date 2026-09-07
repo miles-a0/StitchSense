@@ -67,6 +67,8 @@ EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID=pro
 
 Only public RevenueCat SDK keys belong in the mobile app. The webhook authorization secret belongs only on the backend/VPS.
 
+See `docs/EXPO_BUILD_AND_RELEASE_RUNBOOK.md` for the native build profiles and acceptance matrix. Expo Go can preview subscription screens, but real RevenueCat purchases require a development build, TestFlight build, or Google Play internal/closed testing build.
+
 ## Payout setup
 
 RevenueCat does not collect or store StitchSense payout banking details. Use the Starling Business account in the store payment systems:
