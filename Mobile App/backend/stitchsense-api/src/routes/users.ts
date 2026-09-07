@@ -68,6 +68,12 @@ export async function userRoutes(app: FastifyInstance) {
 
   app.get('/user/export', { preHandler: app.authenticate }, async (request) => {
     const patterns = await query('SELECT * FROM user_patterns WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
+    const projects = await query('SELECT * FROM projects WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
+    const projectCounters = await query('SELECT * FROM project_counters WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
+    const projectWorkLog = await query('SELECT * FROM project_work_log WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
+    const projectPatternMarks = await query('SELECT * FROM project_pattern_marks WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
+    const projectPhotos = await query('SELECT * FROM project_photos WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
+    const stashItems = await query('SELECT * FROM stash_items WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
     const chats = await query('SELECT * FROM chat_sessions WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
     const chatIds = chats.rows.map((row) => row.id);
     const messages = chatIds.length
@@ -81,6 +87,12 @@ export async function userRoutes(app: FastifyInstance) {
       exportedAt: new Date().toISOString(),
       userId: request.authUser.id,
       patterns: patterns.rows,
+      projects: projects.rows,
+      projectCounters: projectCounters.rows,
+      projectWorkLog: projectWorkLog.rows,
+      projectPatternMarks: projectPatternMarks.rows,
+      projectPhotos: projectPhotos.rows,
+      stashItems: stashItems.rows,
       chatSessions: chats.rows,
       chatMessages: messages.rows,
       rewriteSessions: rewrites.rows,
@@ -108,6 +120,7 @@ export async function userRoutes(app: FastifyInstance) {
     await query('UPDATE project_work_log SET deleted_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
     await query('UPDATE project_counters SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
     await query('UPDATE projects SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
+    await query('UPDATE stash_items SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
     await query('UPDATE user_patterns SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1', [request.authUser.id]);
     await query('DELETE FROM user_connections WHERE user_id = $1', [request.authUser.id]);
     await query('DELETE FROM user_settings WHERE user_id = $1', [request.authUser.id]);
