@@ -32,13 +32,20 @@ This policy defines how long StitchSense should keep production data, logs, audi
 When a user requests account deletion, StitchSense should:
 
 1. Confirm the request came from the authenticated account holder or an authorised support/admin process.
-2. Delete or anonymise the user profile.
+2. Require an explicit destructive confirmation (`DELETE_ACCOUNT`) before deleting the account.
 3. Revoke refresh tokens and reset tokens.
 4. Delete library, project, stash, notes, counters, chat, rewrite, and AI workflow records owned by that user.
 5. Delete or queue deletion for object-storage files referenced only by that user.
 6. Preserve only minimal audit/billing records required for fraud prevention, support, or unresolved disputes.
 7. Record a deletion audit event that does not contain deleted content.
 8. Return a clear completion state to the user.
+
+The production API exposes two separate user-controlled deletion paths:
+
+- `POST /user/delete-data` with confirmation `DELETE` clears synced StitchSense mobile data but leaves the user account available.
+- `POST /user/delete-account` with confirmation `DELETE_ACCOUNT` clears synced data, removes refresh tokens, deletes the StitchSense account row, and invalidates future authenticated API access for that account.
+
+Deleting a StitchSense account does not itself cancel an App Store or Google Play subscription. The app must direct users to manage subscriptions through their Apple or Google account.
 
 Backups may retain deleted data until the backup naturally expires. Restoring a backup must include a post-restore deletion replay/check for accounts deleted after the backup was taken.
 

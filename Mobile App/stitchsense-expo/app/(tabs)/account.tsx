@@ -143,6 +143,7 @@ export default function AccountScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isLaunchingCheckout, setIsLaunchingCheckout] = useState<string | null>(null);
   const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
   const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
@@ -225,6 +226,23 @@ export default function AccountScreen() {
       );
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  async function deleteAccount() {
+    if (!accessToken) return;
+    setIsDeletingAccount(true);
+    try {
+      await stitchSenseAPI.deleteAccount(accessToken);
+      await clearLibrary();
+      setLastExportSummary(null);
+      await signOut();
+    } catch (error) {
+      setStatusMessage(
+        getUserFacingErrorMessage(error, { fallback: 'Could not delete your account.' }),
+      );
+    } finally {
+      setIsDeletingAccount(false);
     }
   }
 
@@ -527,6 +545,21 @@ export default function AccountScreen() {
                 [
                   { text: 'Cancel', style: 'cancel' },
                   { text: 'Delete', style: 'destructive', onPress: () => void deleteData() },
+                ],
+              )
+            }
+            style={styles.fullWidth}
+            variant="secondary"
+          />
+          <BrandButton
+            label={isDeletingAccount ? 'Deleting account...' : 'Delete account'}
+            onPress={() =>
+              Alert.alert(
+                'Delete your StitchSense account?',
+                'This permanently removes your StitchSense account and synced mobile data. App Store or Google Play subscriptions must still be managed in your store account.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete account', style: 'destructive', onPress: () => void deleteAccount() },
                 ],
               )
             }

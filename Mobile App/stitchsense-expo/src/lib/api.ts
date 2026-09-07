@@ -973,6 +973,13 @@ export const stitchSenseAPI = {
       body: { confirm: 'DELETE' },
     });
   },
+  deleteAccount(token: string) {
+    return request<DeleteDataResponse>('/user/delete-account', {
+      method: 'POST',
+      token,
+      body: { confirm: 'DELETE_ACCOUNT' },
+    });
+  },
   async syncStatus(token: string) {
     const response = await request<SyncStatusResponse>('/sync/wordpress/status', { token });
     return normalizeSyncStatus(response as unknown as Record<string, unknown>);

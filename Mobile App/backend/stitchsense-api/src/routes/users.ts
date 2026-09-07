@@ -12,6 +12,26 @@ const settingsBody = z.object({
   preferences: z.record(z.unknown()).optional(),
 });
 
+async function clearUserData(userId: string) {
+  await deleteWordPressUserData(userId);
+  await query('DELETE FROM rewrite_sessions WHERE user_id = $1', [userId]);
+  const chats = await query('SELECT id FROM chat_sessions WHERE user_id = $1', [userId]);
+  const chatIds = chats.rows.map((row) => row.id);
+  if (chatIds.length) {
+    await query('DELETE FROM chat_messages WHERE session_id = ANY($1::uuid[])', [chatIds]);
+  }
+  await query('DELETE FROM chat_sessions WHERE user_id = $1', [userId]);
+  await query('UPDATE project_pattern_marks SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [userId]);
+  await query('UPDATE project_photos SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [userId]);
+  await query('UPDATE project_work_log SET deleted_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [userId]);
+  await query('UPDATE project_counters SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [userId]);
+  await query('UPDATE projects SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [userId]);
+  await query('UPDATE stash_items SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [userId]);
+  await query('UPDATE user_patterns SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1', [userId]);
+  await query('DELETE FROM user_connections WHERE user_id = $1', [userId]);
+  await query('DELETE FROM user_settings WHERE user_id = $1', [userId]);
+}
+
 export async function userRoutes(app: FastifyInstance) {
   app.get('/me', { preHandler: app.authenticate }, async (request) => {
     const result = await query(
@@ -107,23 +127,7 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Confirmation required' });
     }
 
-    await deleteWordPressUserData(request.authUser.id);
-    await query('DELETE FROM rewrite_sessions WHERE user_id = $1', [request.authUser.id]);
-    const chats = await query('SELECT id FROM chat_sessions WHERE user_id = $1', [request.authUser.id]);
-    const chatIds = chats.rows.map((row) => row.id);
-    if (chatIds.length) {
-      await query('DELETE FROM chat_messages WHERE session_id = ANY($1::uuid[])', [chatIds]);
-    }
-    await query('DELETE FROM chat_sessions WHERE user_id = $1', [request.authUser.id]);
-    await query('UPDATE project_pattern_marks SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
-    await query('UPDATE project_photos SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
-    await query('UPDATE project_work_log SET deleted_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
-    await query('UPDATE project_counters SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
-    await query('UPDATE projects SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
-    await query('UPDATE stash_items SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL', [request.authUser.id]);
-    await query('UPDATE user_patterns SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1', [request.authUser.id]);
-    await query('DELETE FROM user_connections WHERE user_id = $1', [request.authUser.id]);
-    await query('DELETE FROM user_settings WHERE user_id = $1', [request.authUser.id]);
+    await clearUserData(request.authUser.id);
     await query(
       `INSERT INTO audit_events (actor_user_id, target_user_id, event_type, metadata)
        VALUES ($1,$1,'user.data_deleted',$2)`,
@@ -131,5 +135,24 @@ export async function userRoutes(app: FastifyInstance) {
     );
 
     return reply.code(202).send({ deleted: true });
+  });
+
+  app.post('/user/delete-account', { preHandler: app.authenticate }, async (request, reply) => {
+    const body = z.object({ confirm: z.literal('DELETE_ACCOUNT') }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'Confirmation required' });
+    }
+
+    const deletedUserId = request.authUser.id;
+    await clearUserData(deletedUserId);
+    await query('DELETE FROM refresh_tokens WHERE user_id = $1', [deletedUserId]);
+    await query(
+      `INSERT INTO audit_events (actor_user_id, target_user_id, event_type, metadata)
+       VALUES ($1,$1,'user.account_deleted',$2)`,
+      [deletedUserId, { requestedAt: new Date().toISOString(), deletedUserId }],
+    );
+    await query('DELETE FROM users WHERE id = $1', [deletedUserId]);
+
+    return reply.code(202).send({ deleted: true, accountDeleted: true });
   });
 }
