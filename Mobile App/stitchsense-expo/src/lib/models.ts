@@ -568,4 +568,5 @@ export type RavelryImportResponse = {
 export type APIErrorShape = {
   statusCode: number;
   message: string;
+  requestId?: string | null;
 };
