@@ -48,11 +48,13 @@ import type { StashCategory, StashItem } from '@/src/lib/stash-store';
 
 class APIError extends Error {
   statusCode: number;
+  requestId?: string | null;
 
-  constructor({ statusCode, message }: APIErrorShape) {
+  constructor({ statusCode, message, requestId }: APIErrorShape) {
     super(message);
     this.name = 'APIError';
     this.statusCode = statusCode;
+    this.requestId = requestId ?? null;
   }
 }
 
@@ -68,17 +70,32 @@ let refreshInFlight: Promise<string | null> | null = null;
 const CLIENT_SURFACE = 'expo-mobile';
 const DEFAULT_TIMEOUT_MS = 30000;
 
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit & { timeoutMs?: number } = {}) {
+function createRequestId() {
+  return `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function responseRequestId(response: Response) {
+  return response.headers.get('x-request-id');
+}
+
+type RequestWithTimeoutInit = RequestInit & { timeoutMs?: number; requestId?: string | null };
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestWithTimeoutInit = {}) {
+  const { timeoutMs, requestId, ...fetchInit } = init;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), init.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
     return await fetch(input, {
-      ...init,
-      signal: init.signal ?? controller.signal,
+      ...fetchInit,
+      signal: fetchInit.signal ?? controller.signal,
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new APIError({ statusCode: 408, message: 'The server took too long to respond. Please try again.' });
+      throw new APIError({
+        statusCode: 408,
+        message: 'The server took too long to respond. Please try again.',
+        requestId,
+      });
     }
     throw error;
   } finally {
@@ -90,7 +107,11 @@ async function readJsonResponse<T>(response: Response, fallback = 'Server return
   try {
     return (await response.json()) as T;
   } catch {
-    throw new APIError({ statusCode: response.status || 502, message: fallback });
+    throw new APIError({
+      statusCode: response.status || 502,
+      message: fallback,
+      requestId: responseRequestId(response),
+    });
   }
 }
 
@@ -776,12 +797,15 @@ function normalizeRavelryPattern(pattern: Record<string, unknown>) {
 }
 
 async function performRequest(path: string, options: RequestOptions = {}, tokenOverride?: string | null) {
+  const requestId = createRequestId();
   return fetchWithTimeout(`${config.apiBaseUrl}${path}`, {
     method: options.method ?? 'GET',
     timeoutMs: options.timeoutMs,
+    requestId,
     headers: {
       accept: 'application/json',
       'x-stitchsense-client-surface': CLIENT_SURFACE,
+      'x-request-id': requestId,
       ...(tokenOverride ?? options.token
         ? { authorization: `Bearer ${tokenOverride ?? options.token}` }
         : {}),
@@ -856,7 +880,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         message = text.trim();
       }
     }
-    throw new APIError({ statusCode: response.status, message });
+    throw new APIError({ statusCode: response.status, message, requestId: responseRequestId(response) });
   }
 
   if (response.status === 204) {
@@ -1215,10 +1239,14 @@ export const stitchSenseAPI = {
     };
 
     let activeToken = token;
+    let requestId = createRequestId();
     let response = await fetchWithTimeout(`${config.apiBaseUrl}/projects/${id}/photos`, {
       method: 'POST',
+      requestId,
       headers: {
         accept: 'application/json',
+        'x-stitchsense-client-surface': CLIENT_SURFACE,
+        'x-request-id': requestId,
         authorization: `Bearer ${activeToken}`,
       },
       body: makeFormData(),
@@ -1228,10 +1256,14 @@ export const stitchSenseAPI = {
       const refreshedToken = await refreshAccessToken();
       if (refreshedToken) {
         activeToken = refreshedToken;
+        requestId = createRequestId();
         response = await fetchWithTimeout(`${config.apiBaseUrl}/projects/${id}/photos`, {
           method: 'POST',
+          requestId,
           headers: {
             accept: 'application/json',
+            'x-stitchsense-client-surface': CLIENT_SURFACE,
+            'x-request-id': requestId,
             authorization: `Bearer ${activeToken}`,
           },
           body: makeFormData(),
@@ -1254,7 +1286,7 @@ export const stitchSenseAPI = {
           message = text.trim();
         }
       }
-      throw new APIError({ statusCode: response.status, message });
+      throw new APIError({ statusCode: response.status, message, requestId: responseRequestId(response) });
     }
 
     const payload = await readJsonResponse<ProjectPhotoResponse | Record<string, unknown>>(response);
@@ -1362,10 +1394,14 @@ export const stitchSenseAPI = {
     };
 
     let activeToken = token;
+    let requestId = createRequestId();
     let response = await fetchWithTimeout(`${config.apiBaseUrl}/stash/${id}/image`, {
       method: 'POST',
+      requestId,
       headers: {
         accept: 'application/json',
+        'x-stitchsense-client-surface': CLIENT_SURFACE,
+        'x-request-id': requestId,
         authorization: `Bearer ${activeToken}`,
       },
       body: makeFormData(),
@@ -1375,10 +1411,14 @@ export const stitchSenseAPI = {
       const refreshedToken = await refreshAccessToken();
       if (refreshedToken) {
         activeToken = refreshedToken;
+        requestId = createRequestId();
         response = await fetchWithTimeout(`${config.apiBaseUrl}/stash/${id}/image`, {
           method: 'POST',
+          requestId,
           headers: {
             accept: 'application/json',
+            'x-stitchsense-client-surface': CLIENT_SURFACE,
+            'x-request-id': requestId,
             authorization: `Bearer ${activeToken}`,
           },
           body: makeFormData(),
@@ -1400,7 +1440,7 @@ export const stitchSenseAPI = {
           message = text.trim();
         }
       }
-      throw new APIError({ statusCode: response.status, message });
+      throw new APIError({ statusCode: response.status, message, requestId: responseRequestId(response) });
     }
 
     const payload = await readJsonResponse<{ item: Record<string, unknown> }>(response);
@@ -1627,11 +1667,15 @@ export const stitchSenseAPI = {
     };
 
     let activeToken = token;
+    let requestId = createRequestId();
     let response = await fetchWithTimeout(`${config.apiBaseUrl}/patterns/${id}/file`, {
       method: 'POST',
       timeoutMs: 600000,
+      requestId,
       headers: {
         accept: 'application/json',
+        'x-stitchsense-client-surface': CLIENT_SURFACE,
+        'x-request-id': requestId,
         authorization: `Bearer ${activeToken}`,
       },
       body: makeFormData(),
@@ -1641,11 +1685,15 @@ export const stitchSenseAPI = {
       const refreshedToken = await refreshAccessToken();
       if (refreshedToken) {
         activeToken = refreshedToken;
+        requestId = createRequestId();
         response = await fetchWithTimeout(`${config.apiBaseUrl}/patterns/${id}/file`, {
           method: 'POST',
           timeoutMs: 600000,
+          requestId,
           headers: {
             accept: 'application/json',
+            'x-stitchsense-client-surface': CLIENT_SURFACE,
+            'x-request-id': requestId,
             authorization: `Bearer ${activeToken}`,
           },
           body: makeFormData(),
@@ -1668,7 +1716,7 @@ export const stitchSenseAPI = {
           message = text.trim();
         }
       }
-      throw new APIError({ statusCode: response.status, message });
+      throw new APIError({ statusCode: response.status, message, requestId: responseRequestId(response) });
     }
 
     return readJsonResponse<{

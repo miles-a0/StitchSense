@@ -8,6 +8,10 @@ function normalizeMessage(message: string) {
   return message.replace(/\s+/g, ' ').trim();
 }
 
+function withSupportCode(message: string, requestId?: string | null) {
+  return requestId ? `${message} (support code: ${requestId})` : message;
+}
+
 export function getUserFacingErrorMessage(
   error: unknown,
   options: ErrorMessageOptions = {},
@@ -36,7 +40,7 @@ export function getUserFacingErrorMessage(
     }
 
     if (error.statusCode === 404) {
-      return rawMessage || 'That item could not be found anymore.';
+      return withSupportCode(rawMessage || 'That item could not be found anymore.', error.requestId);
     }
 
     if (error.statusCode === 429 || /rate limit|please wait \d+/i.test(rawMessage)) {
@@ -48,10 +52,10 @@ export function getUserFacingErrorMessage(
     }
 
     if (rawMessage && !/^server returned \d+/i.test(rawMessage)) {
-      return rawMessage;
+      return withSupportCode(rawMessage, error.requestId);
     }
 
-    return fallback;
+    return withSupportCode(fallback, error.requestId);
   }
 
   if (error instanceof Error) {
