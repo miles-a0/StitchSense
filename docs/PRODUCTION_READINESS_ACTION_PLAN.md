@@ -105,7 +105,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [ ] Confirm monthly/annual products, trial rules, prices, entitlement identifier, and account ownership in App Store Connect, Play Console, and RevenueCat.
 - [x] Integrate the RevenueCat SDK into the Expo app as the primary iOS/Android subscription path.
 - [x] Replace iOS “coming soon” and Android Stripe digital-subscription checkout with RevenueCat native store purchase flows for store builds.
-- [ ] Implement purchase, pending purchase, restore, cancellation guidance, expiry, grace period, refund/revocation, and offline/error states.
+- [ ] Implement purchase, pending purchase, restore, cancellation guidance, expiry, grace period, refund/revocation, and offline/error states. *(2026-09-08: mobile RevenueCat purchase handling now distinguishes active, pending, cancelled, already-purchased, network/offline, unavailable-product, and configuration-error states across paywall/account/promo flows. Store dashboard/device validation still required for expiry, grace-period, refund, and revocation states.)*
 - [x] Preserve Stripe billing only for existing/legacy web subscriptions while keeping entitlement resolution consistent across providers.
 - [ ] Validate RevenueCat webhooks for both stores and verify one StitchSense user cannot receive another user’s entitlement.
 - [ ] Complete Apple sandbox/TestFlight and Google licence-tester/internal-track purchase matrices.

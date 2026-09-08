@@ -116,7 +116,10 @@ export function PromoPopup() {
           if (!user?.id) {
             throw new Error('Sign in before starting a subscription.');
           }
-          await purchaseRevenueCatPlan(user.id, action.checkoutPlan === 'monthly' ? 'monthly' : 'annual');
+          const purchase = await purchaseRevenueCatPlan(user.id, action.checkoutPlan === 'monthly' ? 'monthly' : 'annual');
+          if (purchase.status === 'cancelled') {
+            return;
+          }
           await wait(1500);
           await refreshAccount();
           return;
