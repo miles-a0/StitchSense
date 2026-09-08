@@ -142,6 +142,10 @@ export async function checkStorageReadiness() {
   await client.send(new HeadBucketCommand({ Bucket: config.storage.bucket }));
 }
 
+export function destroyStorageClient() {
+  client.destroy();
+}
+
 export async function getPatternFile(key: string) {
   await ensureBucket();
   const command = new GetObjectCommand({

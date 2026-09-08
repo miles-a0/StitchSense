@@ -20,7 +20,7 @@ import { projectRoutes } from './routes/projects.js';
 import { promoRoutes } from './routes/promos.js';
 import { ravelryRoutes } from './routes/ravelry.js';
 import { rewriteRoutes } from './routes/rewrites.js';
-import { checkStorageReadiness } from './services/storage.js';
+import { checkStorageReadiness, destroyStorageClient } from './services/storage.js';
 import { stashRoutes } from './routes/stash.js';
 import { syncRoutes } from './routes/sync.js';
 import { userRoutes } from './routes/users.js';
@@ -89,6 +89,10 @@ export async function buildApp() {
   });
   await app.register(rateLimit, { max: 600, timeWindow: '1 minute' });
   await registerAuth(app);
+
+  app.addHook('onClose', async () => {
+    destroyStorageClient();
+  });
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('x-request-id', request.id);
