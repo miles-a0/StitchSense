@@ -110,6 +110,19 @@ function trialCountdown(trialEndsAt?: string | null) {
   return `${days} days remaining`;
 }
 
+function purchaseStatusMessage(status: string, hasActiveEntitlement: boolean) {
+  if (hasActiveEntitlement || status === 'active') {
+    return 'Purchase complete. Syncing your StitchSense access...';
+  }
+  if (status === 'pending') {
+    return 'Purchase is pending with the store. We’ll refresh your access as soon as Apple or Google confirms it.';
+  }
+  if (status === 'cancelled') {
+    return 'Purchase cancelled. No payment was taken.';
+  }
+  return 'Purchase sent to the store. Syncing your StitchSense access...';
+}
+
 type ChoicePillProps = {
   label: string;
   active: boolean;
@@ -255,14 +268,17 @@ export default function AccountScreen() {
           throw new Error('Sign in before starting a subscription.');
         }
         const purchase = await purchaseRevenueCatPlan(user.id, plan);
-        setStatusMessage(
-          purchase.hasActiveEntitlement
-            ? 'Purchase complete. Syncing your StitchSense access...'
-            : 'Purchase sent to the store. Syncing your StitchSense access...',
-        );
+        setStatusMessage(purchaseStatusMessage(purchase.status, purchase.hasActiveEntitlement));
+        if (purchase.status === 'cancelled') {
+          return;
+        }
         await wait(1500);
         await refreshAccount();
-        setStatusMessage('Subscription status refreshed.');
+        setStatusMessage(
+          purchase.status === 'pending'
+            ? 'Subscription is still pending. Tap refresh after the store confirms payment.'
+            : 'Subscription status refreshed.',
+        );
         return;
       }
 
