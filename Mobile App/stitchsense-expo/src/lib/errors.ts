@@ -1,4 +1,4 @@
-import { APIError } from '@/src/lib/api';
+import { APIError } from './api-error';
 
 type ErrorMessageOptions = {
   fallback?: string;

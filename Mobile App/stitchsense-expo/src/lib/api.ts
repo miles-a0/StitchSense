@@ -1,7 +1,7 @@
 import { config } from '@/src/lib/config';
+import { APIError } from './api-error';
 import { clearTokens, loadTokens, saveTokens } from '@/src/lib/token-store';
 import type {
-  APIErrorShape,
   AuthResponse,
   BillingCheckoutResponse,
   BillingPortalResponse,
@@ -45,18 +45,6 @@ import type {
   WordPressSyncRunResponse,
 } from '@/src/lib/models';
 import type { StashCategory, StashItem } from '@/src/lib/stash-store';
-
-class APIError extends Error {
-  statusCode: number;
-  requestId?: string | null;
-
-  constructor({ statusCode, message, requestId }: APIErrorShape) {
-    super(message);
-    this.name = 'APIError';
-    this.statusCode = statusCode;
-    this.requestId = requestId ?? null;
-  }
-}
 
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
