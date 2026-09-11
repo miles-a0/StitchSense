@@ -83,3 +83,39 @@ jobs:
           assert checks.get("database") is True, payload
           assert checks.get("storage") is True, payload
           PY
+
+      - name: Notify uptime alert webhook
+        if: failure()
+        env:
+          UPTIME_ALERT_WEBHOOK_URL: ${{ secrets.UPTIME_ALERT_WEBHOOK_URL }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${UPTIME_ALERT_WEBHOOK_URL:-}" ]]; then
+            echo "UPTIME_ALERT_WEBHOOK_URL is not configured; relying on GitHub workflow failure notification."
+            exit 0
+          fi
+
+          payload="$(
+            python3 - <<'PY'
+          import json
+          import os
+
+          message = {
+              "text": "StitchSense production uptime check failed.",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "workflow": os.environ["GITHUB_WORKFLOW"],
+              "runUrl": os.environ["RUN_URL"],
+              "apiBaseUrl": os.environ["PRODUCTION_API_BASE_URL"],
+          }
+          print(json.dumps(message, separators=(",", ":")))
+          PY
+          )"
+
+          curl --fail --silent --show-error \
+            --max-time 10 \
+            --retry 2 \
+            --header 'content-type: application/json' \
+            --data "$payload" \
+            "$UPTIME_ALERT_WEBHOOK_URL"
