@@ -14,11 +14,42 @@ function periodEndForSubscription(subscription: Stripe.Subscription) {
   return periodEnd ? new Date(periodEnd * 1000) : null;
 }
 
+async function existingStripeSubscriptionOwner(subscriptionId: string) {
+  const existing = await query<{ user_id: string }>(
+    `SELECT user_id
+     FROM subscriptions
+     WHERE provider = 'stripe' AND provider_subscription_id = $1
+     LIMIT 1`,
+    [subscriptionId],
+  );
+
+  return existing.rows[0]?.user_id ?? null;
+}
+
 export async function upsertStripeSubscriptionFromStripe(subscription: Stripe.Subscription, fallbackUserId?: string | null) {
   const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
   const user = await query<{ id: string }>('SELECT id FROM users WHERE stripe_customer_id = $1', [customerId]);
   const userId = user.rows[0]?.id ?? fallbackUserId ?? null;
   if (!userId) return { synced: false, reason: 'unknown_customer' };
+
+  const existingOwnerId = await existingStripeSubscriptionOwner(subscription.id);
+  if (existingOwnerId && existingOwnerId !== userId) {
+    await query(
+      `INSERT INTO audit_events (actor_user_id, target_user_id, event_type, metadata)
+       VALUES ($1,$2,'billing.stripe.subscription_user_mismatch',$3)`,
+      [
+        userId,
+        existingOwnerId,
+        {
+          receivedAt: new Date().toISOString(),
+          stripeSubscriptionId: subscription.id,
+          customerId,
+          status: subscription.status,
+        },
+      ],
+    );
+    return { synced: false, reason: 'subscription_user_mismatch' };
+  }
 
   const priceId = subscription.items.data[0]?.price.id ?? null;
   await query(

@@ -119,6 +119,10 @@ Close exploitable security and recoverability risks first, then run application 
 
 **2026-09-07 update:** RevenueCat webhook handling now refuses to reassign an existing Apple/Google store transaction to a different StitchSense user, preserving the original owner and logging a mismatch audit event. Integration coverage was added for webhook authorization, ignored events, idempotent renewal updates, and cross-user transaction mismatch protection.
 
+**2026-09-11 update:** RevenueCat webhook integration coverage now also asserts Apple cancellation keeps entitlement active through the paid-through date, Apple expiration removes platform entitlement access, and Google Play Store purchases map to Google-backed Pro monthly subscriptions. Real store-console sandbox/internal-track validation is still required before this exit gate can pass.
+
+**2026-09-11 update:** Stripe subscription sync now pins an existing Stripe subscription ID to its original StitchSense user, records a mismatch audit event instead of moving entitlement access, and has DB-backed integration coverage for active, cancel-at-period-end, canceled, unknown-customer, and cross-user mismatch paths. Live Stripe webhook replay/signature validation remains part of the final billing sign-off.
+
 **Exit gate:** Purchase, restore, cancel, expire, and cross-device entitlement refresh pass on real iOS and Android store builds.
 
 ### 7. Complete physical-device, accessibility, and UX hardening — P1
