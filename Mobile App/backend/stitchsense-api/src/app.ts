@@ -4,7 +4,7 @@ import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { LogController } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import rawBody from 'fastify-raw-body';
 import { ZodError } from 'zod';
 import { config } from './config.js';
@@ -20,6 +20,7 @@ import { projectRoutes } from './routes/projects.js';
 import { promoRoutes } from './routes/promos.js';
 import { ravelryRoutes } from './routes/ravelry.js';
 import { rewriteRoutes } from './routes/rewrites.js';
+import { recordRequestMetrics, renderPrometheusMetrics } from './services/metrics.js';
 import { checkStorageReadiness, destroyStorageClient } from './services/storage.js';
 import { stashRoutes } from './routes/stash.js';
 import { syncRoutes } from './routes/sync.js';
@@ -100,6 +101,7 @@ export async function buildApp() {
 
   app.addHook('onResponse', async (request, reply) => {
     const responseTimeMs = reply.elapsedTime;
+    recordRequestMetrics(request, reply);
     const logPayload = {
       requestId: request.id,
       method: request.method,
@@ -134,6 +136,34 @@ export async function buildApp() {
   });
 
   app.get('/health', async () => ({ ok: true, service: 'stitchsense-api' }));
+
+  function hasMetricsAccess(request: { headers: Record<string, string | string[] | undefined> }) {
+    if (!config.metricsSharedSecret) {
+      return false;
+    }
+
+    const authorization = request.headers.authorization;
+    const token = typeof authorization === 'string' && authorization.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length)
+      : '';
+
+    const expected = Buffer.from(config.metricsSharedSecret);
+    const supplied = Buffer.from(token);
+    return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+  }
+
+  app.get('/metrics', async (request, reply) => {
+    if (!config.metricsSharedSecret) {
+      return reply.code(404).send({ error: 'Not found', requestId: request.id });
+    }
+    if (!hasMetricsAccess(request)) {
+      return reply.code(401).send({ error: 'Unauthorized', requestId: request.id });
+    }
+
+    return reply
+      .type('text/plain; version=0.0.4; charset=utf-8')
+      .send(renderPrometheusMetrics());
+  });
 
   async function withReadinessTimeout(name: string, check: Promise<unknown>) {
     let timeout: NodeJS.Timeout | undefined;

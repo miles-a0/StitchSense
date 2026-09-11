@@ -9,6 +9,7 @@ process.env.NODE_ENV = 'production';
 process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-32-characters';
 process.env.CORS_ORIGINS = 'https://catlowyarns.co.uk';
 process.env.TRUST_PROXY = '127.0.0.1';
+process.env.METRICS_SHARED_SECRET = 'test-only-metrics-secret-with-more-than-32-characters';
 
 test('API hardening controls', async (t) => {
   const { buildApp } = await import('../dist/app.js');
@@ -44,6 +45,26 @@ test('API hardening controls', async (t) => {
       headers: { 'x-request-id': 'stitchsense-test-request' },
     });
     assert.equal(supplied.headers['x-request-id'], 'stitchsense-test-request');
+  });
+
+  await t.test('guards operational metrics and records low-cardinality request data', async () => {
+    const unauthorized = await app.inject({ method: 'GET', url: '/metrics' });
+    assert.equal(unauthorized.statusCode, 401);
+    assert.match(unauthorized.json().requestId, /^[0-9a-f-]{36}$/);
+
+    await app.inject({ method: 'GET', url: '/health' });
+    await app.inject({ method: 'GET', url: '/missing-route' });
+
+    const metrics = await app.inject({
+      method: 'GET',
+      url: '/metrics',
+      headers: { authorization: `Bearer ${process.env.METRICS_SHARED_SECRET}` },
+    });
+    assert.equal(metrics.statusCode, 200);
+    assert.match(metrics.headers['content-type'], /^text\/plain/);
+    assert.match(metrics.body, /stitchsense_api_requests_total\{method="GET",route="\/health",status_class="2xx"\} \d+/);
+    assert.match(metrics.body, /stitchsense_api_requests_total\{method="GET",route="unmatched",status_class="4xx"\} \d+/);
+    assert.match(metrics.body, /stitchsense_api_request_duration_seconds_bucket\{method="GET",route="\/health",status_class="2xx",le="\+Inf"\} \d+/);
   });
 
   await t.test('rate limits repeated login attempts', async () => {
