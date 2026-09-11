@@ -9,6 +9,7 @@ import { ScreenHero } from '@/src/components/ui/screen-hero';
 import { InlineBackButton } from '@/src/components/ui/inline-back-button';
 import { stitchSenseAPI } from '@/src/lib/api';
 import { config } from '@/src/lib/config';
+import { destructiveAccountActionPrompt } from '@/src/lib/destructive-actions';
 import {
   entitlementCopy,
   entitlementHeadline,
@@ -171,6 +172,22 @@ export default function AccountScreen() {
     } finally {
       setIsDeletingAccount(false);
     }
+  }
+
+  function confirmDeleteData() {
+    const prompt = destructiveAccountActionPrompt('delete_synced_data');
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: prompt.confirmLabel, style: 'destructive', onPress: () => void deleteData() },
+    ]);
+  }
+
+  function confirmDeleteAccount() {
+    const prompt = destructiveAccountActionPrompt('delete_account');
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: prompt.confirmLabel, style: 'destructive', onPress: () => void deleteAccount() },
+    ]);
   }
 
   async function launchCheckout(plan: 'monthly' | 'annual') {
@@ -468,31 +485,13 @@ export default function AccountScreen() {
           />
           <BrandButton
             label={isDeleting ? 'Deleting...' : 'Delete synced data'}
-            onPress={() =>
-              Alert.alert(
-                'Delete synced mobile data?',
-                'This removes synced chats, rewrites, and saved platform settings for this account.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: () => void deleteData() },
-                ],
-              )
-            }
+            onPress={confirmDeleteData}
             style={styles.fullWidth}
             variant="secondary"
           />
           <BrandButton
             label={isDeletingAccount ? 'Deleting account...' : 'Delete account'}
-            onPress={() =>
-              Alert.alert(
-                'Delete your StitchSense account?',
-                'This permanently removes your StitchSense account and synced mobile data. App Store or Google Play subscriptions must still be managed in your store account.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete account', style: 'destructive', onPress: () => void deleteAccount() },
-                ],
-              )
-            }
+            onPress={confirmDeleteAccount}
             style={styles.fullWidth}
             variant="secondary"
           />

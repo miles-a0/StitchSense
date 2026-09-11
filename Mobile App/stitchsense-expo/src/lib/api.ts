@@ -1,4 +1,8 @@
 import { config } from '@/src/lib/config';
+import {
+  DELETE_ACCOUNT_CONFIRMATION,
+  DELETE_SYNCED_DATA_CONFIRMATION,
+} from '@/src/lib/destructive-actions';
 import { APIError } from './api-error';
 import { clearTokens, loadTokens, saveTokens } from '@/src/lib/token-store';
 import type {
@@ -982,14 +986,14 @@ export const stitchSenseAPI = {
     return request<DeleteDataResponse>('/user/delete-data', {
       method: 'POST',
       token,
-      body: { confirm: 'DELETE' },
+      body: { confirm: DELETE_SYNCED_DATA_CONFIRMATION },
     });
   },
   deleteAccount(token: string) {
     return request<DeleteDataResponse>('/user/delete-account', {
       method: 'POST',
       token,
-      body: { confirm: 'DELETE_ACCOUNT' },
+      body: { confirm: DELETE_ACCOUNT_CONFIRMATION },
     });
   },
   async syncStatus(token: string) {
