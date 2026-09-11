@@ -98,6 +98,8 @@ Close exploitable security and recoverability risks first, then run application 
 - [ ] Rehearse migration rollback and confirm old WordPress behaviour remains available during rollback.
 - [ ] Produce final migration counts, exceptions, and approval before touching production data.
 
+**2026-09-11 update:** `/sync/validation` now has DB-backed integration coverage for platform library counts, recent active/deleted project reporting, and project-child integrity checks that flag active counters, work logs, photos, or marks attached to deleted projects. Representative WordPress staging-data reconciliation and bidirectional device/web evidence remain required for this exit gate.
+
 **Exit gate:** Reconciled counts and bidirectional test evidence show no data loss, ownership leak, stale resurrection, or AI cross-pattern contamination.
 
 ### 6. Complete compliant native subscriptions — P0
