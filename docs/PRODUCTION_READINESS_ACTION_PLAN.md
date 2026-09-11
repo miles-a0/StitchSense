@@ -75,6 +75,7 @@ Close exploitable security and recoverability risks first, then run application 
 - GitHub Actions run `33968160241` passed on protected release source commit `1c88c5c`; the same commit was deployed to production as image `sha256:03a07dc07c80740712df50cc808b02a875f28b469fa72d45884ef5a67457d10e`.
 - GitHub branch-protection enforcement remains unavailable on the repository's current plan. Checks run on every pull request and push to `main`, but GitHub cannot yet prevent an administrator from bypassing them.
 - 2026-09-11: the CI MinIO integration-test image now pulls from pinned Quay release digest `sha256:ed9be66eb5f2636c18289c34c3b725ddf57815f2777c77b5938543b78a44f144` after Docker Hub denied the matching `minio/minio` pull during PR #35.
+- 2026-09-11: CI action pins were advanced to `actions/checkout` v7.0.1 and `actions/setup-node` v7.0.0 SHAs to clear GitHub's Node 20 action-runtime deprecation warnings while keeping supply-chain pins explicit.
 
 ### 4. Build a launch-level automated test suite — P0/P1
 
