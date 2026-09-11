@@ -24,6 +24,7 @@ export const config = {
   port: positiveInteger(process.env.PORT, 8080),
   logLevel: logLevel(process.env.LOG_LEVEL),
   slowRequestMs: positiveInteger(process.env.SLOW_REQUEST_MS, 3000),
+  metricsSharedSecret: process.env.METRICS_SHARED_SECRET ?? '',
   readinessCheckTimeoutMs: positiveInteger(process.env.READINESS_CHECK_TIMEOUT_MS, 2000),
   publicApiBaseUrl: process.env.PUBLIC_API_BASE_URL ?? process.env.API_PUBLIC_URL ?? '',
   corsOrigins: commaSeparated(process.env.CORS_ORIGINS),
@@ -89,6 +90,9 @@ export function validateProductionConfig() {
   }
   if (config.trustProxy.length === 0) {
     errors.push('TRUST_PROXY must contain the trusted reverse-proxy IP or CIDR range');
+  }
+  if (config.metricsSharedSecret && config.metricsSharedSecret.length < 32) {
+    errors.push('METRICS_SHARED_SECRET must be at least 32 characters when configured');
   }
   if (config.wordpress.siteUrl && !isValidUrl(config.wordpress.siteUrl, true)) {
     errors.push('WORDPRESS_SITE_URL must be a valid HTTPS URL');
