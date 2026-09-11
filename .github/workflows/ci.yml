@@ -114,6 +114,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm test
+
       - name: Run Expo Doctor
         run: npx expo-doctor
 

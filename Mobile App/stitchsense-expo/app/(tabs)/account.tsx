@@ -9,6 +9,13 @@ import { ScreenHero } from '@/src/components/ui/screen-hero';
 import { InlineBackButton } from '@/src/components/ui/inline-back-button';
 import { stitchSenseAPI } from '@/src/lib/api';
 import { config } from '@/src/lib/config';
+import {
+  entitlementCopy,
+  entitlementHeadline,
+  formatAccessSource,
+  purchaseStatusMessage,
+  trialCountdown,
+} from '@/src/lib/entitlement-access';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import {
   openRevenueCatManagement,
@@ -28,99 +35,6 @@ const usesStoreBilling = usesRevenueCatStoreBilling();
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function formatAccessSource(source?: string | null) {
-  switch (source) {
-    case 'manual_lifetime':
-      return 'Lifetime access';
-    case 'manual_trial':
-      return 'Extended trial';
-    case 'courtesy_access':
-      return 'Courtesy access';
-    case 'stripe':
-      return 'Stripe subscription';
-    case 'apple':
-      return 'Apple subscription';
-    case 'google':
-      return 'Google subscription';
-    case 'standard_trial':
-      return 'Free trial';
-    case 'none':
-      return 'No active entitlement';
-    default:
-      return 'Pending';
-  }
-}
-
-function entitlementCopy(source?: string | null) {
-  switch (source) {
-    case 'manual_lifetime':
-      return 'You have lifetime Pro access on this account.';
-    case 'manual_trial':
-      return 'You have extended complimentary access for testing, beta use, or support.';
-    case 'courtesy_access':
-      return 'This account currently has complimentary Pro access.';
-    case 'stripe':
-    case 'apple':
-    case 'google':
-      return 'Your paid StitchSense subscription is active.';
-    case 'standard_trial':
-      return 'Your free trial is active and all Pro features are currently unlocked.';
-    case 'none':
-      return 'This account is currently on the free tier and locked out of Pro-only features.';
-    default:
-      return 'Your subscription details will appear here once the account finishes loading.';
-  }
-}
-
-function entitlementHeadline(source?: string | null) {
-  switch (source) {
-    case 'manual_lifetime':
-      return 'Lifetime Pro';
-    case 'manual_trial':
-      return 'Extended Pro access';
-    case 'courtesy_access':
-      return 'Courtesy Pro access';
-    case 'stripe':
-    case 'apple':
-    case 'google':
-      return 'Paid Pro plan';
-    case 'standard_trial':
-      return 'Free trial active';
-    case 'none':
-      return 'Upgrade to keep full access';
-    default:
-      return 'Checking access';
-  }
-}
-
-function trialCountdown(trialEndsAt?: string | null) {
-  if (!trialEndsAt) {
-    return null;
-  }
-  const ms = new Date(trialEndsAt).getTime() - Date.now();
-  const days = Math.ceil(ms / (1000 * 60 * 60 * 24));
-  if (days <= 0) {
-    return 'Ends today';
-  }
-  if (days === 1) {
-    return '1 day remaining';
-  }
-  return `${days} days remaining`;
-}
-
-function purchaseStatusMessage(status: string, hasActiveEntitlement: boolean) {
-  if (hasActiveEntitlement || status === 'active') {
-    return 'Purchase complete. Syncing your StitchSense access...';
-  }
-  if (status === 'pending') {
-    return 'Purchase is pending with the store. We’ll refresh your access as soon as Apple or Google confirms it.';
-  }
-  if (status === 'cancelled') {
-    return 'Purchase cancelled. No payment was taken.';
-  }
-  return 'Purchase sent to the store. Syncing your StitchSense access...';
 }
 
 type ChoicePillProps = {

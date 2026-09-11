@@ -6,6 +6,13 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { BrandButton } from '@/src/components/ui/brand-button';
 import { stitchSenseAPI } from '@/src/lib/api';
 import { config as appConfig } from '@/src/lib/config';
+import {
+  hasActiveEntitlementAccess,
+  paywallAccessCopy,
+  paywallAccessHeadline,
+  paywallTrialLabel,
+  purchaseStatusMessage,
+} from '@/src/lib/entitlement-access';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import {
   openRevenueCatManagement,
@@ -72,71 +79,6 @@ function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function accessHeadline(accessSource?: string | null) {
-  switch (accessSource) {
-    case 'manual_lifetime':
-      return 'Lifetime Pro access';
-    case 'manual_trial':
-      return 'Extended complimentary access';
-    case 'courtesy_access':
-      return 'Courtesy Pro access';
-    case 'stripe':
-    case 'apple':
-    case 'google':
-      return 'Your Pro plan is active';
-    case 'standard_trial':
-      return 'Free trial active';
-    case 'none':
-      return 'Keep StitchSense unlocked';
-    default:
-      return 'Choose your StitchSense plan';
-  }
-}
-
-function accessCopy(accessSource?: string | null) {
-  switch (accessSource) {
-    case 'manual_lifetime':
-      return 'This account has permanent Pro access. You do not need to subscribe unless you want to test checkout behaviour.';
-    case 'manual_trial':
-      return 'This account has extended free access for beta use, testing, or support.';
-    case 'courtesy_access':
-      return 'This account currently has complimentary Pro access managed from the StitchSense admin tools.';
-    case 'stripe':
-    case 'apple':
-    case 'google':
-      return 'Your account already has active Pro billing. You can refresh your account status or manage billing below.';
-    case 'standard_trial':
-      return 'You are inside the free trial window, with the same core Pro features available while you decide.';
-    case 'none':
-      return 'Choose a plan to keep AI chat, rewrites, Stitch Vision, Ravelry imports, and project guidance available.';
-    default:
-      return 'Pro keeps the full StitchSense toolset available across web and mobile.';
-  }
-}
-
-function trialLabel(trialEndsAt?: string | null) {
-  if (!trialEndsAt) return null;
-  const end = new Date(trialEndsAt);
-  const remaining = end.getTime() - Date.now();
-  if (!Number.isFinite(remaining)) return null;
-  if (remaining <= 0) return 'Trial ended';
-  const days = Math.ceil(remaining / (1000 * 60 * 60 * 24));
-  return days === 1 ? '1 day left in trial' : `${days} days left in trial`;
-}
-
-function purchaseStatusMessage(status: string, hasActiveEntitlement: boolean) {
-  if (hasActiveEntitlement || status === 'active') {
-    return 'Purchase complete. Syncing your StitchSense access...';
-  }
-  if (status === 'pending') {
-    return 'Purchase is pending with the store. We’ll refresh your access as soon as Apple or Google confirms it.';
-  }
-  if (status === 'cancelled') {
-    return 'Purchase cancelled. No payment was taken.';
-  }
-  return 'Purchase sent to the store. Syncing your StitchSense access...';
-}
-
 export default function PaywallScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -156,16 +98,14 @@ export default function PaywallScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const hasActivePaidOrCourtesyAccess = useMemo(() => {
-    if (!entitlement) return false;
-    if (entitlement.status === 'expired') return false;
-    return entitlement.accessSource !== 'none';
+    return hasActiveEntitlementAccess(entitlement);
   }, [entitlement]);
 
   const selectedPlanOption = planOptions.find((option) => option.id === selectedPlan) ?? planOptions[0];
   const promoCode = typeof params.promoCode === 'string' ? params.promoCode : '';
   const couponId = typeof params.couponId === 'string' ? params.couponId : '';
   const promotionCodeId = typeof params.promotionCodeId === 'string' ? params.promotionCodeId : '';
-  const trialStatus = trialLabel(entitlement?.trialEndsAt);
+  const trialStatus = paywallTrialLabel(entitlement?.trialEndsAt);
   const canManageStripeBilling = entitlement?.accessSource === 'stripe';
   const canManageStoreBilling = entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google';
 
@@ -310,11 +250,11 @@ export default function PaywallScreen() {
         <View style={styles.heroHeader}>
           <View style={styles.heroText}>
             <Text style={styles.eyebrow}>StitchSense Pro</Text>
-            <Text style={styles.title}>{accessHeadline(entitlement?.accessSource)}</Text>
+            <Text style={styles.title}>{paywallAccessHeadline(entitlement?.accessSource)}</Text>
           </View>
           {trialStatus ? <Text style={styles.trialBadge}>{trialStatus}</Text> : null}
         </View>
-        <Text style={styles.copy}>{accessCopy(entitlement?.accessSource)}</Text>
+        <Text style={styles.copy}>{paywallAccessCopy(entitlement?.accessSource)}</Text>
         {promoCode || couponId || promotionCodeId ? (
           <Text style={styles.promoBanner}>
             Offer applied{promoCode ? `: ${promoCode}` : ''}. Choose a plan to continue.
