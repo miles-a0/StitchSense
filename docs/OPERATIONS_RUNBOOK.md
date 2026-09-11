@@ -52,6 +52,18 @@ Expected readiness response:
 {"ok":true,"service":"stitchsense-api","checks":{"database":true,"storage":true}}
 ```
 
+## Monitoring hooks
+
+The production uptime workflow probes public `/health` and `/ready` every 15 minutes. Add a repository secret named `UPTIME_ALERT_WEBHOOK_URL` to send failure payloads to the chosen incident channel; leave it unset to rely on GitHub workflow-failure notifications only.
+
+The API exposes Prometheus-style request totals and latency buckets at `/metrics` when `METRICS_SHARED_SECRET` is configured. Scrape it only from a trusted network path:
+
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $METRICS_SHARED_SECRET" \
+  http://127.0.0.1:4445/metrics
+```
+
 ## Staging deployment
 
 Staging is private by default. It has its own API container, Postgres database, MinIO bucket, compose project, and generated secrets.
