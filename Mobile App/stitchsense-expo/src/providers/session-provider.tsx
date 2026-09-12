@@ -4,6 +4,7 @@ import { APIError, stitchSenseAPI } from '@/src/lib/api';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import { saveOnboardingPending } from '@/src/lib/onboarding-store';
 import { configureRevenueCat, hasRevenueCatApiKey, revenueCatLogOut, usesRevenueCatStoreBilling } from '@/src/lib/revenuecat';
+import { restoreSessionFromTokens } from '@/src/lib/session-restoration';
 import { clearTokens, loadTokens, saveTokens } from '@/src/lib/token-store';
 import type { Entitlement, User } from '@/src/lib/models';
 
@@ -126,10 +127,24 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
         if (!isMounted) {
           return;
         }
-        setAccessToken(saved.accessToken);
-        setRefreshToken(saved.refreshToken);
-        if (saved.accessToken || saved.refreshToken) {
-          await refreshAccount();
+        const restored = await restoreSessionFromTokens(saved, {
+          me: stitchSenseAPI.me,
+          entitlement: stitchSenseAPI.entitlement,
+          refresh: stitchSenseAPI.refresh,
+          saveTokens,
+          clearTokens,
+        });
+        if (!isMounted) {
+          return;
+        }
+        if (restored) {
+          setUser(restored.user);
+          setEntitlement(restored.entitlement);
+          setAccessToken(restored.accessToken);
+          setRefreshToken(restored.refreshToken);
+          if (usesRevenueCatStoreBilling() && hasRevenueCatApiKey()) {
+            await configureRevenueCat(restored.user.id);
+          }
         }
       } finally {
         if (isMounted) {
@@ -143,7 +158,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     return () => {
       isMounted = false;
     };
-  }, [refreshAccount]);
+  }, []);
 
   const signIn = useCallback(
     async (identifier: string, password: string) => {
