@@ -9,6 +9,7 @@ import { BrandButton } from '@/src/components/ui/brand-button';
 import { ScreenHero } from '@/src/components/ui/screen-hero';
 import { SwipeToDelete } from '@/src/components/ui/swipe-to-delete';
 import { buildPatternThumbnailUrl, stitchSenseAPI } from '@/src/lib/api';
+import { destructiveResourceActionPrompt } from '@/src/lib/destructive-actions';
 import type { Pattern } from '@/src/lib/models';
 import { findStashInsights } from '@/src/lib/stash-insights';
 import { useLibrary } from '@/src/providers/library-provider';
@@ -165,25 +166,22 @@ export default function LibraryScreen() {
 
   function confirmDeletePattern(pattern: Pattern) {
     if (!accessToken) return;
-    Alert.alert(
-      'Delete pattern?',
-      `“${pattern.title}” and its saved pattern chats will be permanently removed. Projects made from it are kept.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await stitchSenseAPI.deletePattern(pattern.id, accessToken);
-              removePattern(pattern.id);
-            } catch {
-              Alert.alert('Could not delete pattern', 'Please try again in a moment.');
-            }
-          },
+    const prompt = destructiveResourceActionPrompt('delete_pattern', pattern.title);
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: prompt.confirmLabel,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await stitchSenseAPI.deletePattern(pattern.id, accessToken);
+            removePattern(pattern.id);
+          } catch {
+            Alert.alert('Could not delete pattern', 'Please try again in a moment.');
+          }
         },
-      ],
-    );
+      },
+    ]);
   }
 
   return (
