@@ -16,6 +16,7 @@ import { BrandButton } from '@/src/components/ui/brand-button';
 import { RichMarkdownText } from '@/src/components/ui/rich-markdown-text';
 import { APIError, stitchSenseAPI } from '@/src/lib/api';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
+import { choosePatternRewrite } from '@/src/lib/pattern-binding';
 import type { RewriteSession } from '@/src/lib/models';
 import { useLibrary } from '@/src/providers/library-provider';
 import { usePreferences } from '@/src/providers/preferences-provider';
@@ -130,11 +131,7 @@ export default function PatternRewriteScreen() {
         }
         setRewrites(response.rewrites);
 
-        const chosenRewrite =
-          response.rewrites.find(
-            (item) => item.id === rewriteId && item.patternId === patternId,
-          ) ??
-          response.rewrites.find((item) => item.patternId === patternId);
+        const chosenRewrite = choosePatternRewrite(response.rewrites, patternId, rewriteId);
 
         if (chosenRewrite) {
           setSelectedRewrite(chosenRewrite);
