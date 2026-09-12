@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { authenticatedImageSource, stitchSenseAPI } from '@/src/lib/api';
+import { destructiveResourceActionPrompt } from '@/src/lib/destructive-actions';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import { describeStashItem, findStashInsights } from '@/src/lib/stash-insights';
 import { loadTokens } from '@/src/lib/token-store';
@@ -378,35 +379,32 @@ export default function PatternDetailScreen() {
       return;
     }
 
-    Alert.alert(
-      'Delete pattern?',
-      'This removes the pattern from your shared StitchSense library.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setIsDeleting(true);
-            try {
-              const activeToken = await currentAccessToken();
-              if (!activeToken) {
-                throw new Error('Your session has expired. Please sign in again.');
-              }
-              await stitchSenseAPI.deletePattern(activePattern.id, activeToken);
-              await refreshPatterns();
-              router.replace('/(tabs)/library');
-            } catch (error) {
-              setStatusMessage(
-                getUserFacingErrorMessage(error, { fallback: 'Could not delete this pattern.' }),
-              );
-            } finally {
-              setIsDeleting(false);
+    const prompt = destructiveResourceActionPrompt('delete_pattern', activePattern.title);
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: prompt.confirmLabel,
+        style: 'destructive',
+        onPress: async () => {
+          setIsDeleting(true);
+          try {
+            const activeToken = await currentAccessToken();
+            if (!activeToken) {
+              throw new Error('Your session has expired. Please sign in again.');
             }
-          },
+            await stitchSenseAPI.deletePattern(activePattern.id, activeToken);
+            await refreshPatterns();
+            router.replace('/(tabs)/library');
+          } catch (error) {
+            setStatusMessage(
+              getUserFacingErrorMessage(error, { fallback: 'Could not delete this pattern.' }),
+            );
+          } finally {
+            setIsDeleting(false);
+          }
         },
-      ],
-    );
+      },
+    ]);
   }
 
   async function handleRefreshFromRavelry() {

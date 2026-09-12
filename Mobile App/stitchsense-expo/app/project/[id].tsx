@@ -28,6 +28,7 @@ import { RichMarkdownText } from '@/src/components/ui/rich-markdown-text';
 import { ScreenHero } from '@/src/components/ui/screen-hero';
 import { SelectSheet } from '@/src/components/ui/select-sheet';
 import { authenticatedImageSource, projectPhotoFileUrl, stitchSenseAPI } from '@/src/lib/api';
+import { destructiveResourceActionPrompt } from '@/src/lib/destructive-actions';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import { describeStashItem, findStashMentionsInText } from '@/src/lib/stash-insights';
 import type { StashItem } from '@/src/lib/stash-store';
@@ -995,28 +996,25 @@ export default function ProjectDetailScreen() {
 
   function handleDelete() {
     if (!project || !accessToken) return;
-    Alert.alert(
-      'Delete project?',
-      'The linked pattern stays in your library. Only this working project will be removed.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await stitchSenseAPI.deleteProject(project.id, accessToken);
-              removeProject(project.id);
-              router.replace('/(tabs)/workspace');
-            } catch (error) {
-              setStatusMessage(
-                projectErrorMessage(error, 'Could not delete the project.'),
-              );
-            }
-          },
+    const prompt = destructiveResourceActionPrompt('delete_project', project.title);
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: prompt.confirmLabel,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await stitchSenseAPI.deleteProject(project.id, accessToken);
+            removeProject(project.id);
+            router.replace('/(tabs)/workspace');
+          } catch (error) {
+            setStatusMessage(
+              projectErrorMessage(error, 'Could not delete the project.'),
+            );
+          }
         },
-      ],
-    );
+      },
+    ]);
   }
 
   async function completeProject() {

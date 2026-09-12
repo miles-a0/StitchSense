@@ -9,6 +9,7 @@ import { EmptyState } from '@/src/components/ui/empty-state';
 import { ScreenHero } from '@/src/components/ui/screen-hero';
 import { SwipeToDelete } from '@/src/components/ui/swipe-to-delete';
 import { stitchSenseAPI } from '@/src/lib/api';
+import { destructiveResourceActionPrompt } from '@/src/lib/destructive-actions';
 import { useSession } from '@/src/providers/session-provider';
 import {
   isProjectDueSoon,
@@ -176,25 +177,22 @@ export default function WorkspaceScreen() {
 
   function confirmDeleteProject(project: Project) {
     if (!accessToken) return;
-    Alert.alert(
-      'Delete project?',
-      `“${project.title}” will be permanently removed. Its linked pattern stays in your Library.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await stitchSenseAPI.deleteProject(project.id, accessToken);
-              removeProject(project.id);
-            } catch {
-              Alert.alert('Could not delete project', 'Please try again in a moment.');
-            }
-          },
+    const prompt = destructiveResourceActionPrompt('delete_project', project.title);
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: prompt.confirmLabel,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await stitchSenseAPI.deleteProject(project.id, accessToken);
+            removeProject(project.id);
+          } catch {
+            Alert.alert('Could not delete project', 'Please try again in a moment.');
+          }
         },
-      ],
-    );
+      },
+    ]);
   }
 
   return (
