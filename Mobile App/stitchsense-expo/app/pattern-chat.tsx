@@ -18,6 +18,7 @@ import {
 
 import { APIError, stitchSenseAPI } from '@/src/lib/api';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
+import { choosePatternChatSession } from '@/src/lib/pattern-binding';
 import type { ChatMessage, ChatSession } from '@/src/lib/models';
 import { useLibrary } from '@/src/providers/library-provider';
 import { usePreferences } from '@/src/providers/preferences-provider';
@@ -140,12 +141,11 @@ export default function PatternChatScreen() {
         if (loadRequestRef.current !== requestId) {
           return;
         }
-        const latestSession =
-          sessionsResponse.sessions.find(
-            (item) => item.id === sessionId && item.patternId === patternId,
-          ) ??
-          sessionsResponse.sessions.find((item) => item.patternId === patternId) ??
-          null;
+        const latestSession = choosePatternChatSession(
+          sessionsResponse.sessions,
+          patternId,
+          sessionId,
+        );
         setSession(latestSession);
 
         if (!latestSession) {
