@@ -11,8 +11,12 @@ import {
 } from 'react-native';
 
 import { BrandButton } from '@/src/components/ui/brand-button';
-import { APIError, stitchSenseAPI } from '@/src/lib/api';
-import { getUserFacingErrorMessage } from '@/src/lib/errors';
+import { stitchSenseAPI } from '@/src/lib/api';
+import {
+  patternUploadErrorMessage,
+  stripPatternFileExtension,
+  uploadPatternWithRollback,
+} from '@/src/lib/pattern-upload-flow';
 import { loadTokens } from '@/src/lib/token-store';
 import { useLibrary } from '@/src/providers/library-provider';
 import { useSession } from '@/src/providers/session-provider';
@@ -20,24 +24,6 @@ import { tokens } from '@/src/theme/tokens';
 
 const craftOptions = ['knitting', 'crochet'] as const;
 const BUILD_STAMP = 'DEV BUILD JUNE 23 UPLOAD-D';
-
-function stripExtension(filename: string) {
-  return filename.replace(/\.[^/.]+$/, '');
-}
-
-function uploadErrorMessage(error: unknown) {
-  if (error instanceof APIError) {
-    return getUserFacingErrorMessage(error, {
-      fallback: 'Could not upload that pattern right now.',
-    });
-  }
-  if (error instanceof Error) {
-    return getUserFacingErrorMessage(error, {
-      fallback: 'Could not upload that pattern right now.',
-    });
-  }
-  return 'Could not upload that pattern right now.';
-}
 
 export default function PatternUploadScreen() {
   const router = useRouter();
@@ -57,7 +43,7 @@ export default function PatternUploadScreen() {
     if (!selectedFile?.name) {
       return '';
     }
-    return stripExtension(selectedFile.name);
+    return stripPatternFileExtension(selectedFile.name);
   }, [selectedFile?.name]);
 
   async function handlePickDocument() {
@@ -76,10 +62,10 @@ export default function PatternUploadScreen() {
 
       const asset = result.assets[0];
       setSelectedFile(asset);
-      setTitle((current) => current || stripExtension(asset.name));
+      setTitle((current) => current || stripPatternFileExtension(asset.name));
       setStatusMessage('Pattern file selected and ready to upload.');
     } catch (error) {
-      setStatusMessage(uploadErrorMessage(error));
+      setStatusMessage(patternUploadErrorMessage(error));
     } finally {
       setIsPicking(false);
     }
@@ -90,54 +76,31 @@ export default function PatternUploadScreen() {
       return;
     }
 
-    const finalTitle = title.trim() || suggestedTitle || 'Uploaded pattern';
     setIsUploading(true);
-    setStatusMessage('Creating your pattern record…');
-
-    let createdPatternId: string | null = null;
 
     try {
-      await refreshAccount();
-      const { accessToken: latestAccessToken } = await loadTokens();
-      const activeToken = latestAccessToken ?? accessToken;
-
-      if (!activeToken) {
-        throw new Error('Your session has expired. Please sign in again.');
-      }
-
-      const createdPattern = await stitchSenseAPI.createPattern(activeToken, {
-        title: finalTitle,
-        craftType,
-        originalFilename: selectedFile.name,
-        sourceUrl: sourceUrl.trim() || null,
-        source: 'upload',
-        metadata: {
-          uploadedFrom: 'expo-mobile',
-          localFilename: selectedFile.name,
+      const createdPattern = await uploadPatternWithRollback(
+        {
+          accessToken,
+          selectedFile,
+          title,
+          suggestedTitle,
+          craftType,
+          sourceUrl,
         },
-      });
-      createdPatternId = createdPattern.id;
+        {
+          api: stitchSenseAPI,
+          loadTokens,
+          refreshAccount,
+          refreshPatterns,
+          onStatus: setStatusMessage,
+        },
+      );
 
-      setStatusMessage('Uploading your file…');
-      await stitchSenseAPI.uploadPatternFile(createdPattern.id, activeToken, {
-        uri: selectedFile.uri,
-        name: selectedFile.name,
-        mimeType: selectedFile.mimeType,
-      });
-
-      await refreshPatterns();
       Alert.alert('Upload complete', 'Your pattern is now in your StitchSense library.');
       router.replace(`/pattern/${createdPattern.id}`);
     } catch (error) {
-      if (createdPatternId) {
-        try {
-          const { accessToken: latestAccessToken } = await loadTokens();
-          await stitchSenseAPI.deletePattern(createdPatternId, latestAccessToken ?? accessToken);
-        } catch {
-          // Best-effort cleanup if the file upload failed after record creation.
-        }
-      }
-      setStatusMessage(uploadErrorMessage(error));
+      setStatusMessage(patternUploadErrorMessage(error));
     } finally {
       setIsUploading(false);
     }
