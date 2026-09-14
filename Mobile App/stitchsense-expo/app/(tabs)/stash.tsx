@@ -18,6 +18,7 @@ import {
 import { AppCard } from '@/src/components/ui/app-card';
 import { BrandButton } from '@/src/components/ui/brand-button';
 import { ScreenHero } from '@/src/components/ui/screen-hero';
+import { destructiveResourceActionPrompt } from '@/src/lib/destructive-actions';
 import { describeStashItem, ravelryWeightForStash, stashIdeaSuggestions } from '@/src/lib/stash-insights';
 import type { StashCategory, StashItem } from '@/src/lib/stash-store';
 import { useProjects } from '@/src/providers/projects-provider';
@@ -352,10 +353,11 @@ export default function StashScreen() {
   }
 
   function handleRemoveItem(item: StashItem) {
-    Alert.alert('Remove stash item?', `Remove ${item.name} from your stash?`, [
+    const prompt = destructiveResourceActionPrompt('delete_stash_item', item.name);
+    Alert.alert(prompt.title, prompt.message, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Remove',
+        text: prompt.confirmLabel,
         style: 'destructive',
         onPress: () => {
           void removeItem(item.id);
@@ -370,10 +372,11 @@ export default function StashScreen() {
       return;
     }
 
-    Alert.alert('Delete stash item?', `Delete ${editingItem.name} from your stash?`, [
+    const prompt = destructiveResourceActionPrompt('delete_stash_item', editingItem.name);
+    Alert.alert(prompt.title, prompt.message, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: prompt.confirmLabel,
         style: 'destructive',
         onPress: () => {
           void removeItem(editingItem.id);

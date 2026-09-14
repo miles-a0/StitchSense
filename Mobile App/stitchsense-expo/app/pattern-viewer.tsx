@@ -16,6 +16,7 @@ import { WebView } from 'react-native-webview';
 
 import { BrandButton } from '@/src/components/ui/brand-button';
 import { stitchSenseAPI } from '@/src/lib/api';
+import { destructiveResourceActionPrompt } from '@/src/lib/destructive-actions';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import type { ProjectPatternMark } from '@/src/lib/models';
 import { loadTokens } from '@/src/lib/token-store';
@@ -211,10 +212,14 @@ export default function PatternViewerScreen() {
 
   function confirmDeleteProjectMarker(mark: ProjectPatternMark) {
     if (!activeProject?.id) return;
-    Alert.alert('Delete marker?', markerSummary(mark) || 'Remove this project marker?', [
+    const prompt = destructiveResourceActionPrompt(
+      mark.type === 'resume' ? 'clear_reading_position' : 'delete_project_marker',
+      markerSummary(mark),
+    );
+    Alert.alert(prompt.title, prompt.message, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: prompt.confirmLabel,
         style: 'destructive',
         onPress: async () => {
           try {
