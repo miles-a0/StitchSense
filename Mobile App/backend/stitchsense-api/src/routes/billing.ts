@@ -139,6 +139,19 @@ async function existingMobileSubscriptionOwner(input: { provider: 'apple' | 'goo
   return existing.rows[0]?.user_id ?? null;
 }
 
+async function receivedRevenueCatEvent(eventId: string) {
+  const existing = await query<{ id: string }>(
+    `SELECT id
+     FROM audit_events
+     WHERE event_type = 'billing.revenuecat.webhook.received'
+       AND metadata->>'revenueCatEventId' = $1
+     LIMIT 1`,
+    [eventId],
+  );
+
+  return Boolean(existing.rowCount);
+}
+
 async function handleStripeSubscription(subscription: Stripe.Subscription) {
   await upsertStripeSubscriptionFromStripe(subscription);
 }
@@ -165,6 +178,10 @@ export function statusForRevenueCatEvent(type: string, expirationAt: Date | null
 async function handleRevenueCatWebhook(body: unknown) {
   const parsed = revenueCatWebhookBody.parse(body);
   const event = parsed.event;
+  if (await receivedRevenueCatEvent(event.id)) {
+    return { received: true, replayed: true };
+  }
+
   const userId = event.app_user_id;
   const provider = providerForRevenueCatStore(event.store);
   const subscriptionId = event.original_transaction_id ?? event.transaction_id ?? event.id;
@@ -217,7 +234,8 @@ async function handleRevenueCatWebhook(body: unknown) {
 
   await query(
     `INSERT INTO audit_events (target_user_id, event_type, metadata)
-     VALUES ($1,'billing.revenuecat.webhook.received',$2)`,
+     VALUES ($1,'billing.revenuecat.webhook.received',$2)
+     ON CONFLICT DO NOTHING`,
     [userId, { receivedAt: new Date().toISOString(), revenueCatEventId: event.id, type: event.type }],
   );
 

@@ -105,6 +105,29 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-10-07T10:00:00.000Z');
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_initial_1');
 
+  const replay = await webhook({ event: baseEvent });
+  assert.equal(replay.statusCode, 200, replay.body);
+  assert.deepEqual(replay.json(), { received: true, replayed: true });
+
+  subscriptionRows = await client.query(
+    `SELECT user_id, status, current_period_end, metadata
+     FROM subscriptions
+     WHERE provider = 'apple' AND provider_subscription_id = 'original_apple_1'`,
+  );
+  assert.equal(subscriptionRows.rowCount, 1);
+  assert.equal(subscriptionRows.rows[0].user_id, ownerId);
+  assert.equal(subscriptionRows.rows[0].status, 'active');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-10-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_initial_1');
+
+  let receivedAudit = await client.query(
+    `SELECT metadata
+     FROM audit_events
+     WHERE event_type = 'billing.revenuecat.webhook.received'
+       AND metadata->>'revenueCatEventId' = 'evt_rc_initial_1'`,
+  );
+  assert.equal(receivedAudit.rowCount, 1);
+
   const renewal = await webhook({
     event: {
       ...baseEvent,
@@ -250,4 +273,17 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(googleRows.rows[0].current_period_end.toISOString(), '2026-10-07T10:00:00.000Z');
   assert.equal(googleRows.rows[0].metadata.revenueCatEventId, 'evt_rc_google_initial_1');
 
+  receivedAudit = await client.query(
+    `SELECT metadata
+     FROM audit_events
+     WHERE event_type = 'billing.revenuecat.webhook.received'
+       AND metadata->>'revenueCatEventId' IN (
+         'evt_rc_initial_1',
+         'evt_rc_renewal_1',
+         'evt_rc_cancellation_1',
+         'evt_rc_expiration_1',
+         'evt_rc_google_initial_1'
+       )`,
+  );
+  assert.equal(receivedAudit.rowCount, 5);
 });

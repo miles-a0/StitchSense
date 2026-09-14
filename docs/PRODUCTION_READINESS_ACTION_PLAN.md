@@ -81,7 +81,7 @@ Close exploitable security and recoverability risks first, then run application 
 
 - [ ] Add backend route/integration tests using isolated PostgreSQL and object-storage services. *(2026-09-07: CI now provisions isolated PostgreSQL and MinIO for backend integration checks; broader route coverage still remains.)*
 - [ ] Cover registration, login, refresh rotation/revocation, password reset, bridge authentication, entitlements, uploads, signed file access, and data deletion/export. *(2026-09-07: auth lifecycle now has DB-backed coverage for registration, login failure/success, refresh rotation, refresh-token reuse rejection, logout revocation, and password-reset unavailable-state handling. Signed file URL coverage now verifies active owner access, cross-user denial, and deleted-pattern denial. Data export/deletion now has DB-backed coverage for user scoping, destructive confirmation, project/stash inclusion, token redaction, and cross-user preservation.)*
-- [ ] Cover Stripe and RevenueCat webhook signatures, replay/idempotency, cancellation, expiry, restore, and user mapping.
+- [ ] Cover RevenueCat webhook authorization, replay/idempotency, cancellation, expiry, restore, and user mapping. Stripe launch work is intentionally out of scope.
 - [ ] Add Expo unit/component tests for session restoration, API errors, entitlement gates, pattern binding, and destructive confirmations. *(2026-09-14: Expo now has a Node-backed unit-test script plus pure coverage for session restoration/token rotation, entitlement gates, user-facing API error mapping, pattern chat/rewrite binding selectors, and destructive account/data, pattern, project, stash, counter, work-log, photo, and marker confirmation copy. Component-level flows remain.)*
 - [ ] Add device-level E2E smoke tests for onboarding, login, library, upload, pattern chat/rewrite, project lifecycle, Stitch Vision, stash, logout, and returning-user restoration.
 - [ ] Add regression tests for pattern A/B contamination, metadata-only Ravelry blocking, and deleted-record resurrection.
@@ -125,7 +125,9 @@ Close exploitable security and recoverability risks first, then run application 
 
 **2026-09-11 update:** RevenueCat webhook integration coverage now also asserts Apple cancellation keeps entitlement active through the paid-through date, Apple expiration removes platform entitlement access, and Google Play Store purchases map to Google-backed Pro monthly subscriptions. Real store-console sandbox/internal-track validation is still required before this exit gate can pass.
 
-**2026-09-11 update:** Stripe subscription sync now pins an existing Stripe subscription ID to its original StitchSense user, records a mismatch audit event instead of moving entitlement access, and has DB-backed integration coverage for active, cancel-at-period-end, canceled, unknown-customer, and cross-user mismatch paths. Live Stripe webhook replay/signature validation remains part of the final billing sign-off.
+**2026-09-14 update:** RevenueCat webhook handling now detects previously received event IDs before mutating subscription state again, and the database enforces a unique receipt record for RevenueCat webhook event IDs. Integration coverage asserts replay delivery is accepted without duplicating receipt audit rows.
+
+**2026-09-14 update:** Stripe is no longer part of the launch subscription path. Billing production readiness is focused on RevenueCat plus the Apple App Store and Google Play in-app purchase flows.
 
 **Exit gate:** Purchase, restore, cancel, expire, and cross-device entitlement refresh pass on real iOS and Android store builds.
 
