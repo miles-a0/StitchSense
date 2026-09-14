@@ -61,3 +61,80 @@ test('resource deletion prompts keep safe fallback names for blank titles', () =
     /^this project will be permanently removed/i,
   );
 });
+
+test('stash and project sub-item deletion prompts preserve item-specific warnings', () => {
+  assert.deepEqual(
+    destructiveResourceActionPrompt('delete_stash_item', 'Merino DK'),
+    {
+      title: 'Delete stash item?',
+      message: 'Remove Merino DK from your stash?',
+      confirmLabel: 'Delete',
+    },
+  );
+
+  assert.deepEqual(
+    destructiveResourceActionPrompt('delete_project_counter', 'Sleeve rows'),
+    {
+      title: 'Delete counter?',
+      message: 'Remove Sleeve rows from this project?',
+      confirmLabel: 'Delete',
+    },
+  );
+
+  assert.deepEqual(
+    destructiveResourceActionPrompt('delete_work_log_entry', 'First fitting'),
+    {
+      title: 'Delete work log entry?',
+      message: 'Remove First fitting from this project history?',
+      confirmLabel: 'Delete',
+    },
+  );
+});
+
+test('project photo and marker deletion prompts distinguish timeline, bookmark, and resume state', () => {
+  assert.deepEqual(
+    destructiveResourceActionPrompt('delete_project_photo', ''),
+    {
+      title: 'Delete photo?',
+      message: 'Remove this progress photo from the project timeline?',
+      confirmLabel: 'Delete',
+    },
+  );
+
+  assert.deepEqual(
+    destructiveResourceActionPrompt('delete_project_marker', 'Page 12'),
+    {
+      title: 'Delete bookmark?',
+      message: 'Remove Page 12 from this project?',
+      confirmLabel: 'Delete',
+    },
+  );
+
+  assert.deepEqual(
+    destructiveResourceActionPrompt('clear_reading_position', 'ignored'),
+    {
+      title: 'Clear reading position?',
+      message: 'Remove the saved reading position from this project?',
+      confirmLabel: 'Delete',
+    },
+  );
+});
+
+test('lower-level deletion prompts keep safe fallback names for blank labels', () => {
+  assert.match(
+    destructiveResourceActionPrompt('delete_stash_item', '').message,
+    /this stash item/,
+  );
+  assert.match(
+    destructiveResourceActionPrompt('delete_project_counter', '  ').message,
+    /this counter/,
+  );
+  assert.match(
+    destructiveResourceActionPrompt('delete_work_log_entry', '').message,
+    /this entry/,
+  );
+  assert.match(
+    destructiveResourceActionPrompt('delete_project_marker', '').message,
+    /this bookmark/,
+  );
+});

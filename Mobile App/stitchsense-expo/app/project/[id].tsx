@@ -715,10 +715,11 @@ export default function ProjectDetailScreen() {
 
   function handleDeleteCounter(counter: ProjectCounter) {
     if (!project || !accessToken) return;
-    Alert.alert('Delete counter?', `Remove "${counter.label}" from this project?`, [
+    const prompt = destructiveResourceActionPrompt('delete_project_counter', counter.label);
+    Alert.alert(prompt.title, prompt.message, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: prompt.confirmLabel,
         style: 'destructive',
         onPress: async () => {
           try {
@@ -793,10 +794,11 @@ export default function ProjectDetailScreen() {
 
   function handleDeleteWorkLogEntry(entry: ProjectWorkLogEntry) {
     if (!project || !accessToken) return;
-    Alert.alert('Delete work log entry?', `Remove "${entry.title}" from this project history?`, [
+    const prompt = destructiveResourceActionPrompt('delete_work_log_entry', entry.title);
+    Alert.alert(prompt.title, prompt.message, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: prompt.confirmLabel,
         style: 'destructive',
         onPress: async () => {
           try {
@@ -873,10 +875,11 @@ export default function ProjectDetailScreen() {
 
   function handleDeleteProjectPhoto(photo: ProjectPhoto) {
     if (!project || !accessToken) return;
-    Alert.alert('Delete photo?', 'Remove this progress photo from the project timeline?', [
+    const prompt = destructiveResourceActionPrompt('delete_project_photo', '');
+    Alert.alert(prompt.title, prompt.message, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: prompt.confirmLabel,
         style: 'destructive',
         onPress: async () => {
           try {
@@ -963,35 +966,33 @@ export default function ProjectDetailScreen() {
 
   function handleDeleteMark(mark: ProjectPatternMark) {
     if (!project || !accessToken) return;
-    Alert.alert(
-      mark.type === 'resume' ? 'Clear reading position?' : 'Delete bookmark?',
-      mark.type === 'resume'
-        ? 'Remove the saved reading position from this project?'
-        : `Remove "${mark.label}" from this project?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await stitchSenseAPI.deleteProjectMark(project.id, mark.id, accessToken);
-              setProjectMarks((current) => current.filter((item) => item.id !== mark.id));
-              if (mark.type === 'resume') {
-                setResumePage('');
-                setResumeLocation('');
-                setResumeNote('');
-              }
-              setStatusMessage(mark.type === 'resume' ? 'Reading position cleared.' : 'Bookmark deleted.');
-            } catch (error) {
-              setStatusMessage(
-                projectErrorMessage(error, 'Could not delete that bookmark.'),
-              );
-            }
-          },
-        },
-      ],
+    const prompt = destructiveResourceActionPrompt(
+      mark.type === 'resume' ? 'clear_reading_position' : 'delete_project_marker',
+      mark.label,
     );
+    Alert.alert(prompt.title, prompt.message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: prompt.confirmLabel,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await stitchSenseAPI.deleteProjectMark(project.id, mark.id, accessToken);
+            setProjectMarks((current) => current.filter((item) => item.id !== mark.id));
+            if (mark.type === 'resume') {
+              setResumePage('');
+              setResumeLocation('');
+              setResumeNote('');
+            }
+            setStatusMessage(mark.type === 'resume' ? 'Reading position cleared.' : 'Bookmark deleted.');
+          } catch (error) {
+            setStatusMessage(
+              projectErrorMessage(error, 'Could not delete that bookmark.'),
+            );
+          }
+        },
+      },
+    ]);
   }
 
   function handleDelete() {
