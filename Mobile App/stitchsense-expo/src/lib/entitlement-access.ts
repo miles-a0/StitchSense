@@ -17,7 +17,7 @@ export function formatAccessSource(source?: string | null) {
     case 'courtesy_access':
       return 'Courtesy access';
     case 'stripe':
-      return 'Stripe subscription';
+      return 'Legacy web subscription';
     case 'apple':
       return 'Apple subscription';
     case 'google':

@@ -1,11 +1,8 @@
-import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BrandButton } from '@/src/components/ui/brand-button';
-import { stitchSenseAPI } from '@/src/lib/api';
-import { config as appConfig } from '@/src/lib/config';
 import {
   hasActiveEntitlementAccess,
   paywallAccessCopy,
@@ -66,13 +63,9 @@ const reassuranceRows = [
   'Secure mobile checkout is handled by the App Store or Google Play.',
   'You can refresh access after payment from this screen.',
   'RevenueCat keeps app subscriptions and entitlements in sync.',
-  'Existing Stripe subscribers can still manage billing from the app.',
   'Courtesy and beta access still works from WordPress admin.',
 ];
 
-const checkoutSuccessUrl = `${appConfig.apiBaseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
-const checkoutCancelUrl = `${appConfig.apiBaseUrl}/billing/cancel`;
-const billingReturnUrl = `${appConfig.apiBaseUrl}/billing/success`;
 const usesStoreBilling = usesRevenueCatStoreBilling();
 
 function wait(milliseconds: number) {
@@ -106,7 +99,7 @@ export default function PaywallScreen() {
   const couponId = typeof params.couponId === 'string' ? params.couponId : '';
   const promotionCodeId = typeof params.promotionCodeId === 'string' ? params.promotionCodeId : '';
   const trialStatus = paywallTrialLabel(entitlement?.trialEndsAt);
-  const canManageStripeBilling = entitlement?.accessSource === 'stripe';
+  const hasLegacyWebBilling = entitlement?.accessSource === 'stripe';
   const canManageStoreBilling = entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google';
 
   useEffect(() => {
@@ -127,39 +120,24 @@ export default function PaywallScreen() {
     setIsLaunchingCheckout(plan);
     setStatusMessage(null);
     try {
-      if (usesStoreBilling) {
-        if (!user?.id) {
-          throw new Error('Sign in before starting a subscription.');
-        }
-        const purchase = await purchaseRevenueCatPlan(user.id, plan);
-        setStatusMessage(purchaseStatusMessage(purchase.status, purchase.hasActiveEntitlement));
-        if (purchase.status === 'cancelled') {
-          return;
-        }
-        await wait(1500);
-        await refreshAccount();
-        setStatusMessage(
-          purchase.status === 'pending'
-            ? 'Subscription is still pending. Tap refresh after the store confirms payment.'
-            : 'Subscription status refreshed.',
-        );
+      if (!usesStoreBilling) {
+        throw new Error('Mobile subscriptions require an iOS or Android store build.');
+      }
+      if (!user?.id) {
+        throw new Error('Sign in before starting a subscription.');
+      }
+      const purchase = await purchaseRevenueCatPlan(user.id, plan);
+      setStatusMessage(purchaseStatusMessage(purchase.status, purchase.hasActiveEntitlement));
+      if (purchase.status === 'cancelled') {
         return;
       }
-
-      const response = await stitchSenseAPI.createCheckout(accessToken, {
-        plan,
-        successUrl: checkoutSuccessUrl,
-        cancelUrl: checkoutCancelUrl,
-        promoCode: promoCode || undefined,
-        couponId: couponId || undefined,
-        promotionCodeId: promotionCodeId || undefined,
-        allowPromotionCodes: Boolean(promoCode && !couponId && !promotionCodeId),
-      });
-      await WebBrowser.openBrowserAsync(response.checkoutUrl);
-      setStatusMessage('Checking your subscription status...');
       await wait(1500);
       await refreshAccount();
-      setStatusMessage('Account status refreshed. If Stripe is still processing, tap refresh again in a moment.');
+      setStatusMessage(
+        purchase.status === 'pending'
+          ? 'Subscription is still pending. Tap refresh after the store confirms payment.'
+          : 'Subscription status refreshed.',
+      );
     } catch (error) {
       setStatusMessage(
         getUserFacingErrorMessage(error, {
@@ -176,23 +154,14 @@ export default function PaywallScreen() {
     setIsOpeningPortal(true);
     setStatusMessage(null);
     try {
-      if (usesStoreBilling && user?.id && canManageStoreBilling) {
-        await openRevenueCatManagement(user.id);
-        setStatusMessage('Checking your subscription status...');
-        await wait(1500);
-        await refreshAccount();
-        setStatusMessage('Subscription status refreshed.');
-        return;
+      if (!usesStoreBilling || !user?.id || !canManageStoreBilling) {
+        throw new Error('Store subscription management is available after a mobile store subscription is active.');
       }
-
-      const response = await stitchSenseAPI.createBillingPortal(accessToken, {
-        returnUrl: billingReturnUrl,
-      });
-      await WebBrowser.openBrowserAsync(response.portalUrl);
-      setStatusMessage('Checking your billing status...');
+      await openRevenueCatManagement(user.id);
+      setStatusMessage('Checking your subscription status...');
       await wait(1500);
       await refreshAccount();
-      setStatusMessage('Billing status refreshed.');
+      setStatusMessage('Subscription status refreshed.');
     } catch (error) {
       setStatusMessage(
         getUserFacingErrorMessage(error, {
@@ -307,10 +276,8 @@ export default function PaywallScreen() {
         </View>
         <BrandButton
           label={
-            canManageStripeBilling
-              ? isOpeningPortal
-                ? 'Opening billing...'
-              : 'Manage or change plan'
+            hasLegacyWebBilling
+              ? 'Legacy web plan active'
               : canManageStoreBilling
                 ? isOpeningPortal
                   ? 'Opening store settings...'
@@ -320,21 +287,21 @@ export default function PaywallScreen() {
                   ? 'Opening store purchase...'
                   : `Subscribe ${selectedPlanOption.label.toLowerCase()}`
               : isLaunchingCheckout === selectedPlan
-                ? 'Opening checkout...'
-                : `Continue with ${selectedPlanOption.label.toLowerCase()}`
+                ? 'Opening store purchase...'
+                : 'Open this on iOS or Android'
           }
-          onPress={() => void (canManageStripeBilling || canManageStoreBilling ? openBillingPortal() : launchCheckout(selectedPlan))}
-          loading={canManageStripeBilling || canManageStoreBilling ? isOpeningPortal : isLaunchingCheckout === selectedPlan}
+          onPress={() => void (hasLegacyWebBilling ? refreshStatus() : canManageStoreBilling ? openBillingPortal() : launchCheckout(selectedPlan))}
+          loading={canManageStoreBilling ? isOpeningPortal : isLaunchingCheckout === selectedPlan}
           style={styles.fullWidth}
         />
         <Text style={styles.meta}>
-          {canManageStripeBilling
-            ? 'Stripe will show your current subscription, plan change options, cancellation controls, invoices, and payment details.'
+          {hasLegacyWebBilling
+            ? 'This account has an active legacy web subscription. New mobile subscriptions are handled by the App Store or Google Play.'
             : canManageStoreBilling
               ? 'Your store subscription is managed through the App Store or Google Play.'
               : usesStoreBilling
                 ? 'You will review the final price in the App Store or Google Play before paying.'
-                : 'Web checkout is legacy-only while mobile subscriptions move to RevenueCat.'}
+                : 'Mobile subscriptions require an iOS or Android store build.'}
         </Text>
         {usesStoreBilling ? (
           <BrandButton
@@ -389,15 +356,6 @@ export default function PaywallScreen() {
             style={styles.fullWidth}
             variant="ghost"
           />
-          {canManageStripeBilling ? (
-            <BrandButton
-              label={isOpeningPortal ? 'Opening billing...' : 'Manage Stripe billing'}
-              onPress={() => void openBillingPortal()}
-              loading={isOpeningPortal}
-              style={styles.fullWidth}
-              variant="ghost"
-            />
-          ) : null}
           {canManageStoreBilling ? (
             <BrandButton
               label={isOpeningPortal ? 'Opening store settings...' : 'Manage store subscription'}

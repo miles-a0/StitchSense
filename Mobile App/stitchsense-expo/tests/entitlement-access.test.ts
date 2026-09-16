@@ -30,7 +30,7 @@ test('account access labels cover launch billing states', () => {
   assert.equal(formatAccessSource('manual_lifetime'), 'Lifetime access');
   assert.equal(formatAccessSource('manual_trial'), 'Extended trial');
   assert.equal(formatAccessSource('courtesy_access'), 'Courtesy access');
-  assert.equal(formatAccessSource('stripe'), 'Stripe subscription');
+  assert.equal(formatAccessSource('stripe'), 'Legacy web subscription');
   assert.equal(formatAccessSource('apple'), 'Apple subscription');
   assert.equal(formatAccessSource('google'), 'Google subscription');
   assert.equal(formatAccessSource('standard_trial'), 'Free trial');
