@@ -136,13 +136,82 @@ test('pattern upload route stores text files and sends indexing workflow payload
         [userId],
       )
     ).rows[0].id;
+    const unpaidUserId = (
+      await client.query(
+        `INSERT INTO users (email, display_name)
+         VALUES ('upload-unpaid@example.test', 'Upload Unpaid')
+         RETURNING id`,
+      )
+    ).rows[0].id;
+    const unpaidPatternId = (
+      await client.query(
+        `INSERT INTO user_patterns (user_id, title, source)
+         VALUES ($1, 'Unpaid upload pattern', 'upload')
+         RETURNING id`,
+        [unpaidUserId],
+      )
+    ).rows[0].id;
 
     const appModule = await import('../dist/app.js');
     const poolModule = await import('../dist/db/pool.js');
     app = await appModule.buildApp();
     pool = poolModule.pool;
     const authorization = `Bearer ${app.jwt.sign({ sub: userId })}`;
+    const unpaidAuthorization = `Bearer ${app.jwt.sign({ sub: unpaidUserId })}`;
     const boundary = 'stitchsense-upload-test-boundary';
+
+    const unpaidResponse = await app.inject({
+      method: 'POST',
+      url: `/patterns/${unpaidPatternId}/file`,
+      headers: {
+        authorization: unpaidAuthorization,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: multipartBody({
+        boundary,
+        fieldName: 'file',
+        filename: 'notes.txt',
+        contentType: 'text/plain',
+        body: uploadBody,
+      }),
+    });
+    assert.equal(unpaidResponse.statusCode, 402, unpaidResponse.body);
+    assert.equal(unpaidResponse.json().error, 'Subscription required');
+    assert.equal(uploadRequests.length, 0);
+
+    const invalidUpload = await app.inject({
+      method: 'POST',
+      url: `/patterns/${patternId}/file`,
+      headers: {
+        authorization,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: multipartBody({
+        boundary,
+        fieldName: 'file',
+        filename: 'not-a-pattern.png',
+        contentType: 'image/png',
+        body: 'definitely not a PDF or text upload',
+      }),
+    });
+    assert.equal(invalidUpload.statusCode, 415, invalidUpload.body);
+    assert.deepEqual(invalidUpload.json(), { error: 'Please upload a PDF or text-based pattern file.' });
+    assert.equal(uploadRequests.length, 0);
+    const rejectedPattern = (
+      await client.query(
+        `SELECT file_key, original_filename, file_mime_type, file_size
+         FROM user_patterns
+         WHERE id = $1`,
+        [patternId],
+      )
+    ).rows[0];
+    assert.deepEqual(rejectedPattern, {
+      file_key: null,
+      original_filename: null,
+      file_mime_type: null,
+      file_size: null,
+    });
+
     const response = await app.inject({
       method: 'POST',
       url: `/patterns/${patternId}/file`,
