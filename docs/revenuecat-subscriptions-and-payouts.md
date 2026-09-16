@@ -18,7 +18,8 @@ RevenueCat is now the primary subscription-management layer for StitchSense mobi
 - Mobile paywall/account/promo checkout actions use RevenueCat on iOS and Android.
 - Restore purchases is available from the mobile paywall/account flow.
 - Store subscription management opens the App Store / Google Play management URL when RevenueCat returns one.
-- Stripe checkout remains available only as legacy/web fallback.
+- Mobile builds do not expose a web checkout or web billing-management fallback.
+- Existing legacy web entitlement records may still be displayed as active access, but new mobile subscriptions are handled only by the App Store or Google Play through RevenueCat.
 - Backend RevenueCat webhook endpoint exists at:
 
 ```text
