@@ -40,7 +40,7 @@ EXPO_PUBLIC_API_BASE_URL=https://stitchsense.zu-auto.co.uk
 EXPO_PUBLIC_WORDPRESS_BASE_URL=https://catlowyarns.co.uk
 ```
 
-Do not add backend-only secrets to EAS public app config. RevenueCat webhook authorization secrets, Stripe secrets, database URLs, object-storage credentials, and OpenAI keys belong only in backend/VPS environments.
+Do not add backend-only secrets to EAS public app config. RevenueCat webhook authorization secrets, payment-provider secrets, database URLs, object-storage credentials, and OpenAI keys belong only in backend/VPS environments.
 
 ## First-time EAS setup
 

@@ -180,7 +180,7 @@ If refresh-token or bridge-secret exposure is suspected, revoke affected refresh
    - Availability: API, database, storage, proxy, DNS, or n8n unavailable.
    - Security: suspicious auth activity, leaked secret, cross-user access, webhook abuse.
    - Data integrity: missing files, duplicated imports, bad migration, wrong user mapping.
-   - Billing: RevenueCat/Stripe entitlement mismatch, webhook failure, store purchase issue.
+   - Billing: RevenueCat entitlement mismatch, webhook failure, store purchase issue.
 2. Preserve evidence:
    - API logs.
    - Docker container/image status.
@@ -202,4 +202,4 @@ If refresh-token or bridge-secret exposure is suspected, revoke affected refresh
 - Do not use `rm -rf` on deployment, backup, Docker volume, or workspace roots.
 - Do not run restore tests against production databases.
 - Do not expose staging publicly without a dedicated proxy, TLS, auth, and app build channel plan.
-- Do not use Stripe Checkout as the primary iOS/Android digital-subscription flow.
+- Do not add a mobile web-checkout fallback for iOS or Android digital subscriptions.

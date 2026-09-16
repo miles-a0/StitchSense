@@ -81,7 +81,7 @@ Close exploitable security and recoverability risks first, then run application 
 
 - [ ] Add backend route/integration tests using isolated PostgreSQL and object-storage services. *(2026-09-07: CI now provisions isolated PostgreSQL and MinIO for backend integration checks; broader route coverage still remains.)*
 - [ ] Cover registration, login, refresh rotation/revocation, password reset, bridge authentication, entitlements, uploads, signed file access, and data deletion/export. *(2026-09-07: auth lifecycle now has DB-backed coverage for registration, login failure/success, refresh rotation, refresh-token reuse rejection, logout revocation, and password-reset unavailable-state handling. Signed file access coverage now verifies active owner access, stored-object presigned URLs/downloads, transfer-token downloads, tamper rejection, cross-user denial, and deleted-pattern denial. Data export/deletion now has DB-backed coverage for user scoping, destructive confirmation, project/stash inclusion, token redaction, and cross-user preservation. Backend upload route coverage now verifies entitlement-gated text-file upload storage plus multipart indexing workflow payload/persistence against PostgreSQL and MinIO.)*
-- [ ] Cover RevenueCat webhook authorization, replay/idempotency, cancellation, expiry, restore, and user mapping. Stripe launch work is intentionally out of scope.
+- [ ] Cover RevenueCat webhook authorization, replay/idempotency, cancellation, expiry, restore, and user mapping.
 - [ ] Add Expo unit/component tests for session restoration, API errors, entitlement gates, pattern binding, and destructive confirmations. *(2026-09-14: Expo now has a Node-backed unit-test script plus pure coverage for session restoration/token rotation, entitlement gates, user-facing API error mapping, pattern chat/rewrite binding selectors, upload create/file/rollback flow behavior, and destructive account/data, pattern, project, stash, counter, work-log, photo, and marker confirmation copy. 2026-09-16: chat-context document uploads now share tested rollback coverage for create/upload/index failure, summary-refresh fallback, and loaded-pattern intro copy. Component-level flows remain.)*
 - [ ] Add device-level E2E smoke tests for onboarding, login, library, upload, pattern chat/rewrite, project lifecycle, Stitch Vision, stash, logout, and returning-user restoration.
 - [ ] Add regression tests for pattern A/B contamination, metadata-only Ravelry blocking, and deleted-record resurrection. *(2026-09-14: metadata-only paid Ravelry workflow blocking is covered by pure guard tests, WordPress/Ravelry sync now has DB-backed regression coverage proving stale exports do not resurrect locally deleted patterns, and pattern-aware chat/rewrite routes now have DB-backed payload-scope coverage for A/B contamination. Full device relaunch/reinstall matrices remain.)*
@@ -108,9 +108,9 @@ Close exploitable security and recoverability risks first, then run application 
 
 - [ ] Confirm monthly/annual products, trial rules, prices, entitlement identifier, and account ownership in App Store Connect, Play Console, and RevenueCat.
 - [x] Integrate the RevenueCat SDK into the Expo app as the primary iOS/Android subscription path.
-- [x] Replace iOS “coming soon” and Android Stripe digital-subscription checkout with RevenueCat native store purchase flows for store builds.
+- [x] Replace incomplete or non-store digital-subscription paths with RevenueCat native store purchase flows for store builds.
 - [ ] Implement purchase, pending purchase, restore, cancellation guidance, expiry, grace period, refund/revocation, and offline/error states. *(2026-09-08: mobile RevenueCat purchase handling now distinguishes active, pending, cancelled, already-purchased, network/offline, unavailable-product, and configuration-error states across paywall/account/promo flows. Store dashboard/device validation still required for expiry, grace-period, refund, and revocation states.)*
-- [x] Preserve Stripe billing only for existing/legacy web subscriptions while keeping entitlement resolution consistent across providers.
+- [x] Keep any pre-existing legacy web entitlement records readable without exposing a mobile checkout or billing-management path.
 - [ ] Validate RevenueCat webhooks for both stores and verify one StitchSense user cannot receive another user’s entitlement.
 - [ ] Complete Apple sandbox/TestFlight and Google licence-tester/internal-track purchase matrices.
 - [ ] Configure payout banking in App Store Connect and Google Play Console with the Starling Business account; RevenueCat does not hold payout bank details.
@@ -127,9 +127,11 @@ Close exploitable security and recoverability risks first, then run application 
 
 **2026-09-14 update:** RevenueCat webhook handling now detects previously received event IDs before mutating subscription state again, and the database enforces a unique receipt record for RevenueCat webhook event IDs. Integration coverage asserts replay delivery is accepted without duplicating receipt audit rows.
 
-**2026-09-14 update:** Stripe is no longer part of the launch subscription path. Billing production readiness is focused on RevenueCat plus the Apple App Store and Google Play in-app purchase flows.
+**2026-09-14 update:** Billing production readiness is focused on RevenueCat plus the Apple App Store and Google Play in-app purchase flows.
 
-**2026-09-16 update:** The Expo mobile subscription surfaces no longer offer web checkout or Stripe-branded billing management. Paywall, account, and promo checkout actions now route mobile purchases and subscription management through RevenueCat/App Store/Google Play only, while legacy web entitlements are displayed generically as legacy web subscriptions.
+**2026-09-16 update:** The Expo mobile subscription surfaces no longer offer web checkout or provider-branded web billing management. Paywall, account, and promo checkout actions now route mobile purchases and subscription management through RevenueCat/App Store/Google Play only, while legacy web entitlements are displayed generically as legacy web subscriptions.
+
+**2026-09-16 update:** The old web subscription setup guide was removed from launch documentation so production setup instructions now point mobile subscriptions to RevenueCat, Apple App Store, and Google Play only.
 
 **Exit gate:** Purchase, restore, cancel, expire, and cross-device entitlement refresh pass on real iOS and Android store builds.
 
