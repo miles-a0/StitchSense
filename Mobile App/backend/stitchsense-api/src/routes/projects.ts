@@ -222,6 +222,19 @@ async function withSignedProjectPhoto<T extends { file_key?: string | null }>(ro
   };
 }
 
+async function selectOwnedProjectRows(userId: string, projectId: string) {
+  const result = await query(
+    `${projectSelectSql(
+      `WHERE p.id = $1
+         AND p.user_id = $2
+         AND p.deleted_at IS NULL`,
+    )}`,
+    [projectId, userId],
+  );
+
+  return result.rows;
+}
+
 export async function projectRoutes(app: FastifyInstance) {
   app.get('/projects', { preHandler: app.authenticate }, async (request) => {
     const input =
@@ -266,37 +279,34 @@ export async function projectRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'Linked pattern not found' });
     }
 
-    const result = await query(
-      `WITH inserted AS (
-          INSERT INTO projects (
-            user_id,
-            pattern_id,
-            title,
-            craft_type,
-            status,
-            stage_label,
-            progress_mode,
-            progress_value,
-            progress_percent,
-            recipient,
-            is_gift,
-            occasion,
-            deadline_at,
-            notes,
-            yarn_details,
-            needle_hook_details,
-            cover_image_url,
-            is_favorite,
-            last_worked_at,
-            completed_at
-          )
-          VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),
-            CASE WHEN $5 = 'completed' THEN NOW() ELSE NULL END
-          )
-          RETURNING id
+    const inserted = await query<{ id: string }>(
+      `INSERT INTO projects (
+          user_id,
+          pattern_id,
+          title,
+          craft_type,
+          status,
+          stage_label,
+          progress_mode,
+          progress_value,
+          progress_percent,
+          recipient,
+          is_gift,
+          occasion,
+          deadline_at,
+          notes,
+          yarn_details,
+          needle_hook_details,
+          cover_image_url,
+          is_favorite,
+          last_worked_at,
+          completed_at
         )
-        ${projectSelectSql('JOIN inserted i ON i.id = p.id')}`,
+        VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),
+          CASE WHEN $5 = 'completed' THEN NOW() ELSE NULL END
+        )
+        RETURNING id`,
       [
         request.authUser.id,
         body.patternId,
@@ -319,23 +329,17 @@ export async function projectRoutes(app: FastifyInstance) {
       ],
     );
 
-    return reply.code(201).send({ project: (await withSignedProjectMedia(result.rows))[0] });
+    const rows = await selectOwnedProjectRows(request.authUser.id, inserted.rows[0].id);
+    return reply.code(201).send({ project: (await withSignedProjectMedia(rows))[0] });
   });
 
   app.get('/projects/:id', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const result = await query(
-      `${projectSelectSql(
-        `WHERE p.id = $1
-           AND p.user_id = $2
-           AND p.deleted_at IS NULL`,
-      )}`,
-      [id, request.authUser.id],
-    );
-    if (!result.rowCount) {
+    const rows = await selectOwnedProjectRows(request.authUser.id, id);
+    if (!rows.length) {
       return reply.code(404).send({ error: 'Project not found' });
     }
-    return { project: (await withSignedProjectMedia(result.rows))[0] };
+    return { project: (await withSignedProjectMedia(rows))[0] };
   });
 
   app.get('/projects/:id/sync-validation', { preHandler: app.authenticate }, async (request, reply) => {
@@ -441,38 +445,35 @@ export async function projectRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = projectUpdateBody.parse(request.body);
 
-    const result = await query(
-      `WITH updated AS (
-          UPDATE projects
-          SET title = COALESCE($3, title),
-              craft_type = COALESCE($4, craft_type),
-              status = COALESCE($5, status),
-              stage_label = COALESCE($6, stage_label),
-              progress_mode = COALESCE($7, progress_mode),
-              progress_value = CASE WHEN $8::numeric IS NULL THEN progress_value ELSE $8 END,
-              progress_percent = COALESCE($9, progress_percent),
-              recipient = CASE WHEN $10::text IS NULL THEN recipient ELSE $10 END,
-              is_gift = COALESCE($11, is_gift),
-              occasion = CASE WHEN $12::text IS NULL THEN occasion ELSE $12 END,
-              deadline_at = CASE WHEN $13::timestamptz IS NULL THEN deadline_at ELSE $13 END,
-              notes = CASE WHEN $14::text IS NULL THEN notes ELSE $14 END,
-              yarn_details = CASE WHEN $15::text IS NULL THEN yarn_details ELSE $15 END,
-              needle_hook_details = CASE WHEN $16::text IS NULL THEN needle_hook_details ELSE $16 END,
-              cover_image_url = CASE WHEN $17::text IS NULL THEN cover_image_url ELSE $17 END,
-              is_favorite = COALESCE($18, is_favorite),
-              last_worked_at = COALESCE($19, last_worked_at, NOW()),
-              completed_at = CASE
-                WHEN COALESCE($5, status) = 'completed' THEN COALESCE($20, completed_at, NOW())
-                WHEN COALESCE($5, status) <> 'completed' THEN NULL
-                ELSE completed_at
-              END,
-              updated_at = NOW()
-          WHERE id = $1
-            AND user_id = $2
-            AND deleted_at IS NULL
-          RETURNING id
-        )
-        ${projectSelectSql('JOIN updated u ON u.id = p.id')}`,
+    const updated = await query<{ id: string }>(
+      `UPDATE projects
+       SET title = COALESCE($3, title),
+           craft_type = COALESCE($4, craft_type),
+           status = COALESCE($5, status),
+           stage_label = COALESCE($6, stage_label),
+           progress_mode = COALESCE($7, progress_mode),
+           progress_value = CASE WHEN $8::numeric IS NULL THEN progress_value ELSE $8 END,
+           progress_percent = COALESCE($9, progress_percent),
+           recipient = CASE WHEN $10::text IS NULL THEN recipient ELSE $10 END,
+           is_gift = COALESCE($11, is_gift),
+           occasion = CASE WHEN $12::text IS NULL THEN occasion ELSE $12 END,
+           deadline_at = CASE WHEN $13::timestamptz IS NULL THEN deadline_at ELSE $13 END,
+           notes = CASE WHEN $14::text IS NULL THEN notes ELSE $14 END,
+           yarn_details = CASE WHEN $15::text IS NULL THEN yarn_details ELSE $15 END,
+           needle_hook_details = CASE WHEN $16::text IS NULL THEN needle_hook_details ELSE $16 END,
+           cover_image_url = CASE WHEN $17::text IS NULL THEN cover_image_url ELSE $17 END,
+           is_favorite = COALESCE($18, is_favorite),
+           last_worked_at = COALESCE($19, last_worked_at, NOW()),
+           completed_at = CASE
+             WHEN COALESCE($5, status) = 'completed' THEN COALESCE($20, completed_at, NOW())
+             WHEN COALESCE($5, status) <> 'completed' THEN NULL
+             ELSE completed_at
+           END,
+           updated_at = NOW()
+       WHERE id = $1
+         AND user_id = $2
+         AND deleted_at IS NULL
+       RETURNING id`,
       [
         id,
         request.authUser.id,
@@ -497,10 +498,11 @@ export async function projectRoutes(app: FastifyInstance) {
       ],
     );
 
-    if (!result.rowCount) {
+    if (!updated.rowCount) {
       return reply.code(404).send({ error: 'Project not found' });
     }
-    return { project: (await withSignedProjectMedia(result.rows))[0] };
+    const rows = await selectOwnedProjectRows(request.authUser.id, updated.rows[0].id);
+    return { project: (await withSignedProjectMedia(rows))[0] };
   });
 
   app.delete('/projects/:id', { preHandler: app.authenticate }, async (request, reply) => {
