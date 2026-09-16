@@ -69,10 +69,10 @@ export async function userRoutes(app: FastifyInstance) {
       `INSERT INTO user_settings (user_id, default_skill, measurement_unit, language, preferences)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (user_id) DO UPDATE SET
-         default_skill = EXCLUDED.default_skill,
-         measurement_unit = EXCLUDED.measurement_unit,
-         language = EXCLUDED.language,
-         preferences = EXCLUDED.preferences,
+         default_skill = COALESCE($6, user_settings.default_skill),
+         measurement_unit = COALESCE($7, user_settings.measurement_unit),
+         language = COALESCE($8, user_settings.language),
+         preferences = COALESCE($9, user_settings.preferences),
          updated_at = NOW()
        RETURNING *`,
       [
@@ -81,6 +81,10 @@ export async function userRoutes(app: FastifyInstance) {
         body.measurementUnit ?? 'metric',
         body.language ?? 'uk',
         body.preferences ?? {},
+        body.defaultSkill ?? null,
+        body.measurementUnit ?? null,
+        body.language ?? null,
+        body.preferences ?? null,
       ],
     );
     return { settings: result.rows[0] };
