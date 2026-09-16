@@ -23,8 +23,9 @@ import { BrandButton } from '@/src/components/ui/brand-button';
 import { RichMarkdownText } from '@/src/components/ui/rich-markdown-text';
 import { ScreenHero } from '@/src/components/ui/screen-hero';
 import { APIError, stitchSenseAPI } from '@/src/lib/api';
+import { uploadChatDocumentContext } from '@/src/lib/chat-upload-flow';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
-import type { ChatMessage, ChatSession, Pattern } from '@/src/lib/models';
+import type { ChatMessage, ChatSession } from '@/src/lib/models';
 import { usePreferences } from '@/src/providers/preferences-provider';
 import { useSession } from '@/src/providers/session-provider';
 import { shadows, tokens } from '@/src/theme/tokens';
@@ -57,10 +58,6 @@ function preferredChatLevel(defaultSkill: string): ChatSkillLevel {
   return 'beginner';
 }
 
-function stripExtension(filename: string) {
-  return filename.replace(/\.[^/.]+$/, '');
-}
-
 async function imageDataUriFor(uri: string, mimeType?: string | null, base64?: string | null) {
   const encoded = base64 ?? await new File(uri).base64();
   return `data:${mimeType ?? 'image/jpeg'};base64,${encoded}`;
@@ -88,50 +85,6 @@ function chatError(error: unknown) {
   });
 }
 
-function firstUsefulSentences(text: string, maxLength = 280) {
-  const normalized = cleanSummaryText(text).replace(/\s+/g, ' ').trim();
-  if (!normalized) return '';
-  const sentences = normalized.match(/[^.!?]+[.!?]+/g) ?? [normalized];
-  const picked = sentences.slice(0, 2).join(' ').trim();
-  return picked.length > maxLength ? `${picked.slice(0, maxLength - 1).trimEnd()}...` : picked;
-}
-
-function looksLikeEncodedJunk(value: string) {
-  const compact = value.replace(/\s+/g, '');
-  if (compact.length < 24) return false;
-  const alphaNumericRatio = (compact.match(/[a-zA-Z0-9+/=]/g)?.length ?? 0) / compact.length;
-  const vowelRatio = (compact.match(/[aeiouAEIOU]/g)?.length ?? 0) / compact.length;
-  const wordCount = value.match(/\b(?:yarn|needle|hook|gauge|size|row|round|stitch|knit|purl|chain|double|crochet|mm|grams?|metres?)\b/gi)?.length ?? 0;
-  return alphaNumericRatio > 0.94 && vowelRatio < 0.22 && wordCount < 2;
-}
-
-function cleanSummaryText(value: string) {
-  return value
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter((line) => line && !looksLikeEncodedJunk(line))
-    .join('\n')
-    .trim();
-}
-
-function cleanFact(value: string) {
-  const cleaned = cleanSummaryText(value)
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/[•*-]\s*$/, '');
-  if (!cleaned || looksLikeEncodedJunk(cleaned)) return '';
-  return cleaned.length > 140 ? `${cleaned.slice(0, 139).trimEnd()}...` : cleaned;
-}
-
-function matchFact(text: string, patterns: RegExp[]) {
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    const value = cleanFact(String(match?.[1] ?? match?.[2] ?? ''));
-    if (value) return value;
-  }
-  return '';
-}
-
 function visionAnswerText(result: unknown) {
   if (typeof result === 'string') {
     return result;
@@ -146,62 +99,6 @@ function visionAnswerText(result: unknown) {
     }
   }
   return JSON.stringify(result, null, 2);
-}
-
-function buildPatternLoadedSummary(pattern: Pattern, fallbackName: string) {
-  const title = pattern.title || fallbackName;
-  const summary = cleanSummaryText(pattern.patternSummaryText ?? '');
-  const metadataText = pattern.metadata ? JSON.stringify(pattern.metadata) : '';
-  const searchable = `${summary}\n${metadataText}`;
-  const nutshell = firstUsefulSentences(summary) || 'I have loaded this pattern and will use it as the context for this chat.';
-  const difficulty =
-    matchFact(searchable, [
-      /difficulty(?:\s+level)?[:\s-]+([^.\n,;]+)/i,
-      /\b(beginner|easy|intermediate|advanced|experienced)\b/i,
-    ]) || 'I will keep the guidance clear and beginner-friendly unless you ask for more detail.';
-  const trickyBits =
-    matchFact(searchable, [
-      /(?:tricky|watch out|challenge|special techniques?)[:\s-]+([^.\n]+)/i,
-      /\b((?:cables?|lace|short rows?|colourwork|shaping|seaming|grafting|picking up stitches)[^.\n]*)/i,
-    ]) || 'If any part feels fiddly, StitchSense can talk you through it slowly, one step at a time.';
-  const yarn =
-    matchFact(searchable, [
-      /(?:yarn|recommended yarn|yarn type|yarn weight)[:\s-]+([^.\n]+)/i,
-      /\b(4 ply|sock|dk|double knit|aran|worsted|chunky|bulky|lace weight|fingering)[^.\n]*/i,
-    ]) || 'Check the yarn details in the pattern before starting.';
-  const amount =
-    matchFact(searchable, [
-      /(?:yardage|meterage|metres|grams|quantity|amount)[:\s-]+([^.\n]+)/i,
-      /(\d+(?:\.\d+)?\s?(?:g|grams|m|metres|yds|yards|skeins?|balls?)[^.\n]*)/i,
-    ]) || 'I can help calculate quantities once you choose a size.';
-  const tools =
-    matchFact(searchable, [
-      /(?:needles?|hooks?|needle size|hook size)[:\s-]+([^.\n]+)/i,
-      /(\d+(?:\.\d+)?\s?mm(?:\s+(?:needles?|hooks?))?[^.\n]*)/i,
-    ]) || 'Check the needle or hook size against your gauge.';
-  const sizes = matchFact(searchable, [
-    /(?:sizes?|size options?|to fit|finished measurements?)[:\s-]+([^.\n]+)/i,
-  ]);
-  const oneSizeDetected = /\b(one size|one-size|one size fits|osfa)\b/i.test(searchable);
-
-  return [
-    `Pattern loaded: ${title}`,
-    '',
-    `In a nutshell: ${nutshell}`,
-    '',
-    `Difficulty: ${difficulty}.`,
-    `Tricky bits: ${trickyBits} I’ll help you through those bits calmly when you get there.`,
-    '',
-    'Important bits:',
-    `- Yarn: ${yarn}`,
-    `- Amount: ${amount}`,
-    `- Needles/hooks: ${tools}`,
-    oneSizeDetected
-      ? '- Size options: One size. I will answer using the pattern as written unless you tell me otherwise.'
-      : sizes
-      ? `- Size options: ${sizes}\n\nWhich size would you like to make? Once I know that, I can answer using the right stitch counts, measurements, and sections.`
-      : '- Size options: No clear size options found. I will treat this as one-size unless the pattern text says otherwise.',
-  ].join('\n');
 }
 
 export default function ChatScreen() {
@@ -634,61 +531,24 @@ export default function ChatScreen() {
       }
 
 	      if (!asset.mimeType?.startsWith('image/')) {
-	        const title = stripExtension(asset.name) || 'Uploaded chat pattern';
-        setUploadOverlayPhase('uploading');
-        setUploadOverlayMessage('Creating a private chat context for this pattern...');
-        setStatusMessage('Reading pattern into chat context...');
-        const createdPattern = await stitchSenseAPI.createPattern(accessToken, {
-          title,
-          craftType: null,
-          originalFilename: asset.name,
-          source: 'chat_upload',
-          metadata: {
-            uploadedFrom: 'expo-mobile-chat',
-            localFilename: asset.name,
-          },
-        });
-
-        setUploadOverlayPhase('uploading');
-        setUploadOverlayMessage('Uploading the full pattern file...');
-        setStatusMessage('Uploading pattern for chat...');
-        const uploadResult = await stitchSenseAPI.uploadPatternFile(createdPattern.id, accessToken, {
-          uri: asset.uri,
-          name: asset.name,
-          mimeType: asset.mimeType,
-        });
-        if (!uploadResult.indexed) {
-          throw new Error(
-            uploadResult.indexingError?.trim() ||
-              'The pattern file uploaded, but StitchSense could not finish indexing the full instructions for chat. Please try the upload again.',
-          );
-        }
-
-        setUploadOverlayPhase('processing');
-        setUploadOverlayMessage('Processing and indexing the pattern. Larger PDFs can take a little while...');
-        setStatusMessage('Analysing pattern for chat...');
-        let analysedPattern = createdPattern;
-        try {
-          const refreshed = await stitchSenseAPI.refreshPatternSummary(
-            createdPattern.id,
+        const documentContext = await uploadChatDocumentContext(
+          {
             accessToken,
+            asset: {
+              uri: asset.uri,
+              name: asset.name,
+              mimeType: asset.mimeType,
+            },
             skillLevel,
-          );
-          analysedPattern = refreshed.pattern;
-        } catch {
-          analysedPattern = await stitchSenseAPI.pattern(createdPattern.id, accessToken);
-        }
-
-        confirmFileLoaded({
-          name: analysedPattern.title || asset.name,
-          kind: 'document',
-          mimeType: asset.mimeType,
-          patternId: analysedPattern.id,
-          introMessage: buildPatternLoadedSummary(analysedPattern, asset.name),
-          analysis:
-            analysedPattern.patternSummaryText?.trim() ||
-            'The uploaded pattern is attached to this chat. Use the pattern file and any extracted summary as the only document context.',
-        });
+          },
+          {
+            api: stitchSenseAPI,
+            onOverlayPhase: setUploadOverlayPhase,
+            onOverlayMessage: setUploadOverlayMessage,
+            onStatus: setStatusMessage,
+          },
+        );
+        confirmFileLoaded(documentContext);
         return;
       }
 
