@@ -103,6 +103,14 @@ async function ensureOwnedStashItem(userId: string, itemId: string) {
   return result.rows[0] ?? null;
 }
 
+function hasOwn(input: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(input, key);
+}
+
+function trimmedNullable(value: unknown) {
+  return typeof value === 'string' ? value.trim() || null : null;
+}
+
 export async function stashRoutes(app: FastifyInstance) {
   app.get('/stash', { preHandler: app.authenticate }, async (request) => {
     const input =
@@ -175,22 +183,23 @@ export async function stashRoutes(app: FastifyInstance) {
     }
 
     const body = stashUpdateBody.parse(request.body);
+    const rawBody = request.body && typeof request.body === 'object' ? (request.body as Record<string, unknown>) : {};
     const result = await query(
       `UPDATE stash_items
        SET category = COALESCE($3, category),
            name = COALESCE($4, name),
-           quantity = $5,
-           unit = $6,
-           brand = $7,
-           yarn_weight = $8,
-           fibre = $9,
-           colour = $10,
-           dye_lot = $11,
-           size = $12,
-           material = $13,
-           location = $14,
-           reserved_for = $15,
-           notes = $16,
+           quantity = CASE WHEN $5::boolean THEN $6 ELSE quantity END,
+           unit = CASE WHEN $7::boolean THEN $8 ELSE unit END,
+           brand = CASE WHEN $9::boolean THEN $10 ELSE brand END,
+           yarn_weight = CASE WHEN $11::boolean THEN $12 ELSE yarn_weight END,
+           fibre = CASE WHEN $13::boolean THEN $14 ELSE fibre END,
+           colour = CASE WHEN $15::boolean THEN $16 ELSE colour END,
+           dye_lot = CASE WHEN $17::boolean THEN $18 ELSE dye_lot END,
+           size = CASE WHEN $19::boolean THEN $20 ELSE size END,
+           material = CASE WHEN $21::boolean THEN $22 ELSE material END,
+           location = CASE WHEN $23::boolean THEN $24 ELSE location END,
+           reserved_for = CASE WHEN $25::boolean THEN $26 ELSE reserved_for END,
+           notes = CASE WHEN $27::boolean THEN $28 ELSE notes END,
            updated_at = NOW()
        WHERE id = $1
          AND user_id = $2
@@ -201,18 +210,30 @@ export async function stashRoutes(app: FastifyInstance) {
         request.authUser.id,
         body.category ?? null,
         body.name?.trim() || null,
-        body.quantity?.trim() || null,
-        body.unit?.trim() || null,
-        body.brand?.trim() || null,
-        body.yarnWeight?.trim() || null,
-        body.fibre?.trim() || null,
-        body.colour?.trim() || null,
-        body.dyeLot?.trim() || null,
-        body.size?.trim() || null,
-        body.material?.trim() || null,
-        body.location?.trim() || null,
-        body.reservedFor?.trim() || null,
-        body.notes?.trim() || null,
+        hasOwn(rawBody, 'quantity'),
+        trimmedNullable(body.quantity),
+        hasOwn(rawBody, 'unit'),
+        trimmedNullable(body.unit),
+        hasOwn(rawBody, 'brand'),
+        trimmedNullable(body.brand),
+        hasOwn(rawBody, 'yarnWeight'),
+        trimmedNullable(body.yarnWeight),
+        hasOwn(rawBody, 'fibre'),
+        trimmedNullable(body.fibre),
+        hasOwn(rawBody, 'colour'),
+        trimmedNullable(body.colour),
+        hasOwn(rawBody, 'dyeLot'),
+        trimmedNullable(body.dyeLot),
+        hasOwn(rawBody, 'size'),
+        trimmedNullable(body.size),
+        hasOwn(rawBody, 'material'),
+        trimmedNullable(body.material),
+        hasOwn(rawBody, 'location'),
+        trimmedNullable(body.location),
+        hasOwn(rawBody, 'reservedFor'),
+        trimmedNullable(body.reservedFor),
+        hasOwn(rawBody, 'notes'),
+        trimmedNullable(body.notes),
       ],
     );
 
