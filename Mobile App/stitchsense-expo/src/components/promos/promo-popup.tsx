@@ -7,15 +7,12 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BrandButton } from '@/src/components/ui/brand-button';
 import { stitchSenseAPI } from '@/src/lib/api';
-import { config } from '@/src/lib/config';
 import type { Promotion } from '@/src/lib/models';
 import { purchaseRevenueCatPlan, usesRevenueCatStoreBilling } from '@/src/lib/revenuecat';
 import { useSession } from '@/src/providers/session-provider';
 import { tokens } from '@/src/theme/tokens';
 import { getStoredItem, setStoredItem } from '@/src/lib/secure-storage';
 
-const checkoutSuccessUrl = `${config.apiBaseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
-const checkoutCancelUrl = `${config.apiBaseUrl}/billing/cancel`;
 const usesStoreBilling = usesRevenueCatStoreBilling();
 
 function wait(milliseconds: number) {
@@ -112,28 +109,16 @@ export function PromoPopup() {
         return;
       }
       if (action.type === 'checkout') {
-        if (usesStoreBilling) {
-          if (!user?.id) {
-            throw new Error('Sign in before starting a subscription.');
-          }
-          const purchase = await purchaseRevenueCatPlan(user.id, action.checkoutPlan === 'monthly' ? 'monthly' : 'annual');
-          if (purchase.status === 'cancelled') {
-            return;
-          }
-          await wait(1500);
-          await refreshAccount();
+        if (!usesStoreBilling) {
+          throw new Error('Mobile subscriptions require an iOS or Android store build.');
+        }
+        if (!user?.id) {
+          throw new Error('Sign in before starting a subscription.');
+        }
+        const purchase = await purchaseRevenueCatPlan(user.id, action.checkoutPlan === 'monthly' ? 'monthly' : 'annual');
+        if (purchase.status === 'cancelled') {
           return;
         }
-        const response = await stitchSenseAPI.createCheckout(accessToken, {
-          plan: action.checkoutPlan === 'monthly' ? 'monthly' : 'annual',
-          successUrl: checkoutSuccessUrl,
-          cancelUrl: checkoutCancelUrl,
-          promoCode: action.promoCode || undefined,
-          couponId: action.couponId || undefined,
-          promotionCodeId: action.promotionCodeId || undefined,
-          allowPromotionCodes: Boolean(action.promoCode && !action.couponId && !action.promotionCodeId),
-        });
-        await WebBrowser.openBrowserAsync(response.checkoutUrl);
         await wait(1500);
         await refreshAccount();
         return;

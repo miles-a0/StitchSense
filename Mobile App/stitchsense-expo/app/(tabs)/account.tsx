@@ -1,4 +1,3 @@
-import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +7,6 @@ import { BrandButton } from '@/src/components/ui/brand-button';
 import { ScreenHero } from '@/src/components/ui/screen-hero';
 import { InlineBackButton } from '@/src/components/ui/inline-back-button';
 import { stitchSenseAPI } from '@/src/lib/api';
-import { config } from '@/src/lib/config';
 import { destructiveAccountActionPrompt } from '@/src/lib/destructive-actions';
 import {
   entitlementCopy,
@@ -29,9 +27,6 @@ import { usePreferences } from '@/src/providers/preferences-provider';
 import { useSession } from '@/src/providers/session-provider';
 import { shadows, tokens } from '@/src/theme/tokens';
 
-const checkoutSuccessUrl = `${config.apiBaseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
-const checkoutCancelUrl = `${config.apiBaseUrl}/billing/cancel`;
-const billingReturnUrl = `${config.apiBaseUrl}/billing/success`;
 const usesStoreBilling = usesRevenueCatStoreBilling();
 
 function wait(milliseconds: number) {
@@ -194,35 +189,24 @@ export default function AccountScreen() {
     if (!accessToken) return;
     setIsLaunchingCheckout(plan);
     try {
-      if (usesStoreBilling) {
-        if (!user?.id) {
-          throw new Error('Sign in before starting a subscription.');
-        }
-        const purchase = await purchaseRevenueCatPlan(user.id, plan);
-        setStatusMessage(purchaseStatusMessage(purchase.status, purchase.hasActiveEntitlement));
-        if (purchase.status === 'cancelled') {
-          return;
-        }
-        await wait(1500);
-        await refreshAccount();
-        setStatusMessage(
-          purchase.status === 'pending'
-            ? 'Subscription is still pending. Tap refresh after the store confirms payment.'
-            : 'Subscription status refreshed.',
-        );
+      if (!usesStoreBilling) {
+        throw new Error('Mobile subscriptions require an iOS or Android store build.');
+      }
+      if (!user?.id) {
+        throw new Error('Sign in before starting a subscription.');
+      }
+      const purchase = await purchaseRevenueCatPlan(user.id, plan);
+      setStatusMessage(purchaseStatusMessage(purchase.status, purchase.hasActiveEntitlement));
+      if (purchase.status === 'cancelled') {
         return;
       }
-
-      const response = await stitchSenseAPI.createCheckout(accessToken, {
-        plan,
-        successUrl: checkoutSuccessUrl,
-        cancelUrl: checkoutCancelUrl,
-      });
-      await WebBrowser.openBrowserAsync(response.checkoutUrl);
-      setStatusMessage('Checking your subscription status...');
       await wait(1500);
       await refreshAccount();
-      setStatusMessage('Account status refreshed.');
+      setStatusMessage(
+        purchase.status === 'pending'
+          ? 'Subscription is still pending. Tap refresh after the store confirms payment.'
+          : 'Subscription status refreshed.',
+      );
     } catch (error) {
       const message = getUserFacingErrorMessage(error, {
         fallback: 'Could not refresh checkout status.',
@@ -238,23 +222,14 @@ export default function AccountScreen() {
     setIsOpeningBillingPortal(true);
     setStatusMessage(null);
     try {
-      if (usesStoreBilling && user?.id && (entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google')) {
-        await openRevenueCatManagement(user.id);
-        setStatusMessage('Checking your subscription status...');
-        await wait(1500);
-        await refreshAccount();
-        setStatusMessage('Subscription status refreshed.');
-        return;
+      if (!usesStoreBilling || !user?.id || !(entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google')) {
+        throw new Error('Store subscription management is available after a mobile store subscription is active.');
       }
-
-      const response = await stitchSenseAPI.createBillingPortal(accessToken, {
-        returnUrl: billingReturnUrl,
-      });
-      await WebBrowser.openBrowserAsync(response.portalUrl);
-      setStatusMessage('Checking your billing status...');
+      await openRevenueCatManagement(user.id);
+      setStatusMessage('Checking your subscription status...');
       await wait(1500);
       await refreshAccount();
-      setStatusMessage('Billing status refreshed.');
+      setStatusMessage('Subscription status refreshed.');
     } catch (error) {
       setStatusMessage(
         getUserFacingErrorMessage(error, {
@@ -332,28 +307,12 @@ export default function AccountScreen() {
           </Text>
           {entitlement?.accessSource === 'stripe' ? (
             <Text style={styles.meta}>
-              To cancel, open Stripe billing. Cancelling stops renewal and keeps Pro access until the paid period ends.
+              This account has an active legacy web subscription. New mobile subscription changes are handled by the App Store or Google Play.
             </Text>
           ) : null}
         </View>
         <View style={styles.actionStack}>
-          {entitlement?.accessSource === 'stripe' ? (
-            <BrandButton
-              label={isOpeningBillingPortal ? 'Opening billing...' : 'Manage or cancel subscription'}
-              onPress={() =>
-                Alert.alert(
-                  'Manage subscription',
-                  'This opens Stripe billing, where you can cancel renewal, change plan, update payment details, or view invoices.',
-                  [
-                    { text: 'Not now', style: 'cancel' },
-                    { text: 'Open Stripe billing', onPress: () => void openBillingPortal() },
-                  ],
-                )
-              }
-              loading={isOpeningBillingPortal}
-              style={styles.fullWidth}
-            />
-          ) : entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google' ? (
+          {entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google' ? (
             <BrandButton
               label={isOpeningBillingPortal ? 'Opening store settings...' : 'Manage or cancel store subscription'}
               onPress={() =>

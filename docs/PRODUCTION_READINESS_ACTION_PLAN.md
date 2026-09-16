@@ -129,6 +129,8 @@ Close exploitable security and recoverability risks first, then run application 
 
 **2026-09-14 update:** Stripe is no longer part of the launch subscription path. Billing production readiness is focused on RevenueCat plus the Apple App Store and Google Play in-app purchase flows.
 
+**2026-09-16 update:** The Expo mobile subscription surfaces no longer offer web checkout or Stripe-branded billing management. Paywall, account, and promo checkout actions now route mobile purchases and subscription management through RevenueCat/App Store/Google Play only, while legacy web entitlements are displayed generically as legacy web subscriptions.
+
 **Exit gate:** Purchase, restore, cancel, expire, and cross-device entitlement refresh pass on real iOS and Android store builds.
 
 ### 7. Complete physical-device, accessibility, and UX hardening — P1
