@@ -51,21 +51,24 @@ async function wordpressPromoRequest(userId: string) {
   const url = new URL(`${siteUrl}/wp-json/stitchsense/v1/platform-promotions`);
   url.searchParams.set('wpUserId', wpUserId);
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    redirect: 'error',
-    headers: {
-      accept: 'application/json',
-      'x-stitchsense-wordpress-secret': config.wordpress.sharedSecret,
-    },
-  });
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      redirect: 'error',
+      headers: {
+        accept: 'application/json',
+        'x-stitchsense-wordpress-secret': config.wordpress.sharedSecret,
+      },
+    });
 
-  const payload = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) {
+    if (!response.ok) {
+      return { promotions: [] };
+    }
+
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
     return { promotions: [] };
   }
-
-  return payload;
 }
 
 export async function promoRoutes(app: FastifyInstance) {
