@@ -266,9 +266,12 @@ export async function syncRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/sync', { preHandler: app.authenticate }, async (request) => {
+  app.get('/sync', { preHandler: app.authenticate }, async (request, reply) => {
     const since = typeof request.query === 'object' && request.query ? (request.query as { since?: string }).since : undefined;
     const sinceDate = since ? new Date(since) : new Date(0);
+    if (Number.isNaN(sinceDate.getTime())) {
+      return reply.code(400).send({ error: 'Invalid since timestamp' });
+    }
 
     const patterns = await query(
       'SELECT * FROM user_patterns WHERE user_id = $1 AND updated_at > $2 ORDER BY updated_at ASC',
