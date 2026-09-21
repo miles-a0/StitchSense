@@ -28,6 +28,20 @@ import { useSession } from '@/src/providers/session-provider';
 import { useStash } from '@/src/providers/stash-provider';
 import { shadows, tokens } from '@/src/theme/tokens';
 import { BrandButton } from '@/src/components/ui/brand-button';
+import { patternNeedsOwnedSource, patternHasScopedContent } from '@/src/lib/pattern-content-readiness';
+
+const SOURCE_REQUIRED_CHAT_MESSAGE =
+  'This Ravelry pattern needs your owned pattern source before StitchSense can chat about it.';
+const SOURCE_REQUIRED_REWRITE_MESSAGE =
+  'This Ravelry pattern needs your owned pattern source before StitchSense can rewrite it.';
+const SOURCE_REQUIRED_SUMMARY_MESSAGE =
+  'This Ravelry pattern needs your owned pattern source before StitchSense can refresh the summary.';
+const CONTENT_REQUIRED_CHAT_MESSAGE =
+  'This pattern has no content available yet for chatting. Upload or re-import the pattern source first.';
+const CONTENT_REQUIRED_REWRITE_MESSAGE =
+  'This pattern has no content available yet for rewriting. Upload or re-import the pattern source first.';
+const CONTENT_REQUIRED_SUMMARY_MESSAGE =
+  'This pattern has no content available yet for summary refresh. Upload or re-import the pattern source first.';
 
 function buildPatternQuestionStarter(pattern: Pattern | null, summary: string) {
   return 'Ask a question about this pattern.';
@@ -170,9 +184,15 @@ export default function PatternDetailScreen() {
   const ravelrySizes = String(activePattern?.metadata?.sizes ?? '').trim();
   const ravelryYardage = String(activePattern?.metadata?.yardage ?? '').trim();
   const ravelryAvailability = String(activePattern?.metadata?.ravelry_availability ?? '').trim();
+  const patternNeedsOwnedSourceCheck = useMemo(() => patternNeedsOwnedSource(activePattern), [activePattern]);
+  const patternHasScopedContentCheck = useMemo(() => patternHasScopedContent(activePattern), [activePattern]);
+  const isChatReady = !patternNeedsOwnedSourceCheck && patternHasScopedContentCheck;
+  const isRewriteReady = !patternNeedsOwnedSourceCheck && patternHasScopedContentCheck;
   const summaryText =
     activePattern?.patternSummaryText?.trim() ||
-    'This pattern is synced and ready for the same chat and rewrite flows as the main StitchSense experience.';
+    (patternNeedsOwnedSourceCheck
+      ? 'This Ravelry pattern needs your owned pattern source before StitchSense can summarize, chat, or rewrite it.'
+      : 'This pattern has no content yet. Upload or re-import the pattern source first.');
   const formattedSummaryText = useMemo(() => formatPatternSummary(summaryText), [summaryText]);
   const linkedProjects = useMemo(
     () => projects.filter((project) => project.patternId === activePattern?.id),
@@ -193,8 +213,44 @@ export default function PatternDetailScreen() {
       ravelryGauge ||
       ravelrySizes ||
       ravelryYardage ||
-      activePattern?.patternSummaryText,
+      activePattern?.patternSummaryText ||
+      activePattern?.patternSummaryStructured,
   );
+
+  function showPatternNotReadyAlert(message: string) {
+    Alert.alert('Pattern not ready', message, [{ text: 'OK' }]);
+  }
+
+  function handleChatNavigation(params?: Record<string, string | undefined>) {
+    if (!isChatReady) {
+      showPatternNotReadyAlert(
+        patternNeedsOwnedSourceCheck ? SOURCE_REQUIRED_CHAT_MESSAGE : CONTENT_REQUIRED_CHAT_MESSAGE,
+      );
+      return;
+    }
+    router.push({ pathname: '/pattern-chat', params: { patternId: activePattern?.id, ...params } });
+  }
+
+  function handleRewriteNavigation() {
+    if (!isRewriteReady) {
+      showPatternNotReadyAlert(
+        patternNeedsOwnedSourceCheck ? SOURCE_REQUIRED_REWRITE_MESSAGE : CONTENT_REQUIRED_REWRITE_MESSAGE,
+      );
+      return;
+    }
+    router.push({ pathname: '/pattern-rewrite', params: { patternId: activePattern?.id } });
+  }
+
+  function handleRefreshSummaryPress() {
+    if (patternNeedsOwnedSourceCheck || !patternHasScopedContentCheck) {
+      showPatternNotReadyAlert(
+        patternNeedsOwnedSourceCheck ? SOURCE_REQUIRED_SUMMARY_MESSAGE : CONTENT_REQUIRED_SUMMARY_MESSAGE,
+      );
+      return;
+    }
+    void handleRefreshSummary();
+  }
+
   const readinessTasks = [
     {
       key: 'file',
@@ -242,7 +298,7 @@ export default function PatternDetailScreen() {
           title: 'Improve the pattern details',
           copy: 'Refresh the summary or add craft/gauge details before relying on suggestions.',
           label: 'Refresh summary',
-          action: () => void handleRefreshSummary(),
+          action: handleRefreshSummaryPress,
         }
       : firstStashInsight
           ? {
@@ -574,17 +630,13 @@ export default function PatternDetailScreen() {
           />
           <BrandButton
             label="Ask about this"
-            onPress={() =>
-              router.push({ pathname: '/pattern-chat', params: { patternId: activePattern?.id } })
-            }
+            onPress={() => handleChatNavigation()}
             style={styles.fullWidth}
             variant="ghost"
           />
           <BrandButton
             label="Rewrite / adapt"
-            onPress={() =>
-              router.push({ pathname: '/pattern-rewrite', params: { patternId: activePattern?.id } })
-            }
+            onPress={handleRewriteNavigation}
             style={styles.fullWidth}
             variant="ghost"
           />
@@ -596,7 +648,7 @@ export default function PatternDetailScreen() {
           <Text style={styles.sectionTitle}>Summary</Text>
           <View style={styles.summaryHeaderActions}>
             <Text
-              onPress={isRefreshingSummary ? undefined : () => void handleRefreshSummary()}
+              onPress={isRefreshingSummary ? undefined : handleRefreshSummaryPress}
               style={[styles.inlineLink, isRefreshingSummary ? styles.inlineLinkDisabled : null]}>
               {isRefreshingSummary ? 'Refreshing…' : 'Refresh'}
             </Text>
@@ -608,13 +660,9 @@ export default function PatternDetailScreen() {
         <BrandButton
           label="Ask questions"
           onPress={() =>
-            router.push({
-              pathname: '/pattern-chat',
-              params: {
-                patternId: activePattern?.id,
-                placeholder: buildPatternQuestionStarter(activePattern, summaryText),
-                summary: formattedSummaryText,
-              },
+            handleChatNavigation({
+              placeholder: buildPatternQuestionStarter(activePattern, summaryText),
+              summary: formattedSummaryText,
             })
           }
           style={styles.fullWidth}

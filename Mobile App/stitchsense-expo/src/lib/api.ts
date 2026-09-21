@@ -141,6 +141,8 @@ function normalizePattern(pattern: Record<string, unknown>): Pattern {
     originalFilename,
     fileUrl: (pattern.fileUrl as string | null | undefined) ?? (pattern.file_url as string | null | undefined) ?? null,
     fileKey: (pattern.fileKey as string | null | undefined) ?? (pattern.file_key as string | null | undefined) ?? null,
+    fileId: (pattern.fileId as string | null | undefined) ?? (pattern.file_id as string | null | undefined) ?? null,
+    jobId: (pattern.jobId as string | null | undefined) ?? (pattern.job_id as string | null | undefined) ?? null,
     fileMimeType,
     fileSize:
       (pattern.fileSize as number | null | undefined) ??
@@ -157,6 +159,10 @@ function normalizePattern(pattern: Record<string, unknown>): Pattern {
     patternSummaryHtml:
       (pattern.patternSummaryHtml as string | null | undefined) ??
       (pattern.pattern_summary_html as string | null | undefined) ??
+      null,
+    patternSummaryStructured:
+      (pattern.patternSummaryStructured as Record<string, unknown> | null | undefined) ??
+      (pattern.pattern_summary_structured as Record<string, unknown> | null | undefined) ??
       null,
     metadata,
     source: String(pattern.source ?? 'upload'),
