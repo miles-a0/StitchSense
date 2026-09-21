@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Pattern } from '@/src/lib/models';
 import { authenticatedImageSource } from '@/src/lib/api';
+import { hasStructuredSummary } from '@/src/lib/pattern-content-readiness';
 import { useSession } from '@/src/providers/session-provider';
 import { shadows, tokens } from '@/src/theme/tokens';
 
@@ -32,7 +33,9 @@ export function PatternCard({ pattern, onPress, stashHint }: PatternCardProps) {
     (/^https?:\/\//i.test(pattern.thumbnailUrl) || /^data:image\//i.test(pattern.thumbnailUrl));
   const remoteThumbnailUrl =
     hasRemoteThumbnail && typeof pattern.thumbnailUrl === 'string' ? pattern.thumbnailUrl : undefined;
-  const needsDetails = !pattern.patternSummaryText?.trim() || !pattern.craftType?.trim();
+  const hasSummaryDetails =
+    Boolean(pattern.patternSummaryText?.trim()) || hasStructuredSummary(pattern.patternSummaryStructured);
+  const needsDetails = !hasSummaryDetails || !pattern.craftType?.trim();
   const signals = [
     isPdfPattern ? 'PDF' : null,
     stashHint ? 'Stash ready' : null,
