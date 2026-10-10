@@ -12,6 +12,20 @@ RevenueCat is now the primary subscription-management layer for StitchSense mobi
 - StitchSense user mapping: RevenueCat `appUserID` must equal the StitchSense backend user ID.
 - Product cadence: monthly and annual Pro subscriptions.
 
+## Manual and developer access
+
+RevenueCat is for public mobile store subscriptions only. Developer, support, beta, and other comped lifetime accounts should continue to be assigned through the StitchSense WordPress/admin entitlement tools.
+
+Manual entitlement mapping:
+
+| Admin grant type | Mobile access source | Expected status | Notes |
+| --- | --- | --- | --- |
+| `lifetime_pro` | `manual_lifetime` | `active` | Developer or manually comped lifetime Pro access. |
+| `extended_trial` | `manual_trial` | `active` | Time-limited manual trial or support extension. |
+| `courtesy_access` | `courtesy_access` | `active` | Temporary support, beta, or goodwill access. |
+
+Do not create RevenueCat lifetime products for internal developer access unless there is a separate public product decision. Store subscription states such as pending, cancelled, refunded, or expired must not override an active manual lifetime entitlement.
+
 ## What is already implemented
 
 - Expo app dependency: `react-native-purchases`.
@@ -66,7 +80,7 @@ EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY=goog_...
 EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID=pro
 ```
 
-Only public RevenueCat SDK keys belong in the mobile app. The webhook authorization secret belongs only on the backend/VPS.
+Only public RevenueCat SDK keys belong in the mobile app. The webhook authorization secret and RevenueCat REST API key belong only on the backend/VPS. The backend uses the REST API key to reconcile a user's store entitlement after purchase or restore if webhook delivery is delayed.
 
 See `docs/EXPO_BUILD_AND_RELEASE_RUNBOOK.md` for the native build profiles and acceptance matrix. Expo Go can preview subscription screens, but real RevenueCat purchases require a development build, TestFlight build, or Google Play internal/closed testing build.
 
