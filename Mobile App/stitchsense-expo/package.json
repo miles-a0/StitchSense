@@ -17,7 +17,7 @@
     "build:preview:android": "bash ../../tools/run-with-node22.sh npx eas build --profile preview --platform android",
     "build:prod:ios": "bash ../../tools/run-with-node22.sh npx eas build --profile production --platform ios",
     "build:prod:android": "bash ../../tools/run-with-node22.sh npx eas build --profile production --platform android",
-    "eas-build-pre-install": "npm run check:release-config",
+    "eas-build-pre-install": "node ./scripts/validate-release-config.mjs --eas-hook",
     "check:capture-script": "bash ../../tools/run-with-node22.sh node --check ./scripts/capture-app-screenshots.cjs",
     "check:mobile-artifacts": "bash ../../tools/run-with-node22.sh node ../../tools/validate-mobile-release-artifacts.mjs",
     "check:release-config": "bash ../../tools/run-with-node22.sh node ./scripts/validate-release-config.mjs --require-revenuecat",

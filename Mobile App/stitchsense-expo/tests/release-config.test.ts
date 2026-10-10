@@ -157,6 +157,32 @@ test('release config rejects Test Store key even when production RevenueCat keys
   assert.match(result.stderr, /EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY must not be configured for store builds/);
 });
 
+test('EAS hook skips development builds even with a Test Store key', () => {
+  const result = runReleaseConfig(
+    { revenueCatAndroidApiKey: '', revenueCatIosApiKey: '', revenueCatTestStoreApiKey: 'rc_test_public_key' },
+    ['--eas-hook'],
+    { EAS_BUILD_PROFILE: 'development' },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /skipped for EAS development profile/);
+});
+
+test('EAS hook enforces store rules for preview, production, and unknown profiles', () => {
+  for (const profile of ['preview', 'production', 'release-candidate', '']) {
+    const result = runReleaseConfig({}, ['--eas-hook'], {
+      EAS_BUILD_PROFILE: profile,
+      EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY: 'rc_test_public_key',
+    });
+
+    assert.notEqual(result.status, 0, `profile "${profile}" should fail closed`);
+    assert.match(result.stderr, /EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY must not be configured for store builds/);
+  }
+
+  const production = runReleaseConfig({}, ['--eas-hook'], { EAS_BUILD_PROFILE: 'production' });
+  assert.equal(production.status, 0, production.stderr);
+});
+
 test('release config rejects app config Test Store key for store builds', () => {
   const result = runReleaseConfig({
     revenueCatTestStoreApiKey: 'rc_test_public_key',

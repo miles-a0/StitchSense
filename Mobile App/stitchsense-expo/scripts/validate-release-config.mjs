@@ -2,7 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const requireRevenueCat = process.argv.includes('--require-revenuecat');
+const easHook = process.argv.includes('--eas-hook');
+const easProfile = process.env.EAS_BUILD_PROFILE?.trim() ?? '';
+
+if (easHook && easProfile === 'development') {
+  console.log('Release configuration check skipped for EAS development profile');
+  process.exit(0);
+}
+
+const requireRevenueCat = process.argv.includes('--require-revenuecat') || easHook;
 const appJsonPath = path.join(process.cwd(), 'app.json');
 const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
 const expo = appJson.expo ?? {};

@@ -66,6 +66,8 @@ EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID=pro
 
 Do not use the Test Store key for preview/internal or production-candidate store builds. `npm run check:release-config` requires real iOS and Android RevenueCat public SDK keys and fails if the Test Store key is present.
 
+The same check runs automatically on EAS through the `eas-build-pre-install` hook (`validate-release-config.mjs --eas-hook`). It enforces the store rules for every profile except `development`, including any profile name it does not recognise, and calls `node` directly so it does not depend on the local Node 22 wrapper.
+
 Set these when a build profile must point somewhere other than the defaults in `app.json`:
 
 ```bash
