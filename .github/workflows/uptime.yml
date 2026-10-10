@@ -21,68 +21,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Check public health endpoint
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check public API health and readiness
+        env:
+          STITCHSENSE_API_BASE_URL: ${{ env.PRODUCTION_API_BASE_URL }}
+          STITCHSENSE_METRICS_SHARED_SECRET: ${{ secrets.METRICS_SHARED_SECRET }}
         shell: bash
-        run: |
-          set -euo pipefail
-          response_file="$(mktemp)"
-          status="$(
-            curl --silent --show-error --location \
-              --max-time 10 \
-              --retry 2 \
-              --retry-delay 5 \
-              --output "$response_file" \
-              --write-out "%{http_code}" \
-              "$PRODUCTION_API_BASE_URL/health"
-          )"
-          if [[ "$status" != "200" ]]; then
-            echo "Expected /health HTTP 200, got $status"
-            sed -n '1,40p' "$response_file"
-            exit 1
-          fi
-          python3 - "$response_file" <<'PY'
-          import json
-          import sys
-
-          with open(sys.argv[1], encoding="utf-8") as handle:
-              payload = json.load(handle)
-
-          assert payload.get("ok") is True, payload
-          assert payload.get("service") == "stitchsense-api", payload
-          PY
-
-      - name: Check public deep readiness endpoint
-        shell: bash
-        run: |
-          set -euo pipefail
-          response_file="$(mktemp)"
-          status="$(
-            curl --silent --show-error --location \
-              --max-time 15 \
-              --retry 2 \
-              --retry-delay 5 \
-              --output "$response_file" \
-              --write-out "%{http_code}" \
-              "$PRODUCTION_API_BASE_URL/ready"
-          )"
-          if [[ "$status" != "200" ]]; then
-            echo "Expected /ready HTTP 200, got $status"
-            sed -n '1,80p' "$response_file"
-            exit 1
-          fi
-          python3 - "$response_file" <<'PY'
-          import json
-          import sys
-
-          with open(sys.argv[1], encoding="utf-8") as handle:
-              payload = json.load(handle)
-
-          assert payload.get("ok") is True, payload
-          assert payload.get("service") == "stitchsense-api", payload
-          checks = payload.get("checks") or {}
-          assert checks.get("database") is True, payload
-          assert checks.get("storage") is True, payload
-          PY
+        run: '"Mobile App/backend/scripts/smoke-api.sh"'
 
       - name: Notify uptime alert webhook
         if: failure()

@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend build, test, audit, and image
+    name: Backend build, test, and audit
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
@@ -36,10 +36,10 @@ jobs:
         working-directory: Mobile App/backend/stitchsense-api
     env:
       TEST_DATABASE_URL: postgres://stitchsense_test:integration-test-only@127.0.0.1:5432/stitchsense_test
-      OBJECT_STORAGE_PROVIDER: minio
+      OBJECT_STORAGE_PROVIDER: s3mock
       OBJECT_STORAGE_BUCKET: stitchsense-test-patterns
       OBJECT_STORAGE_REGION: us-east-1
-      OBJECT_STORAGE_ENDPOINT: http://127.0.0.1:9000
+      OBJECT_STORAGE_ENDPOINT: http://127.0.0.1:9090
       OBJECT_STORAGE_ACCESS_KEY: stitchsense-test
       OBJECT_STORAGE_SECRET_KEY: stitchsense-test-password
     steps:
@@ -56,23 +56,37 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Start isolated object storage
+      - name: Verify container-safe backend npm scripts
+        run: |
+          node - <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          for (const scriptName of ['build', 'start']) {
+            const script = pkg.scripts?.[scriptName] ?? '';
+            if (script.includes('run-with-node22.sh')) {
+              throw new Error(`${scriptName} must be usable inside the Docker build context and runtime image`);
+            }
+          }
+          NODE
+
+      - name: Check backend deployment scripts
+        run: bash -n ../scripts/smoke-api.sh
+
+      - name: Start isolated S3-compatible object storage
         shell: bash
         run: |
           docker run --detach \
-            --name stitchsense-test-minio \
-            --publish 127.0.0.1:9000:9000 \
-            --env MINIO_ROOT_USER="$OBJECT_STORAGE_ACCESS_KEY" \
-            --env MINIO_ROOT_PASSWORD="$OBJECT_STORAGE_SECRET_KEY" \
-            quay.io/minio/minio:RELEASE.2025-01-20T14-49-07Z@sha256:ed9be66eb5f2636c18289c34c3b725ddf57815f2777c77b5938543b78a44f144 \
-            server /data
+            --name stitchsense-test-s3 \
+            --publish 127.0.0.1:9090:9090 \
+            --env COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS="$OBJECT_STORAGE_BUCKET" \
+            adobe/s3mock:5.2.2@sha256:e7c36014dcf4c7f0f6bec9de888477d1d9b8f55eceb7d9c1186f70d7aadf81ca
           for attempt in {1..20}; do
-            if docker exec stitchsense-test-minio sh -c 'mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && mc mb --ignore-existing local/stitchsense-test-patterns >/dev/null'; then
+            if curl --fail --silent --show-error http://127.0.0.1:9090/favicon.ico >/dev/null; then
               exit 0
             fi
             sleep 2
           done
-          docker logs stitchsense-test-minio
+          docker logs stitchsense-test-s3
           exit 1
 
       - name: Build and test, including cross-user authorization
@@ -80,9 +94,6 @@ jobs:
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
-
-      - name: Build the production image
-        run: docker build --pull=false --tag stitchsense-api:${{ github.sha }} .
 
   expo:
     name: Expo lint, types, dependencies, and Doctor
@@ -107,6 +118,21 @@ jobs:
 
       - name: Verify Expo package compatibility
         run: npx expo install --check
+
+      - name: Verify Expo release configuration defaults
+        run: node ./scripts/validate-release-config.mjs
+
+      - name: Verify Expo store release configuration gate
+        env:
+          EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: appl_ci_public_key
+          EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: goog_ci_public_key
+        run: npm run check:release-config
+
+      - name: Verify screenshot capture helper
+        run: npm run check:capture-script
+
+      - name: Verify mobile release artifacts
+        run: npm run check:mobile-artifacts
 
       - name: Lint
         run: npm run lint
@@ -156,3 +182,37 @@ jobs:
       - name: Scan the release tree for secrets
         run: |
           "$RUNNER_TEMP/gitleaks" detect --source . --no-git --redact --verbose
+
+  operations:
+    name: Operations artifact checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate monitoring alert rules YAML
+        run: |
+          ruby -e 'require "yaml"; data = YAML.load_file("ops/monitoring/stitchsense-alerts.yml"); raise "missing groups" unless data.is_a?(Hash) && data["groups"].is_a?(Array)'
+
+      - name: Validate monitoring dashboard JSON
+        run: |
+          ruby -e 'require "json"; data = JSON.parse(File.read("ops/monitoring/stitchsense-dashboard.json")); raise "missing panels" unless data.is_a?(Hash) && data["panels"].is_a?(Array) && !data["panels"].empty?'
+
+      - name: Validate production readiness artifacts
+        run: node tools/validate-production-artifacts.mjs
+
+  production-image:
+    name: Production image build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [backend, expo, php, secrets, operations]
+    defaults:
+      run:
+        working-directory: Mobile App/backend/stitchsense-api
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the production image
+        run: docker build --pull=false --tag stitchsense-api:${{ github.sha }} .

@@ -1,0 +1,184 @@
+groups:
+  - name: stitchsense-api
+    rules:
+      - alert: StitchSenseApiNoMetrics
+        expr: absent(up{job="stitchsense-api"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+          service: stitchsense-api
+        annotations:
+          summary: StitchSense API metrics are not being scraped
+          description: Prometheus has not scraped the StitchSense API metrics target for at least 5 minutes.
+
+      - alert: StitchSenseApiHighErrorRate
+        expr: |
+          (
+            sum(rate(stitchsense_api_requests_total{status_class=~"5xx|unknown"}[5m]))
+            /
+            clamp_min(sum(rate(stitchsense_api_requests_total[5m])), 0.001)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: stitchsense-api
+        annotations:
+          summary: StitchSense API 5xx rate is above 5%
+          description: More than 5% of StitchSense API responses have been server errors or unknown status for 10 minutes.
+
+      - alert: StitchSenseApiRouteErrorBurst
+        expr: |
+          sum by (method, route, status_class) (
+            increase(stitchsense_api_requests_total{status_class=~"5xx|unknown"}[10m])
+          ) >= 5
+        for: 0m
+        labels:
+          severity: warning
+          service: stitchsense-api
+        annotations:
+          summary: StitchSense API route has repeated errors
+          description: "{{ $labels.method }} {{ $labels.route }} returned {{ $labels.status_class }} at least 5 times in 10 minutes."
+
+      - alert: StitchSenseApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(stitchsense_api_request_duration_seconds_bucket[10m]))
+          ) > 5
+        for: 15m
+        labels:
+          severity: warning
+          service: stitchsense-api
+        annotations:
+          summary: StitchSense API p95 latency is above 5 seconds
+          description: The API p95 response time has exceeded 5 seconds for 15 minutes.
+
+      - alert: StitchSenseAuthFailureBurst
+        expr: |
+          sum by (route, status_class) (
+            increase(stitchsense_api_requests_total{
+              route=~"/auth/(login|refresh|password-reset/request|password-reset/confirm|wordpress-login|wordpress-register)",
+              status_class="4xx"
+            }[10m])
+          ) >= 10
+        for: 0m
+        labels:
+          severity: warning
+          service: stitchsense-api
+        annotations:
+          summary: StitchSense auth failures increased
+          description: "{{ $labels.route }} returned {{ $labels.status_class }} at least 10 times in 10 minutes."
+
+      - alert: StitchSenseAuthClientFailureSpike
+        expr: |
+          sum by (route) (
+            increase(stitchsense_api_requests_total{
+              route=~"/auth/(login|refresh|password-reset/request|password-reset/confirm|wordpress-login|wordpress-register)",
+              status_class="4xx"
+            }[5m])
+          ) >= 25
+        for: 0m
+        labels:
+          severity: critical
+          service: stitchsense-api
+        annotations:
+          summary: StitchSense auth endpoint is seeing heavy client failures
+          description: "{{ $labels.route }} returned at least 25 client failures in 5 minutes. Check for attack traffic, broken clients, or rate limiting."
+
+  - name: stitchsense-workflows
+    rules:
+      - alert: StitchSenseWorkflowHttpErrors
+        expr: |
+          sum by (workflow_type, status_class) (
+            increase(stitchsense_workflow_requests_total{outcome="http_error"}[10m])
+          ) >= 3
+        for: 0m
+        labels:
+          severity: warning
+          service: stitchsense-workflows
+        annotations:
+          summary: StitchSense workflow HTTP errors detected
+          description: "{{ $labels.workflow_type }} workflow returned HTTP {{ $labels.status_class }} at least 3 times in 10 minutes."
+
+      - alert: StitchSenseWorkflowFailures
+        expr: |
+          sum by (workflow_type, outcome) (
+            increase(stitchsense_workflow_requests_total{outcome=~"workflow_error|exception"}[10m])
+          ) >= 2
+        for: 0m
+        labels:
+          severity: critical
+          service: stitchsense-workflows
+        annotations:
+          summary: StitchSense workflow failures detected
+          description: "{{ $labels.workflow_type }} workflow recorded {{ $labels.outcome }} at least 2 times in 10 minutes."
+
+      - alert: StitchSenseWorkflowHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (workflow_type, le) (
+              rate(stitchsense_workflow_request_duration_seconds_bucket[10m])
+            )
+          ) > 45
+        for: 15m
+        labels:
+          severity: warning
+          service: stitchsense-workflows
+        annotations:
+          summary: StitchSense workflow p95 latency is above 45 seconds
+          description: "{{ $labels.workflow_type }} workflow p95 latency has exceeded 45 seconds for 15 minutes."
+
+  - name: stitchsense-billing
+    rules:
+      - alert: StitchSenseBillingWebhookAuthFailures
+        expr: |
+          sum by (provider) (
+            increase(stitchsense_billing_webhook_requests_total{outcome="unauthorized"}[15m])
+          ) >= 2
+        for: 0m
+        labels:
+          severity: critical
+          service: stitchsense-billing
+        annotations:
+          summary: StitchSense billing webhook authorization failures
+          description: "{{ $labels.provider }} webhook authorization failed at least twice in 15 minutes."
+
+      - alert: StitchSenseBillingWebhookInvalidPayloads
+        expr: |
+          sum by (provider) (
+            increase(stitchsense_billing_webhook_requests_total{outcome="invalid_payload"}[15m])
+          ) >= 3
+        for: 0m
+        labels:
+          severity: warning
+          service: stitchsense-billing
+        annotations:
+          summary: StitchSense billing webhook invalid payloads
+          description: "{{ $labels.provider }} delivered at least 3 invalid webhook payloads in 15 minutes."
+
+      - alert: StitchSenseBillingWebhookConfigurationError
+        expr: |
+          sum by (provider) (
+            increase(stitchsense_billing_webhook_requests_total{outcome="configuration_error"}[5m])
+          ) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: stitchsense-billing
+        annotations:
+          summary: StitchSense billing webhook configuration error
+          description: "{{ $labels.provider }} webhook reached the API while required billing configuration was missing."
+
+      - alert: StitchSenseBillingWebhookExceptions
+        expr: |
+          sum by (provider) (
+            increase(stitchsense_billing_webhook_requests_total{outcome="exception"}[10m])
+          ) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: stitchsense-billing
+        annotations:
+          summary: StitchSense billing webhook exception
+          description: "{{ $labels.provider }} webhook processing raised an exception."
