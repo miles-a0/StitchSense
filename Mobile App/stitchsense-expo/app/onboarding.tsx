@@ -792,7 +792,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#120f0c',
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(7, 7, 8, 0.54)',
   },
   root: {

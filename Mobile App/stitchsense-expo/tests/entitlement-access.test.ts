@@ -4,26 +4,56 @@ import test from 'node:test';
 import {
   entitlementCopy,
   entitlementHeadline,
+  effectiveEntitlement,
   formatAccessSource,
+  formatEntitlementPlan,
+  formatEntitlementStatus,
   hasActiveEntitlementAccess,
+  isManualEntitlementSource,
   paywallAccessCopy,
   paywallAccessHeadline,
   paywallTrialLabel,
   purchaseStatusMessage,
+  revenueCatEntitlementSnapshot,
   trialCountdown,
 } from '../src/lib/entitlement-access';
 
 const now = Date.UTC(2026, 8, 11, 12, 0, 0);
 
-test('active entitlement access requires a non-expired non-free source', () => {
+const activeStoreEntitlement = {
+  accessSource: 'apple',
+  features: {
+    aiChat: true,
+    patternUploads: true,
+    ravelryImport: true,
+    rewrite: true,
+    stitchVision: true,
+  },
+  plan: 'pro_monthly',
+  status: 'active',
+  trialEndsAt: null,
+} as const;
+
+test('active entitlement access requires active or trialing access from an allowed source', () => {
   assert.equal(hasActiveEntitlementAccess(null), false);
   assert.equal(hasActiveEntitlementAccess({ status: 'expired', accessSource: 'apple' }), false);
+  assert.equal(hasActiveEntitlementAccess({ status: 'pending', accessSource: 'apple' }), false);
+  assert.equal(hasActiveEntitlementAccess({ status: 'cancelled', accessSource: 'google' }), false);
+  assert.equal(hasActiveEntitlementAccess({ status: 'pending', accessSource: 'manual_lifetime' }), false);
   assert.equal(hasActiveEntitlementAccess({ status: 'active', accessSource: 'none' }), false);
   assert.equal(hasActiveEntitlementAccess({ status: 'trialing', accessSource: 'standard_trial' }), true);
   assert.equal(hasActiveEntitlementAccess({ status: 'active', accessSource: 'manual_lifetime' }), true);
+  assert.equal(hasActiveEntitlementAccess({ status: 'active', accessSource: 'manual_trial' }), true);
+  assert.equal(hasActiveEntitlementAccess({ status: 'active', accessSource: 'courtesy_access' }), true);
   assert.equal(hasActiveEntitlementAccess({ status: 'active', accessSource: 'stripe' }), true);
   assert.equal(hasActiveEntitlementAccess({ status: 'active', accessSource: 'apple' }), true);
   assert.equal(hasActiveEntitlementAccess({ status: 'active', accessSource: 'google' }), true);
+
+  assert.equal(isManualEntitlementSource('manual_lifetime'), true);
+  assert.equal(isManualEntitlementSource('manual_trial'), true);
+  assert.equal(isManualEntitlementSource('courtesy_access'), true);
+  assert.equal(isManualEntitlementSource('apple'), false);
+  assert.equal(isManualEntitlementSource(undefined), false);
 });
 
 test('account access labels cover launch billing states', () => {
@@ -41,6 +71,50 @@ test('account access labels cover launch billing states', () => {
   assert.equal(entitlementHeadline('stripe'), 'Paid Pro plan');
   assert.equal(entitlementHeadline('none'), 'Upgrade to keep full access');
   assert.equal(entitlementCopy('standard_trial'), 'Your free trial is active and all Pro features are currently unlocked.');
+});
+
+test('manual admin entitlements outrank local RevenueCat store overlays', () => {
+  const manualLifetimeEntitlement = {
+    ...activeStoreEntitlement,
+    accessSource: 'manual_lifetime',
+    plan: 'pro',
+  };
+  const manualTrialEntitlement = {
+    ...activeStoreEntitlement,
+    accessSource: 'manual_trial',
+    plan: 'pro',
+  };
+  const courtesyEntitlement = {
+    ...activeStoreEntitlement,
+    accessSource: 'courtesy_access',
+    plan: 'pro',
+  };
+  const expiredManualEntitlement = {
+    ...manualLifetimeEntitlement,
+    status: 'expired',
+  };
+
+  assert.equal(effectiveEntitlement(manualLifetimeEntitlement, activeStoreEntitlement), manualLifetimeEntitlement);
+  assert.equal(effectiveEntitlement(manualTrialEntitlement, activeStoreEntitlement), manualTrialEntitlement);
+  assert.equal(effectiveEntitlement(courtesyEntitlement, activeStoreEntitlement), courtesyEntitlement);
+  assert.equal(effectiveEntitlement(expiredManualEntitlement, activeStoreEntitlement), activeStoreEntitlement);
+  assert.equal(effectiveEntitlement(null, activeStoreEntitlement), activeStoreEntitlement);
+});
+
+test('entitlement plan and status labels do not expose raw identifiers', () => {
+  assert.equal(formatEntitlementPlan('pro_annual'), 'Pro Annual');
+  assert.equal(formatEntitlementPlan('pro_monthly'), 'Pro Monthly');
+  assert.equal(formatEntitlementPlan('standard_trial'), 'Trial');
+  assert.equal(formatEntitlementPlan('manual_lifetime'), 'Lifetime Pro');
+  assert.equal(formatEntitlementPlan('courtesy_access'), 'Courtesy Pro');
+  assert.equal(formatEntitlementPlan('custom_beta_plan'), 'Custom Beta Plan');
+  assert.equal(formatEntitlementPlan(undefined), 'Free');
+
+  assert.equal(formatEntitlementStatus('active'), 'Active');
+  assert.equal(formatEntitlementStatus('trialing'), 'Trialing');
+  assert.equal(formatEntitlementStatus('cancelled'), 'Cancelled');
+  assert.equal(formatEntitlementStatus('billing_retry'), 'Billing Retry');
+  assert.equal(formatEntitlementStatus(undefined), 'Unknown');
 });
 
 test('paywall copy distinguishes manual, store, trial, and free states', () => {
@@ -74,4 +148,55 @@ test('purchase status messaging preserves pending and cancelled store states', (
   );
   assert.equal(purchaseStatusMessage('cancelled', false), 'Purchase cancelled. No payment was taken.');
   assert.equal(purchaseStatusMessage('unknown', false), 'Purchase sent to the store. Syncing your StitchSense access...');
+});
+
+test('RevenueCat entitlement snapshot overrides trial display for active store access', () => {
+  const entitlement = revenueCatEntitlementSnapshot(
+    {
+      activeSubscriptions: ['monthly'],
+      entitlements: {
+        active: {
+          pro: {
+            productIdentifier: 'monthly',
+          },
+        },
+      },
+    },
+    'pro',
+    'apple',
+  );
+
+  assert.deepEqual(entitlement, {
+    accessSource: 'apple',
+    features: {
+      aiChat: true,
+      patternUploads: true,
+      ravelryImport: true,
+      rewrite: true,
+      stitchVision: true,
+    },
+    plan: 'pro_monthly',
+    status: 'active',
+    trialEndsAt: null,
+  });
+  assert.equal(entitlementHeadline(entitlement?.accessSource), 'Paid Pro plan');
+});
+
+test('RevenueCat entitlement snapshot ignores inactive or unmatched entitlements', () => {
+  assert.equal(
+    revenueCatEntitlementSnapshot(
+      {
+        entitlements: {
+          active: {
+            other: {
+              productIdentifier: 'annual',
+            },
+          },
+        },
+      },
+      'pro',
+      'google',
+    ),
+    null,
+  );
 });

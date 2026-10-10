@@ -12,12 +12,17 @@ import {
   entitlementCopy,
   entitlementHeadline,
   formatAccessSource,
+  formatEntitlementPlan,
+  formatEntitlementStatus,
+  hasActiveEntitlementAccess,
+  isManualEntitlementSource,
   purchaseStatusMessage,
   trialCountdown,
 } from '@/src/lib/entitlement-access';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import {
   openRevenueCatManagement,
+  isUsingRevenueCatTestStore,
   purchaseRevenueCatPlan,
   restoreRevenueCatPurchases,
   usesRevenueCatStoreBilling,
@@ -28,6 +33,7 @@ import { useSession } from '@/src/providers/session-provider';
 import { shadows, tokens } from '@/src/theme/tokens';
 
 const usesStoreBilling = usesRevenueCatStoreBilling();
+const usesRevenueCatTestStore = isUsingRevenueCatTestStore();
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -71,14 +77,16 @@ export default function AccountScreen() {
   const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
   const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
   const [lastExportSummary, setLastExportSummary] = useState<string | null>(null);
+  const hasActiveAccess = hasActiveEntitlementAccess(entitlement);
+  const hasManualAccess = hasActiveAccess && isManualEntitlementSource(entitlement?.accessSource);
 
   useEffect(() => {
     setDraftSettings(settings);
   }, [settings]);
 
   const accountStats = [
-    { label: 'Plan', value: entitlement?.plan ?? 'Free' },
-    { label: 'Status', value: entitlement?.status ?? 'Unknown' },
+    { label: 'Plan', value: formatEntitlementPlan(entitlement?.plan) },
+    { label: 'Status', value: formatEntitlementStatus(entitlement?.status) },
     {
       label: 'Access',
       value: trialCountdown(entitlement?.trialEndsAt) ?? formatAccessSource(entitlement?.accessSource),
@@ -200,6 +208,9 @@ export default function AccountScreen() {
       if (purchase.status === 'cancelled') {
         return;
       }
+      if (purchase.hasActiveEntitlement) {
+        await stitchSenseAPI.syncRevenueCatEntitlement(accessToken);
+      }
       await wait(1500);
       await refreshAccount();
       setStatusMessage(
@@ -224,6 +235,9 @@ export default function AccountScreen() {
     try {
       if (!usesStoreBilling || !user?.id || !(entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google')) {
         throw new Error('Store subscription management is available after a mobile store subscription is active.');
+      }
+      if (usesRevenueCatTestStore) {
+        throw new Error('Subscription management is available after a real App Store or Google Play purchase. RevenueCat Test Store purchases can be changed from the RevenueCat dashboard.');
       }
       await openRevenueCatManagement(user.id);
       setStatusMessage('Checking your subscription status...');
@@ -252,6 +266,9 @@ export default function AccountScreen() {
           ? 'Store purchase restored. Syncing your StitchSense access...'
           : 'No active store subscription was found for this account.',
       );
+      if (restored.hasActiveEntitlement && accessToken) {
+        await stitchSenseAPI.syncRevenueCatEntitlement(accessToken);
+      }
       await wait(1500);
       await refreshAccount();
     } catch (error) {
@@ -294,13 +311,17 @@ export default function AccountScreen() {
 
       <AppSection
         style={styles.sectionCard}
-        subtitle="Choose, change, or cancel your StitchSense Pro subscription."
+        subtitle={
+          hasManualAccess
+            ? 'Your StitchSense Pro access is assigned from the admin tools.'
+            : 'Choose, change, or cancel your StitchSense Pro subscription.'
+        }
         title="Subscription">
         <View style={styles.planSummaryCard}>
           <Text style={styles.featureTitle}>{formatAccessSource(entitlement?.accessSource)}</Text>
-          <Text style={styles.planSummaryTitle}>{entitlement?.plan ?? 'free'}</Text>
+          <Text style={styles.planSummaryTitle}>{formatEntitlementPlan(entitlement?.plan)}</Text>
           <Text style={styles.meta}>
-            Status: {entitlement?.status ?? 'unknown'}
+            Status: {formatEntitlementStatus(entitlement?.status)}
             {entitlement?.trialEndsAt
               ? ` · ${new Date(entitlement.trialEndsAt).toLocaleDateString()}`
               : ''}
@@ -310,23 +331,45 @@ export default function AccountScreen() {
               This account has an active legacy web subscription. New mobile subscription changes are handled by the App Store or Google Play.
             </Text>
           ) : null}
+          {hasManualAccess ? (
+            <Text style={styles.meta}>
+              This access is assigned through the StitchSense admin tools and does not need a store subscription.
+            </Text>
+          ) : null}
         </View>
         <View style={styles.actionStack}>
           {entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google' ? (
             <BrandButton
-              label={isOpeningBillingPortal ? 'Opening store settings...' : 'Manage or cancel store subscription'}
+              label={
+                usesRevenueCatTestStore
+                  ? 'Test Store purchase active'
+                  : isOpeningBillingPortal
+                    ? 'Opening store settings...'
+                    : 'Manage or cancel store subscription'
+              }
               onPress={() =>
                 Alert.alert(
-                  'Manage subscription',
-                  'This opens the App Store or Google Play subscription management page for your current plan.',
+                  usesRevenueCatTestStore ? 'Test Store purchase' : 'Manage subscription',
+                  usesRevenueCatTestStore
+                    ? 'This is a RevenueCat Test Store purchase. Real App Store or Google Play subscription management will be available after real store products are connected.'
+                    : 'This opens the App Store or Google Play subscription management page for your current plan.',
                   [
                     { text: 'Not now', style: 'cancel' },
-                    { text: 'Open store settings', onPress: () => void openBillingPortal() },
+                    ...(usesRevenueCatTestStore
+                      ? []
+                      : [{ text: 'Open store settings', onPress: () => void openBillingPortal() }]),
                   ],
                 )
               }
               loading={isOpeningBillingPortal}
               style={styles.fullWidth}
+            />
+          ) : hasManualAccess ? (
+            <BrandButton
+              label="Admin access active"
+              onPress={() => void handleRefreshAccount()}
+              style={styles.fullWidth}
+              variant="ghost"
             />
           ) : (
             <>

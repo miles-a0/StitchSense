@@ -218,7 +218,7 @@ function createStyles(topInset: number) {
       flex: 1,
     },
     overlay: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       backgroundColor: 'rgba(9, 7, 6, 0.56)',
     },
     scrollContent: {

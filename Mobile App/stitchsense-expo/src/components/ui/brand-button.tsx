@@ -35,7 +35,7 @@ export function BrandButton({
   labelStyle,
 }: BrandButtonProps) {
   const reduceMotion = useReducedMotion();
-  const pressScale = React.useRef(new Animated.Value(1)).current;
+  const [pressScale] = React.useState(() => new Animated.Value(1));
 
   function animateScale(toValue: number) {
     if (reduceMotion) return;
@@ -71,6 +71,9 @@ export function BrandButton({
           <ActivityIndicator color={variant === 'ghost' ? tokens.color.primary : '#fff'} />
         ) : (
           <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            numberOfLines={1}
             style={[
               styles.label,
               variant === 'ghost' ? styles.ghostLabel : null,
@@ -117,9 +120,11 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#fff',
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.2,
+    textAlign: 'center',
   },
   ghostLabel: {
     color: tokens.color.primary,

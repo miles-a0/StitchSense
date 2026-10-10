@@ -109,11 +109,18 @@ export async function uploadPatternWithRollback(
     createdPatternId = createdPattern.id;
 
     dependencies.onStatus?.('Uploading your file\u2026');
-    await dependencies.api.uploadPatternFile(createdPattern.id, activeToken, {
+    const uploadResult = await dependencies.api.uploadPatternFile(createdPattern.id, activeToken, {
       uri: input.selectedFile.uri,
       name: input.selectedFile.name,
       mimeType: input.selectedFile.mimeType,
     });
+
+    if (!uploadResult.indexed) {
+      throw new Error(
+        uploadResult.indexingError?.trim() ||
+          'The pattern file uploaded, but StitchSense could not finish indexing the full instructions. Please try the upload again.',
+      );
+    }
 
     await dependencies.refreshPatterns();
     return createdPattern;

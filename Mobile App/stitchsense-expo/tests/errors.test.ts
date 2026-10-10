@@ -77,6 +77,24 @@ test('API route-not-found and rate-limit errors use launch-friendly copy', () =>
   );
 });
 
+test('network and timeout errors give clear retry guidance', () => {
+  assert.equal(
+    getUserFacingErrorMessage(
+      new APIError({
+        statusCode: 408,
+        message: 'The server took too long to respond. Please try again.',
+        requestId: 'req-timeout',
+      }),
+    ),
+    'The server took too long to respond. Please check your connection and try again. (support code: req-timeout)',
+  );
+
+  assert.equal(
+    getUserFacingErrorMessage(new Error('Network request failed')),
+    'StitchSense could not reach the server. Please check your connection and try again.',
+  );
+});
+
 test('non-API errors keep clear device-side recovery guidance', () => {
   assert.equal(
     getUserFacingErrorMessage(new Error('Invalid key provided to SecureStore')),

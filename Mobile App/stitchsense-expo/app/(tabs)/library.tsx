@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   syncOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     backgroundColor: 'rgba(43, 29, 25, 0.28)',
     justifyContent: 'center',

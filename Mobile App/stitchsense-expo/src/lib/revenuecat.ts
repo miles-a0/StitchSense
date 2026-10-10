@@ -3,9 +3,22 @@ import { Platform } from 'react-native';
 import Purchases, { LOG_LEVEL, type CustomerInfo, type PurchasesPackage } from 'react-native-purchases';
 
 import { config } from '@/src/lib/config';
+import { revenueCatEntitlementSnapshot } from '@/src/lib/entitlement-access';
+import type { Entitlement } from '@/src/lib/models';
+import {
+  mapRevenueCatPurchaseError,
+  revenueCatNetworkErrorMessage,
+  revenueCatUnavailableMessage,
+  type RevenueCatPurchaseStatus,
+} from '@/src/lib/revenuecat-results';
+import {
+  revenueCatPlanPriceFromProduct,
+  type RevenueCatPlan,
+  type RevenueCatPlanPricing,
+} from '@/src/lib/revenuecat-pricing';
 
-export type RevenueCatPlan = 'monthly' | 'annual';
-export type RevenueCatPurchaseStatus = 'active' | 'pending' | 'cancelled' | 'syncing';
+export type { RevenueCatPlan, RevenueCatPlanPricing } from '@/src/lib/revenuecat-pricing';
+export type { RevenueCatPurchaseStatus } from '@/src/lib/revenuecat-results';
 
 export class RevenueCatUnavailableError extends Error {
   constructor(message: string) {
@@ -15,29 +28,6 @@ export class RevenueCatUnavailableError extends Error {
 }
 
 let configuredForUserId: string | null = null;
-
-type RevenueCatErrorLike = {
-  code?: string | number;
-  message?: string;
-  userCancelled?: boolean | null;
-  userInfo?: {
-    readableErrorCode?: string;
-  };
-};
-
-function readRevenueCatError(error: unknown): RevenueCatErrorLike {
-  if (error && typeof error === 'object') {
-    return error as RevenueCatErrorLike;
-  }
-  return {};
-}
-
-function isRevenueCatErrorCode(error: unknown, codes: string[]) {
-  const parsed = readRevenueCatError(error);
-  const code = parsed.code == null ? '' : String(parsed.code);
-  const readableCode = parsed.userInfo?.readableErrorCode ?? '';
-  return codes.includes(code) || codes.includes(readableCode);
-}
 
 function customerInfoResult(customerInfo: CustomerInfo, status: RevenueCatPurchaseStatus = 'syncing') {
   const hasActiveEntitlement = hasRevenueCatEntitlement(customerInfo);
@@ -60,6 +50,11 @@ export function usesRevenueCatStoreBilling() {
 
 export function hasRevenueCatApiKey() {
   return Boolean(revenueCatApiKey());
+}
+
+export function isUsingRevenueCatTestStore() {
+  const apiKey = revenueCatApiKey();
+  return Boolean(apiKey && config.revenueCat.testStoreApiKey && apiKey === config.revenueCat.testStoreApiKey);
 }
 
 export async function configureRevenueCat(userId: string) {
@@ -135,6 +130,43 @@ export function hasRevenueCatEntitlement(customerInfo: CustomerInfo) {
   return Boolean(customerInfo.entitlements.active[config.revenueCat.entitlementId]);
 }
 
+export function revenueCatEntitlementFromCustomerInfo(customerInfo: CustomerInfo): Entitlement | null {
+  const source = Platform.OS === 'android' ? 'google' : 'apple';
+  return revenueCatEntitlementSnapshot(customerInfo, config.revenueCat.entitlementId, source);
+}
+
+export async function getRevenueCatEntitlement(userId: string) {
+  await configureRevenueCat(userId);
+  const customerInfo = await Purchases.getCustomerInfo();
+  return revenueCatEntitlementFromCustomerInfo(customerInfo);
+}
+
+export async function getRevenueCatPlanPricing(userId: string): Promise<RevenueCatPlanPricing> {
+  await configureRevenueCat(userId);
+  const pricing: RevenueCatPlanPricing = {};
+
+  for (const plan of ['monthly', 'annual'] satisfies RevenueCatPlan[]) {
+    try {
+      const selectedPackage = await packageForPlan(plan);
+      const planPrice = revenueCatPlanPriceFromProduct(selectedPackage.product);
+      if (planPrice) {
+        pricing[plan] = planPrice;
+      }
+    } catch (error) {
+      if (error instanceof RevenueCatUnavailableError) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (!pricing.monthly && !pricing.annual) {
+    throw new RevenueCatUnavailableError('No RevenueCat plan pricing is configured for this app yet.');
+  }
+
+  return pricing;
+}
+
 export async function purchaseRevenueCatPlan(userId: string, plan: RevenueCatPlan) {
   await configureRevenueCat(userId);
   const selectedPackage = await packageForPlan(plan);
@@ -142,28 +174,28 @@ export async function purchaseRevenueCatPlan(userId: string, plan: RevenueCatPla
     const purchase = await Purchases.purchasePackage(selectedPackage);
     return customerInfoResult(purchase.customerInfo);
   } catch (error) {
-    const parsed = readRevenueCatError(error);
-    if (parsed.userCancelled || isRevenueCatErrorCode(error, ['1', 'PURCHASE_CANCELLED_ERROR'])) {
+    const mappedError = mapRevenueCatPurchaseError(error);
+    if (mappedError === 'cancelled') {
       const customerInfo = await Purchases.getCustomerInfo();
       return customerInfoResult(customerInfo, 'cancelled');
     }
 
-    if (isRevenueCatErrorCode(error, ['20', 'PAYMENT_PENDING_ERROR'])) {
+    if (mappedError === 'pending') {
       const customerInfo = await Purchases.getCustomerInfo();
       return customerInfoResult(customerInfo, 'pending');
     }
 
-    if (isRevenueCatErrorCode(error, ['6', 'PRODUCT_ALREADY_PURCHASED_ERROR'])) {
+    if (mappedError === 'already_purchased') {
       const customerInfo = await Purchases.getCustomerInfo();
       return customerInfoResult(customerInfo);
     }
 
-    if (isRevenueCatErrorCode(error, ['10', 'NETWORK_ERROR', '35', 'OFFLINE_CONNECTION_ERROR', '32', 'PRODUCT_REQUEST_TIMED_OUT_ERROR'])) {
-      throw new Error('The store connection was interrupted. Please check your connection and try again.');
+    if (mappedError === 'network') {
+      throw new Error(revenueCatNetworkErrorMessage());
     }
 
-    if (isRevenueCatErrorCode(error, ['5', 'PRODUCT_NOT_AVAILABLE_FOR_PURCHASE_ERROR', '23', 'CONFIGURATION_ERROR', '11', 'INVALID_CREDENTIALS_ERROR'])) {
-      throw new RevenueCatUnavailableError('This subscription is not available in this build yet. Check the RevenueCat and store product configuration.');
+    if (mappedError === 'configuration') {
+      throw new RevenueCatUnavailableError(revenueCatUnavailableMessage());
     }
 
     throw error;
@@ -177,6 +209,12 @@ export async function restoreRevenueCatPurchases(userId: string) {
 }
 
 export async function openRevenueCatManagement(userId: string) {
+  if (isUsingRevenueCatTestStore()) {
+    throw new RevenueCatUnavailableError(
+      'Subscription management is available after a real App Store or Google Play purchase. RevenueCat Test Store purchases can be changed from the RevenueCat dashboard.',
+    );
+  }
+
   await configureRevenueCat(userId);
   const customerInfo = await Purchases.getCustomerInfo();
   if (!customerInfo.managementURL) {

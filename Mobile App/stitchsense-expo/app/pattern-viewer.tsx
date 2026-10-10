@@ -1,4 +1,6 @@
+import { Directory, File } from 'expo-file-system';
 import * as WebBrowser from 'expo-web-browser';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -40,6 +42,7 @@ export default function PatternViewerScreen() {
   const [patternTitle, setPatternTitle] = useState(title ?? 'Pattern file');
   const [statusMessage, setStatusMessage] = useState('Preparing your pattern file…');
   const [isLoading, setIsLoading] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [viewerFailed, setViewerFailed] = useState(false);
   const [projectMarks, setProjectMarks] = useState<ProjectPatternMark[]>([]);
   const [markerStatus, setMarkerStatus] = useState<string | null>(null);
@@ -258,6 +261,39 @@ export default function PatternViewerScreen() {
     }
   }
 
+  async function downloadPatternFile() {
+    if (!fileUrl) {
+      setStatusMessage('No pattern file is ready to download yet.');
+      return;
+    }
+
+    setIsDownloading(true);
+    setStatusMessage('Choose where to save this pattern file.');
+    try {
+      const saveDirectory = await Directory.pickDirectoryAsync();
+      const activeToken = await currentAccessToken();
+      if (!activeToken) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+
+      const extension = fileUrl.toLowerCase().includes('.pdf') ? 'pdf' : 'pdf';
+      const destination = new File(saveDirectory, `${safePatternFilename(encodedTitle)}.${extension}`);
+      await File.downloadFileAsync(fileUrl, destination, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+        idempotent: true,
+      });
+      setStatusMessage(`Saved ${destination.name} to your device.`);
+    } catch (error) {
+      setStatusMessage(
+        getUserFacingErrorMessage(error, {
+          fallback: 'Could not save this pattern file. You can still open it with the system viewer.',
+        }),
+      );
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <View style={styles.centerScreen}>
@@ -362,12 +398,22 @@ export default function PatternViewerScreen() {
             <Text style={styles.viewerProjectButtonText}>Project</Text>
           </Pressable>
         ) : null}
-        <BrandButton
-          label="System"
-          onPress={() => void openFallback()}
-          style={styles.systemButton}
-          variant="ghost"
-        />
+        <Pressable
+          accessibilityLabel="Download pattern file"
+          accessibilityRole="button"
+          disabled={isDownloading}
+          onPress={() => void downloadPatternFile()}
+          style={({ pressed }) => [
+            styles.downloadButton,
+            isDownloading ? styles.disabledAction : null,
+            pressed ? styles.pressed : null,
+          ]}>
+          {isDownloading ? (
+            <ActivityIndicator color={tokens.color.primary} size="small" />
+          ) : (
+            <MaterialCommunityIcons color={tokens.color.primary} name="download-outline" size={22} />
+          )}
+        </Pressable>
       </View>
       <WebView
         allowsBackForwardNavigationGestures
@@ -423,6 +469,19 @@ function markerSummary(mark: ProjectPatternMark) {
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+function safePatternFilename(title: string) {
+  const fallback = 'stitchsense-pattern';
+  const safeTitle = title
+    .trim()
+    .replace(/\.[Pp][Dd][Ff]$/, '')
+    .replace(/[^a-zA-Z0-9._ -]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+
+  return safeTitle || fallback;
 }
 
 function ProjectMarkerTools({
@@ -743,16 +802,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
-  systemButton: {
-    minHeight: 42,
-    paddingHorizontal: tokens.spacing.md,
+  disabledAction: {
+    opacity: 0.58,
+  },
+  downloadButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff7ec',
+    borderColor: tokens.color.border,
+    borderRadius: tokens.radius.pill,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  pressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.98 }],
   },
   webView: {
     flex: 1,
     backgroundColor: tokens.color.background,
   },
   webLoading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: tokens.color.background,

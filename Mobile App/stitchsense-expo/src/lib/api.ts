@@ -1044,6 +1044,12 @@ export const stitchSenseAPI = {
       body,
     });
   },
+  syncRevenueCatEntitlement(token: string) {
+    return request<EntitlementResponse>('/billing/revenuecat/sync', {
+      method: 'POST',
+      token,
+    });
+  },
   promotions(token: string) {
     return request<PromotionsResponse>('/promotions/active', { token });
   },
