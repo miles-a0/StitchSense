@@ -8,16 +8,18 @@
     "npm": ">=10"
   },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "bash ../../../tools/run-with-node22.sh npx tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
+    "build:local": "bash ../../../tools/run-with-node22.sh npx tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
-    "migrate": "node dist/scripts/apply-migrations.js",
-    "audit:platform-data": "node dist/scripts/audit-platform-data.js",
-    "audit:wordpress-export": "node dist/scripts/audit-wordpress-export.js",
-    "migration:wordpress": "node dist/scripts/import-wordpress-library.js",
-    "seed:demo": "node dist/scripts/seed-demo-user.js",
-    "validate:pattern-files": "node dist/scripts/validate-pattern-file-links.js"
+    "start:local": "bash ../../../tools/run-with-node22.sh node dist/server.js",
+    "test": "bash ../../../tools/run-with-node22.sh npm run build && bash ../../../tools/run-with-node22.sh node --test --test-concurrency=1 tests/*.test.mjs",
+    "migrate": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/apply-migrations.js; else node dist/scripts/apply-migrations.js; fi",
+    "audit:platform-data": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/audit-platform-data.js; else node dist/scripts/audit-platform-data.js; fi",
+    "audit:wordpress-export": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/audit-wordpress-export.js; else node dist/scripts/audit-wordpress-export.js; fi",
+    "migration:wordpress": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/import-wordpress-library.js; else node dist/scripts/import-wordpress-library.js; fi",
+    "seed:demo": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/seed-demo-user.js; else node dist/scripts/seed-demo-user.js; fi",
+    "validate:pattern-files": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/validate-pattern-file-links.js; else node dist/scripts/validate-pattern-file-links.js; fi"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1069.0",

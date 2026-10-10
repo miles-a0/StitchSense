@@ -575,9 +575,11 @@ export async function patternRoutes(app: FastifyInstance) {
       try {
         workflow = await callWordPressChatProxy(request.authUser.id, workflowPayload);
       } catch (fallbackError) {
-        const message = fallbackError instanceof Error ? fallbackError.message : 'Workflow chat failed';
         request.log.error({ error: fallbackError }, 'Pattern summary refresh failed');
-        return reply.code(502).send({ error: message });
+        return reply.code(502).send({
+          error: 'StitchSense could not refresh the pattern summary. Please try again.',
+          requestId: request.id,
+        });
       }
     }
 
@@ -670,7 +672,11 @@ export async function patternRoutes(app: FastifyInstance) {
             } catch {
               // Keep the default detail string if the bridge did not return JSON.
             }
-            return reply.code(502).send({ error: detail });
+            request.log.error({ error: detail, patternId: id }, 'WordPress library delete failed');
+            return reply.code(502).send({
+              error: 'StitchSense could not delete the WordPress library item. Please try again.',
+              requestId: request.id,
+            });
           }
         }
       }
@@ -756,6 +762,7 @@ export async function patternRoutes(app: FastifyInstance) {
     let summaryText: string | null = null;
     let summaryHtml: string | null = null;
     let summaryStructured: Record<string, unknown> | null = null;
+    const scopedWorkflowUserId = buildScopedWorkflowUserId(request.authUser.id, id);
     const workflowPayload = {
       file_name: filename,
       mime_type: validatedMimeType,
@@ -766,6 +773,10 @@ export async function patternRoutes(app: FastifyInstance) {
       upload_nonce: `mobile_${id}`,
       upload_transport: 'stitchsense_platform_file',
       platform_pattern_id: id,
+      user_id: scopedWorkflowUserId,
+      userId: scopedWorkflowUserId,
+      platform_user_id: request.authUser.id,
+      platformUserId: request.authUser.id,
       source_url: pattern.source_url ?? '',
       file_extension: filename.split('.').pop()?.toLowerCase() ?? '',
       response_language: 'english',
@@ -1023,8 +1034,11 @@ export async function patternRoutes(app: FastifyInstance) {
       reply.header('cache-control', 'private, max-age=300');
       return reply.send(thumbnail);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not generate a PDF thumbnail.';
-      return reply.code(502).send({ error: message });
+      request.log.error({ error, patternId: id }, 'Could not generate a PDF thumbnail');
+      return reply.code(502).send({
+        error: 'StitchSense could not generate a PDF thumbnail. Please try again.',
+        requestId: request.id,
+      });
     }
   });
 }

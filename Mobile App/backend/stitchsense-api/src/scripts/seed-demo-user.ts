@@ -18,10 +18,10 @@ async function main() {
 
   const userResult = await query<{ id: string; email: string }>(
     `INSERT INTO users (email, display_name, password_hash, standard_trial_ends_at)
-     VALUES ($1, $2, crypt($3, gen_salt('bf')), $4)
+     VALUES ($1, $2, crypt($3, gen_salt('bf', 10)), $4)
      ON CONFLICT (email) DO UPDATE SET
        display_name = EXCLUDED.display_name,
-       password_hash = crypt($3, gen_salt('bf')),
+       password_hash = crypt($3, gen_salt('bf', 10)),
        standard_trial_ends_at = GREATEST(users.standard_trial_ends_at, EXCLUDED.standard_trial_ends_at),
        updated_at = NOW()
      RETURNING id, email`,

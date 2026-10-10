@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { fetchWithTimeout } from './http.js';
+import { recordWorkflowMetrics } from './metrics.js';
 
 type WorkflowType = 'chat' | 'upload' | 'library' | 'image';
 
@@ -62,20 +63,27 @@ export async function callWorkflow(type: WorkflowType, payload: unknown) {
 
   let lastStatus = 0;
   for (const endpoint of endpoints) {
-    const response = await fetchWithTimeout(endpoint, {
-      method: 'POST',
-      timeoutMs: type === 'upload' || type === 'chat' ? 600000 : 90000,
-      headers: {
-        'content-type': 'application/json',
-        ...(sharedSecret
-          ? {
-              'x-stitchsense-secret': sharedSecret,
-              'x-pattern-helper-secret': sharedSecret,
-            }
-          : {}),
-      },
-      body: JSON.stringify(body),
-    });
+    const startedAt = Date.now();
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(endpoint, {
+        method: 'POST',
+        timeoutMs: type === 'upload' || type === 'chat' ? 600000 : 90000,
+        headers: {
+          'content-type': 'application/json',
+          ...(sharedSecret
+            ? {
+                'x-stitchsense-secret': sharedSecret,
+                'x-pattern-helper-secret': sharedSecret,
+              }
+            : {}),
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      recordWorkflowMetrics({ workflowType: type, outcome: 'exception', durationMs: Date.now() - startedAt });
+      throw error;
+    }
 
     const text = await response.text();
     let responseBody: unknown = text;
@@ -87,17 +95,41 @@ export async function callWorkflow(type: WorkflowType, payload: unknown) {
 
     const workflowFailure = workflowFailureMessage(type, responseBody);
     if (workflowFailure) {
+      recordWorkflowMetrics({
+        workflowType: type,
+        outcome: 'workflow_error',
+        statusCode: response.status,
+        durationMs: Date.now() - startedAt,
+      });
       throw new Error(workflowFailure);
     }
 
     if (response.ok) {
+      recordWorkflowMetrics({
+        workflowType: type,
+        outcome: 'success',
+        statusCode: response.status,
+        durationMs: Date.now() - startedAt,
+      });
       return responseBody;
     }
 
     lastStatus = response.status;
     if (!(type === 'image' && response.status === 404)) {
+      recordWorkflowMetrics({
+        workflowType: type,
+        outcome: 'http_error',
+        statusCode: response.status,
+        durationMs: Date.now() - startedAt,
+      });
       throw new Error(workflowErrorMessage(type, response.status, responseBody));
     }
+    recordWorkflowMetrics({
+      workflowType: type,
+      outcome: 'http_error',
+      statusCode: response.status,
+      durationMs: Date.now() - startedAt,
+    });
   }
 
   throw new Error(`Workflow ${type} failed with ${lastStatus || 404}`);
@@ -134,20 +166,27 @@ export async function callUploadWorkflowWithFile(params: {
   formData.append('data', blob, params.filename);
   formData.append('pattern_file', blob, params.filename);
 
-  const response = await fetchWithTimeout(endpoint, {
-    method: 'POST',
-    timeoutMs: 600000,
-    headers: {
-      accept: 'application/json',
-      ...(sharedSecret
-        ? {
-            'x-stitchsense-secret': sharedSecret,
-            'x-pattern-helper-secret': sharedSecret,
-          }
-        : {}),
-    },
-    body: formData,
-  });
+  const startedAt = Date.now();
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(endpoint, {
+      method: 'POST',
+      timeoutMs: 600000,
+      headers: {
+        accept: 'application/json',
+        ...(sharedSecret
+          ? {
+              'x-stitchsense-secret': sharedSecret,
+              'x-pattern-helper-secret': sharedSecret,
+            }
+          : {}),
+      },
+      body: formData,
+    });
+  } catch (error) {
+    recordWorkflowMetrics({ workflowType: 'upload', outcome: 'exception', durationMs: Date.now() - startedAt });
+    throw error;
+  }
 
   const text = await response.text();
   let responseBody: unknown = text;
@@ -158,13 +197,31 @@ export async function callUploadWorkflowWithFile(params: {
   }
 
   if (!response.ok) {
+    recordWorkflowMetrics({
+      workflowType: 'upload',
+      outcome: 'http_error',
+      statusCode: response.status,
+      durationMs: Date.now() - startedAt,
+    });
     throw new Error(workflowErrorMessage('upload', response.status, responseBody));
   }
 
   const workflowFailure = workflowFailureMessage('upload', responseBody);
   if (workflowFailure) {
+    recordWorkflowMetrics({
+      workflowType: 'upload',
+      outcome: 'workflow_error',
+      statusCode: response.status,
+      durationMs: Date.now() - startedAt,
+    });
     throw new Error(workflowFailure);
   }
 
+  recordWorkflowMetrics({
+    workflowType: 'upload',
+    outcome: 'success',
+    statusCode: response.status,
+    durationMs: Date.now() - startedAt,
+  });
   return responseBody;
 }

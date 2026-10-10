@@ -21,6 +21,13 @@ function multipartBody({ boundary, fieldName, filename, contentType, body }) {
   ]);
 }
 
+function normaliseContentType(value) {
+  return value
+    .split(';')
+    .map((part) => part.trim().toLowerCase())
+    .join('; ');
+}
+
 test('pattern upload route stores text files and sends indexing workflow payload', {
   skip: databaseUrl && objectStorageEndpoint ? false : 'TEST_DATABASE_URL and OBJECT_STORAGE_ENDPOINT are not configured',
 }, async () => {
@@ -82,6 +89,10 @@ test('pattern upload route stores text files and sends indexing workflow payload
     assert.equal(payload.secret, 'test-upload-secret');
     assert.equal(payload.upload_transport, 'stitchsense_platform_file');
     assert.equal(payload.platform_pattern_id, patternId);
+    assert.equal(payload.user_id, `pattern:${userId}:${patternId}`);
+    assert.equal(payload.userId, `pattern:${userId}:${patternId}`);
+    assert.equal(payload.platform_user_id, userId);
+    assert.equal(payload.platformUserId, userId);
     assert.equal(payload.project_name, 'Seeded upload pattern');
     assert.equal(payload.file_name, 'notes.txt');
     assert.equal(payload.mime_type, 'text/plain; charset=utf-8');
@@ -114,9 +125,10 @@ test('pattern upload route stores text files and sends indexing workflow payload
   let app;
   let pool;
   let patternId;
+  let userId;
   const uploadBody = 'Row 1: Knit across.\nRow 2: Purl across.\n';
   try {
-    const userId = (
+    userId = (
       await client.query(
         `INSERT INTO users (email, display_name)
          VALUES ('upload-owner@example.test', 'Upload Owner')
@@ -274,7 +286,7 @@ test('pattern upload route stores text files and sends indexing workflow payload
         Key: responseBody.fileKey,
       }),
     );
-    assert.equal(storedObject.ContentType, 'text/plain; charset=utf-8');
+    assert.equal(normaliseContentType(storedObject.ContentType), 'text/plain; charset=utf-8');
     assert.equal(await storedObject.Body.transformToString(), uploadBody);
   } finally {
     globalThis.fetch = originalFetch;

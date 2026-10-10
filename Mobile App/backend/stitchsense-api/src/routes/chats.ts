@@ -80,6 +80,24 @@ function logPatternRouting(
   );
 }
 
+function workflowLogContext(params: {
+  patternId: string | null;
+  sessionId: string;
+  toolMode: string;
+  promptChars: number;
+  historyCount: number;
+  directPatternTextChars: number;
+}) {
+  return {
+    patternId: params.patternId,
+    sessionId: params.sessionId,
+    toolMode: params.toolMode,
+    promptChars: params.promptChars,
+    historyCount: params.historyCount,
+    directPatternTextChars: params.directPatternTextChars,
+  };
+}
+
 function buildSessionTitleFromPrompt(content: string) {
   const normalized = content.replace(/\s+/g, ' ').trim();
   if (!normalized) {
@@ -600,6 +618,14 @@ export async function chatRoutes(app: FastifyInstance) {
       locale: 'en-GB',
       system_instruction: [englishOnlyInstruction(), guideSystemInstruction].filter(Boolean).join('\n'),
     };
+    const aiLogContext = workflowLogContext({
+      patternId: session.pattern_id,
+      sessionId: session.id,
+      toolMode: workflowToolMode,
+      promptChars: workflowQuestion.length,
+      historyCount: aiPayload.history.length,
+      directPatternTextChars: directPatternText?.length ?? 0,
+    });
 
     logPatternRouting(request, {
       toolMode: workflowToolMode,
@@ -665,7 +691,10 @@ export async function chatRoutes(app: FastifyInstance) {
         !hasReliablePatternRetrieval(ai)
       ) {
         request.log.warn(
-          { aiPayload, ai },
+          {
+            ...aiLogContext,
+            contextCount: workflowNumber(workflowRecord(ai).context_count ?? workflowRecord(ai).contextCount) ?? 0,
+          },
           'Pattern step guide blocked because workflow returned no reliable scoped pattern retrieval',
         );
         answer = patternEvidenceRequiredMessage();
@@ -677,15 +706,18 @@ export async function chatRoutes(app: FastifyInstance) {
         };
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Workflow chat failed';
-      request.log.error({ error, aiPayload }, 'Chat workflow failed');
-      return reply.code(502).send({ error: message });
+      request.log.error({ error, ...aiLogContext }, 'Chat workflow failed');
+      return reply.code(502).send({
+        error: 'StitchSense could not reach the chat workflow. Please try again.',
+        requestId: request.id,
+      });
     }
 
     if (!answer) {
-      request.log.error({ aiPayload, ai }, 'Chat workflow returned no usable answer');
+      request.log.error({ ...aiLogContext, ai }, 'Chat workflow returned no usable answer');
       return reply.code(502).send({
         error: 'StitchSense could not get a usable chat answer from the workflow. Please try again.',
+        requestId: request.id,
       });
     }
     const saved = await query(

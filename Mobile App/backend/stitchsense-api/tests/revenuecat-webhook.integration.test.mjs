@@ -15,14 +15,18 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   process.env.NODE_ENV = 'test';
   process.env.DATABASE_URL = databaseUrl;
   process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-32-characters';
+  process.env.REVENUECAT_API_BASE_URL = 'https://revenuecat.example.test/v1';
+  process.env.REVENUECAT_API_KEY = 'test-only-revenuecat-api-key-with-more-than-32-characters';
   process.env.REVENUECAT_WEBHOOK_AUTHORIZATION = 'Bearer revenuecat-test-secret';
   process.env.REVENUECAT_ENTITLEMENT_ID = 'pro';
 
   let app;
   let pool;
+  const originalFetch = globalThis.fetch;
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
   t.after(async () => {
+    globalThis.fetch = originalFetch;
     if (app) await app.close();
     if (pool) await pool.end();
     await client.end();
@@ -36,24 +40,101 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   const users = await client.query(
     `INSERT INTO users (email, display_name) VALUES
        ('revenuecat-owner@example.test', 'RevenueCat Owner'),
-       ('revenuecat-other@example.test', 'RevenueCat Other')
+       ('revenuecat-other@example.test', 'RevenueCat Other'),
+       ('revenuecat-sync@example.test', 'RevenueCat Sync')
      RETURNING id, email`,
   );
   const ownerId = users.rows.find((row) => row.email === 'revenuecat-owner@example.test').id;
   const otherId = users.rows.find((row) => row.email === 'revenuecat-other@example.test').id;
+  const syncId = users.rows.find((row) => row.email === 'revenuecat-sync@example.test').id;
 
   const { buildApp } = await import('../dist/app.js');
   const poolModule = await import('../dist/db/pool.js');
   pool = poolModule.pool;
   app = await buildApp();
 
+  const ownerToken = await app.jwt.sign({ sub: ownerId, email: 'revenuecat-owner@example.test' });
+  const otherToken = await app.jwt.sign({ sub: otherId, email: 'revenuecat-other@example.test' });
+  const syncToken = await app.jwt.sign({ sub: syncId, email: 'revenuecat-sync@example.test' });
+
   const webhook = (payload, authorization = 'Bearer revenuecat-test-secret') =>
     app.inject({
       method: 'POST',
       url: '/billing/revenuecat/webhook',
-      headers: { authorization },
+      headers: authorization ? { authorization } : {},
       payload,
     });
+
+  const unauthenticatedSync = await app.inject({
+    method: 'POST',
+    url: '/billing/revenuecat/sync',
+  });
+  assert.equal(unauthenticatedSync.statusCode, 401, unauthenticatedSync.body);
+
+  let revenueCatFetchCalls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    revenueCatFetchCalls.push({ url: String(url), authorization: init.headers?.Authorization });
+    assert.equal(String(url), `https://revenuecat.example.test/v1/subscribers/${syncId}`);
+    return Response.json({
+      subscriber: {
+        entitlements: {
+          pro: {
+            expires_date: '2026-12-08T10:00:00Z',
+            product_identifier: 'stitchsense_pro_annual_sync',
+            purchase_date: '2026-11-08T10:00:00Z',
+          },
+        },
+        subscriptions: {
+          stitchsense_pro_annual_sync: {
+            store: 'app_store',
+            expires_date: '2026-12-08T10:00:00Z',
+            purchase_date: '2026-11-08T10:00:00Z',
+          },
+        },
+      },
+    });
+  };
+
+  const synced = await app.inject({
+    method: 'POST',
+    url: '/billing/revenuecat/sync',
+    headers: { authorization: `Bearer ${syncToken}` },
+  });
+  assert.equal(synced.statusCode, 200, synced.body);
+  assert.equal(synced.json().entitlement.status, 'active');
+  assert.equal(synced.json().entitlement.accessSource, 'apple');
+  assert.equal(synced.json().entitlement.plan, 'pro_annual');
+  assert.deepEqual(revenueCatFetchCalls, [
+    {
+      url: `https://revenuecat.example.test/v1/subscribers/${syncId}`,
+      authorization: 'Bearer test-only-revenuecat-api-key-with-more-than-32-characters',
+    },
+  ]);
+
+  let syncRows = await client.query(
+    `SELECT user_id, provider, provider_subscription_id, plan, status, current_period_end, metadata
+     FROM subscriptions
+     WHERE provider = 'apple' AND provider_subscription_id = $1`,
+    [`${syncId}:apple:stitchsense_pro_annual_sync`],
+  );
+  assert.equal(syncRows.rowCount, 1);
+  assert.equal(syncRows.rows[0].user_id, syncId);
+  assert.equal(syncRows.rows[0].plan, 'pro_annual');
+  assert.equal(syncRows.rows[0].status, 'active');
+  assert.equal(syncRows.rows[0].current_period_end.toISOString(), '2026-12-08T10:00:00.000Z');
+  assert.equal(syncRows.rows[0].metadata.revenueCatSync, true);
+  assert.equal(syncRows.rows[0].metadata.entitlementId, 'pro');
+
+  globalThis.fetch = async () => Response.json({ error: 'upstream private detail' }, { status: 500 });
+  const failedSync = await app.inject({
+    method: 'POST',
+    url: '/billing/revenuecat/sync',
+    headers: { authorization: `Bearer ${otherToken}` },
+  });
+  assert.equal(failedSync.statusCode, 502, failedSync.body);
+  assert.equal(failedSync.json().error, 'Could not sync subscription status right now');
+  assert.ok(failedSync.json().requestId);
+  assert.doesNotMatch(failedSync.body, /upstream private detail/);
 
   const baseEvent = {
     id: 'evt_rc_initial_1',
@@ -71,6 +152,9 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
 
   const unauthorized = await webhook({ event: baseEvent }, 'Bearer wrong-secret');
   assert.equal(unauthorized.statusCode, 401, unauthorized.body);
+
+  const missingAuthorization = await webhook({ event: baseEvent }, '');
+  assert.equal(missingAuthorization.statusCode, 401, missingAuthorization.body);
 
   const unmatchedEntitlement = await webhook({
     event: { ...baseEvent, id: 'evt_rc_wrong_entitlement', entitlement_ids: ['other'] },
@@ -187,6 +271,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       ...baseEvent,
       id: 'evt_rc_cancellation_1',
       type: 'CANCELLATION',
+      cancel_reason: 'UNSUBSCRIBE',
       expiration_at_ms: Date.parse('2026-11-07T10:00:00Z'),
     },
   });
@@ -204,6 +289,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-11-07T10:00:00.000Z');
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_cancellation_1');
   assert.equal(subscriptionRows.rows[0].metadata.type, 'CANCELLATION');
+  assert.equal(subscriptionRows.rows[0].metadata.cancelReason, 'UNSUBSCRIBE');
 
   const activeEntitlement = await app.inject({
     method: 'GET',
@@ -219,6 +305,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       ...baseEvent,
       id: 'evt_rc_expiration_1',
       type: 'EXPIRATION',
+      expiration_reason: 'UNSUBSCRIBE',
       expiration_at_ms: Date.parse('2026-11-07T10:00:00Z'),
     },
   });
@@ -236,6 +323,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-11-07T10:00:00.000Z');
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_expiration_1');
   assert.equal(subscriptionRows.rows[0].metadata.type, 'EXPIRATION');
+  assert.equal(subscriptionRows.rows[0].metadata.expirationReason, 'UNSUBSCRIBE');
 
   const expiredEntitlement = await app.inject({
     method: 'GET',
@@ -245,6 +333,38 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(expiredEntitlement.statusCode, 200, expiredEntitlement.body);
   assert.equal(expiredEntitlement.json().entitlement.status, 'expired');
   assert.equal(expiredEntitlement.json().entitlement.accessSource, 'none');
+
+  const restore = await webhook({
+    event: {
+      ...baseEvent,
+      id: 'evt_rc_restore_1',
+      type: 'UNCANCELLATION',
+      expiration_at_ms: Date.parse('2026-12-07T10:00:00Z'),
+    },
+  });
+  assert.equal(restore.statusCode, 200, restore.body);
+  assert.deepEqual(restore.json(), { received: true });
+
+  subscriptionRows = await client.query(
+    `SELECT user_id, status, current_period_end, metadata
+     FROM subscriptions
+     WHERE provider = 'apple' AND provider_subscription_id = 'original_apple_1'`,
+  );
+  assert.equal(subscriptionRows.rowCount, 1);
+  assert.equal(subscriptionRows.rows[0].user_id, ownerId);
+  assert.equal(subscriptionRows.rows[0].status, 'active');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-12-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_restore_1');
+  assert.equal(subscriptionRows.rows[0].metadata.type, 'UNCANCELLATION');
+
+  const restoredEntitlement = await app.inject({
+    method: 'GET',
+    url: '/me/entitlements',
+    headers: { authorization: `Bearer ${await app.jwt.sign({ sub: ownerId, email: 'revenuecat-owner@example.test' })}` },
+  });
+  assert.equal(restoredEntitlement.statusCode, 200, restoredEntitlement.body);
+  assert.equal(restoredEntitlement.json().entitlement.status, 'active');
+  assert.equal(restoredEntitlement.json().entitlement.accessSource, 'apple');
 
   const googleInitialPurchase = await webhook({
     event: {
@@ -282,8 +402,9 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
          'evt_rc_renewal_1',
          'evt_rc_cancellation_1',
          'evt_rc_expiration_1',
+         'evt_rc_restore_1',
          'evt_rc_google_initial_1'
        )`,
   );
-  assert.equal(receivedAudit.rowCount, 5);
+  assert.equal(receivedAudit.rowCount, 6);
 });

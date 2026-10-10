@@ -214,7 +214,7 @@ test('user data export and deletion are scoped to the authenticated user', {
 
   const deleteAccountUser = await client.query(
     `INSERT INTO users (email, display_name, password_hash)
-     VALUES ('delete-account@example.test', 'Delete Account', crypt('delete-account-password', gen_salt('bf')))
+     VALUES ('delete-account@example.test', 'Delete Account', crypt('delete-account-password', gen_salt('bf', 10)))
      RETURNING id`,
   );
   const deleteAccountUserId = deleteAccountUser.rows[0].id;

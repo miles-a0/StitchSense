@@ -7,7 +7,7 @@ const grantBody = z.object({
   type: z.enum(['lifetime_pro', 'extended_trial', 'courtesy_access']),
   startsAt: z.string().datetime().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
-  reason: z.string().optional(),
+  reason: z.string().max(500).optional(),
 });
 
 export async function adminRoutes(app: FastifyInstance) {

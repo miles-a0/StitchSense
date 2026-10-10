@@ -48,6 +48,8 @@ export const config = {
     annualPriceId: process.env.STRIPE_ANNUAL_PRICE_ID ?? '',
   },
   revenueCat: {
+    apiBaseUrl: process.env.REVENUECAT_API_BASE_URL ?? 'https://api.revenuecat.com/v1',
+    apiKey: process.env.REVENUECAT_API_KEY ?? '',
     webhookAuthorization: process.env.REVENUECAT_WEBHOOK_AUTHORIZATION ?? '',
     entitlementId: process.env.REVENUECAT_ENTITLEMENT_ID ?? 'pro',
   },
@@ -74,6 +76,18 @@ function isValidUrl(value: string, requireHttps = false) {
   }
 }
 
+function requireProductionHttpsUrl(errors: string[], name: string, value: string) {
+  if (!isValidUrl(value, true)) {
+    errors.push(`${name} must be a valid HTTPS URL`);
+  }
+}
+
+function requireProductionSecret(errors: string[], name: string, value: string) {
+  if (!value || value.length < 32) {
+    errors.push(`${name} must be configured and at least 32 characters`);
+  }
+}
+
 export function validateProductionConfig() {
   if (config.nodeEnv !== 'production') return;
 
@@ -82,9 +96,7 @@ export function validateProductionConfig() {
   if (config.jwtSecret === DEVELOPMENT_JWT_SECRET || config.jwtSecret.length < 32) {
     errors.push('JWT_SECRET must be a non-default value of at least 32 characters');
   }
-  if (!isValidUrl(config.publicApiBaseUrl, true)) {
-    errors.push('PUBLIC_API_BASE_URL must be a valid HTTPS URL');
-  }
+  requireProductionHttpsUrl(errors, 'PUBLIC_API_BASE_URL', config.publicApiBaseUrl);
   if (config.corsOrigins.length === 0 || config.corsOrigins.some((origin) => !isValidUrl(origin, true))) {
     errors.push('CORS_ORIGINS must contain one or more comma-separated HTTPS origins');
   }
@@ -93,6 +105,31 @@ export function validateProductionConfig() {
   }
   if (config.metricsSharedSecret && config.metricsSharedSecret.length < 32) {
     errors.push('METRICS_SHARED_SECRET must be at least 32 characters when configured');
+  }
+  if (!config.revenueCat.webhookAuthorization || config.revenueCat.webhookAuthorization.length < 32) {
+    errors.push('REVENUECAT_WEBHOOK_AUTHORIZATION must be configured and at least 32 characters');
+  }
+  requireProductionHttpsUrl(errors, 'REVENUECAT_API_BASE_URL', config.revenueCat.apiBaseUrl);
+  if (!config.revenueCat.apiKey || config.revenueCat.apiKey.length < 32) {
+    errors.push('REVENUECAT_API_KEY must be configured and at least 32 characters');
+  }
+  requireProductionHttpsUrl(errors, 'N8N_CHAT_URL', config.n8n.chatUrl);
+  requireProductionHttpsUrl(errors, 'N8N_UPLOAD_URL', config.n8n.uploadUrl);
+  requireProductionHttpsUrl(errors, 'N8N_LIBRARY_PROXY_URL', config.n8n.libraryProxyUrl);
+  requireProductionHttpsUrl(errors, 'N8N_IMAGE_URL', config.n8n.imageUrl);
+  requireProductionSecret(errors, 'N8N_SHARED_SECRET', config.n8n.sharedSecret);
+  requireProductionSecret(errors, 'N8N_CHAT_SHARED_SECRET', config.n8n.chatSharedSecret);
+  requireProductionSecret(errors, 'N8N_UPLOAD_SHARED_SECRET', config.n8n.uploadSharedSecret);
+  if (!/^[a-zA-Z0-9._:-]+$/.test(config.revenueCat.entitlementId)) {
+    errors.push('REVENUECAT_ENTITLEMENT_ID must be a non-empty identifier');
+  }
+  if (config.stripe.secretKey) {
+    if (!config.stripe.webhookSecret || config.stripe.webhookSecret.length < 32) {
+      errors.push('STRIPE_WEBHOOK_SECRET must be at least 32 characters when Stripe is configured');
+    }
+    if (!config.stripe.monthlyPriceId || !config.stripe.annualPriceId) {
+      errors.push('STRIPE_MONTHLY_PRICE_ID and STRIPE_ANNUAL_PRICE_ID are required when Stripe is configured');
+    }
   }
   if (config.wordpress.siteUrl && !isValidUrl(config.wordpress.siteUrl, true)) {
     errors.push('WORDPRESS_SITE_URL must be a valid HTTPS URL');

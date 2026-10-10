@@ -11,6 +11,9 @@ test('RevenueCat store values map to platform providers', () => {
   assert.equal(providerForRevenueCatStore('APP_STORE'), 'apple');
   assert.equal(providerForRevenueCatStore('MAC_APP_STORE'), 'apple');
   assert.equal(providerForRevenueCatStore('PLAY_STORE'), 'google');
+  assert.equal(providerForRevenueCatStore('app_store'), 'apple');
+  assert.equal(providerForRevenueCatStore('mac_app_store'), 'apple');
+  assert.equal(providerForRevenueCatStore('play_store'), 'google');
   assert.equal(providerForRevenueCatStore('STRIPE'), null);
   assert.equal(providerForRevenueCatStore(undefined), null);
 });
@@ -30,8 +33,16 @@ test('RevenueCat event statuses preserve paid access until expiry', () => {
   assert.equal(statusForRevenueCatEvent('INITIAL_PURCHASE', null, now), 'active');
   assert.equal(statusForRevenueCatEvent('RENEWAL', null, now), 'active');
   assert.equal(statusForRevenueCatEvent('UNCANCELLATION', null, now), 'active');
+  assert.equal(statusForRevenueCatEvent('NON_RENEWING_PURCHASE', null, now), 'active');
+  assert.equal(statusForRevenueCatEvent('SUBSCRIPTION_EXTENDED', null, now), 'active');
+  assert.equal(statusForRevenueCatEvent('REFUND_REVERSED', null, now), 'active');
   assert.equal(statusForRevenueCatEvent('CANCELLATION', future, now), 'active');
   assert.equal(statusForRevenueCatEvent('CANCELLATION', past, now), 'expired');
+  assert.equal(statusForRevenueCatEvent('BILLING_ISSUE', future, now), 'active');
+  assert.equal(statusForRevenueCatEvent('BILLING_ISSUE', past, now), 'expired');
+  assert.equal(statusForRevenueCatEvent('SUBSCRIPTION_PAUSED', future, now), 'active');
+  assert.equal(statusForRevenueCatEvent('SUBSCRIPTION_PAUSED', past, now), 'expired');
+  assert.equal(statusForRevenueCatEvent('PRODUCT_CHANGE', future, now), 'active');
   assert.equal(statusForRevenueCatEvent('EXPIRATION', future, now), 'expired');
   assert.equal(statusForRevenueCatEvent('TRANSFER', future, now), 'expired');
 });

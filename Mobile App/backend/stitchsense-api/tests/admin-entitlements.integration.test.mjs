@@ -71,6 +71,19 @@ test('admin entitlement routes grant, list, report, and revoke manual access', {
   assert.equal(denied.statusCode, 403, denied.body);
   assert.deepEqual(denied.json(), { error: 'Admin access required' });
 
+  const tooLongReason = await app.inject({
+    method: 'POST',
+    url: '/admin/entitlements',
+    headers: { authorization: adminAuthorization },
+    payload: {
+      userId: targetUserId,
+      type: 'courtesy_access',
+      reason: 'x'.repeat(501),
+    },
+  });
+  assert.equal(tooLongReason.statusCode, 400, tooLongReason.body);
+  assert.equal(tooLongReason.json().error, 'Invalid request');
+
   const grant = await app.inject({
     method: 'POST',
     url: '/admin/entitlements',

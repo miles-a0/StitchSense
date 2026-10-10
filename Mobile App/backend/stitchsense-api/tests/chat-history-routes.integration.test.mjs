@@ -15,11 +15,15 @@ test('chat history routes cover scoped sessions, imported messages, ordering, an
   process.env.NODE_ENV = 'test';
   process.env.DATABASE_URL = databaseUrl;
   process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-32-characters';
+  process.env.N8N_CHAT_URL = 'http://workflow.test/chat-history';
+  process.env.N8N_CHAT_SHARED_SECRET = 'test-chat-secret';
 
   let app;
   let pool;
+  const originalFetch = globalThis.fetch;
   const client = new pg.Client({ connectionString: databaseUrl });
   t.after(async () => {
+    globalThis.fetch = originalFetch;
     if (app) {
       await app.close();
     }
@@ -43,6 +47,11 @@ test('chat history routes cover scoped sessions, imported messages, ordering, an
   );
   const ownerId = users.rows.find((row) => row.email === 'chat-history-owner@example.test').id;
   const otherId = users.rows.find((row) => row.email === 'chat-history-other@example.test').id;
+  await client.query(
+    `INSERT INTO manual_entitlements (user_id, type, reason)
+     VALUES ($1, 'lifetime_pro', 'chat history route integration test')`,
+    [ownerId],
+  );
 
   const ownerPatternId = (
     await client.query(
@@ -239,4 +248,25 @@ test('chat history routes cover scoped sessions, imported messages, ordering, an
     otherOwnerMessages.json().messages.map((message) => message.content),
     ['Other private message'],
   );
+
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ error: 'N8N_UPLOAD_SHARED_SECRET leaked upstream detail' }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    });
+  const workflowFailure = await app.inject({
+    method: 'POST',
+    url: `/chats/${createdGeneralChat.json().session.id}/messages`,
+    headers: {
+      authorization: ownerAuthorization,
+      'x-request-id': 'chat-workflow-failure-test',
+    },
+    payload: { content: 'Can you help?', toolMode: 'pattern_chat' },
+  });
+  assert.equal(workflowFailure.statusCode, 502, workflowFailure.body);
+  assert.deepEqual(workflowFailure.json(), {
+    error: 'StitchSense could not get a usable chat answer from the workflow. Please try again.',
+    requestId: 'chat-workflow-failure-test',
+  });
+  assert.doesNotMatch(workflowFailure.body, /N8N_UPLOAD_SHARED_SECRET|leaked upstream detail/);
 });
