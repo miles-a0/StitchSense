@@ -103,8 +103,8 @@ test('pattern upload route stores text files and sends indexing workflow payload
     assert.equal(workflowFile.name, 'notes.txt');
     assert.equal(workflowFile.type, 'text/plain; charset=utf-8');
     assert.equal(await workflowFile.text(), uploadBody);
-    assert.equal(await formData.get('data').text(), uploadBody);
-    assert.equal(await formData.get('pattern_file').text(), uploadBody);
+    const fileParts = [...formData.entries()].filter(([, value]) => typeof value !== 'string');
+    assert.deepEqual(fileParts.map(([name]) => name), ['file']);
 
     return new Response(
       JSON.stringify({

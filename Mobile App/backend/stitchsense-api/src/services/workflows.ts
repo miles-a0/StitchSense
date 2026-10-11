@@ -162,9 +162,8 @@ export async function callUploadWorkflowWithFile(params: {
     params.buffer.byteOffset + params.buffer.byteLength,
   ) as ArrayBuffer;
   const blob = new Blob([arrayBuffer], { type: params.mimeType || 'application/octet-stream' });
+  // The upload workflow's Validate File node reads the `file` binary key; extra copies tripled the request size.
   formData.append('file', blob, params.filename);
-  formData.append('data', blob, params.filename);
-  formData.append('pattern_file', blob, params.filename);
 
   const startedAt = Date.now();
   let response: Response;

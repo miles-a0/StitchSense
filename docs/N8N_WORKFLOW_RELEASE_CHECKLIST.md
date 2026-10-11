@@ -22,6 +22,13 @@ Treat n8n as an external service boundary. Workflow changes must preserve user o
 | Retry/fallback behaviour matches backend tests and support copy |  |
 | Metrics emit only low-cardinality labels and no URLs, prompts, file IDs, or secrets |  |
 
+## Deploy-order dependencies
+
+| Backend change | Workflow requirement | Confirmed live |
+| --- | --- | --- |
+| Upload requests send the pattern file only as the `file` multipart field (previously also `data` and `pattern_file`) | Upload workflow `Validate File` node must select the `file` binary key, as the repository export does. Import the current export before deploying this backend change; an older workflow that reads `data` would reject every upload with "No file uploaded." |  |
+| n8n secrets and Qdrant/embedding URLs read from `$env` in the exports | `N8N_CHAT_SHARED_SECRET`, `N8N_UPLOAD_SHARED_SECRET`/`N8N_SHARED_SECRET`, `STITCHSENSE_QDRANT_URL`, `STITCHSENSE_EMBEDDINGS_URL`, `STITCHSENSE_STIRLING_URL` and `QDRANT_API_KEY` set in the n8n environment |  |
+
 ## Release Steps
 
 1. Export the current production workflow definitions before editing.
