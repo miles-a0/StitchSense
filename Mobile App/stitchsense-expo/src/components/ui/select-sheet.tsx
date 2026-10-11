@@ -39,11 +39,16 @@ export function SelectSheet({
       visible={visible}
       onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Pressable
+          accessibilityLabel={`Close ${title}`}
+          accessibilityRole="button"
+          style={styles.backdrop}
+          onPress={onClose}
+        />
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <Text onPress={onClose} style={styles.closeLink}>
+            <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+            <Text accessibilityRole="button" onPress={onClose} style={styles.closeLink}>
               Done
             </Text>
           </View>
@@ -53,6 +58,8 @@ export function SelectSheet({
               return (
                 <Pressable
                   key={option.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                   onPress={() => {
                     onSelect(option.value);
                     onClose();

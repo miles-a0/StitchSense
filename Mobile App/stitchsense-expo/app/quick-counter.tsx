@@ -130,12 +130,14 @@ export default function QuickCounterScreen() {
       <View style={styles.toggleWrap}>
         <Pressable
           accessibilityRole="button"
+          accessibilityState={{ selected: mode === 'row' }}
           onPress={() => setMode('row')}
           style={[styles.toggleButton, mode === 'row' ? styles.toggleButtonActive : null]}>
           <Text style={[styles.toggleText, mode === 'row' ? styles.toggleTextActive : null]}>Rows</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
+          accessibilityState={{ selected: mode === 'stitch' }}
           onPress={() => setMode('stitch')}
           style={[styles.toggleButton, mode === 'stitch' ? styles.toggleButtonActive : null]}>
           <Text style={[styles.toggleText, mode === 'stitch' ? styles.toggleTextActive : null]}>Stitches</Text>
@@ -146,7 +148,7 @@ export default function QuickCounterScreen() {
         <View style={styles.countHeader}>
           <View>
             <Text style={styles.countKicker}>Counting {pluralLabel(mode, 2)}</Text>
-            <Text style={styles.countNumber}>{activeCount}</Text>
+            <Text accessibilityLiveRegion="polite" style={styles.countNumber}>{activeCount}</Text>
           </View>
           <View style={styles.sideCount}>
             <Text style={styles.sideCountNumber}>{inactiveCount}</Text>
@@ -181,8 +183,9 @@ export default function QuickCounterScreen() {
             <Text style={styles.resetText}>Reset {modeLabel(mode)}</Text>
           </Pressable>
           <Pressable
-            accessibilityLabel="Toggle voice commands"
-            accessibilityRole="button"
+            accessibilityLabel="Voice commands"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: isListening }}
             onPress={toggleVoice}
             style={({ pressed }) => [
               styles.micButton,

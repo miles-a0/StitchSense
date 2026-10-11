@@ -72,10 +72,15 @@ export function DeadlineSheet({ visible, value, onClose, onConfirm }: DeadlineSh
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Pressable
+          accessibilityLabel="Close deadline picker"
+          accessibilityRole="button"
+          style={styles.backdrop}
+          onPress={onClose}
+        />
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>Set deadline</Text>
+            <Text accessibilityRole="header" style={styles.title}>Set deadline</Text>
             <Text style={styles.selectedValue}>{formatDeadlineLabel(preview.toISOString())}</Text>
           </View>
 
@@ -88,18 +93,21 @@ export function DeadlineSheet({ visible, value, onClose, onConfirm }: DeadlineSh
 
             <View style={styles.columnsRow}>
               <PickerColumn
+                name="Month"
                 values={Array.from({ length: 12 }, (_, index) => index)}
                 activeValue={month}
                 renderLabel={(value) => monthLabel(value)}
                 onSelect={setMonth}
               />
               <PickerColumn
+                name="Day"
                 values={days}
                 activeValue={day}
                 renderLabel={(value) => String(value)}
                 onSelect={setDay}
               />
               <PickerColumn
+                name="Year"
                 values={years}
                 activeValue={year}
                 renderLabel={(value) => String(value)}
@@ -136,13 +144,14 @@ export function DeadlineSheet({ visible, value, onClose, onConfirm }: DeadlineSh
 }
 
 type PickerColumnProps = {
+  name: string;
   values: number[];
   activeValue: number;
   renderLabel: (value: number) => string;
   onSelect: (value: number) => void;
 };
 
-function PickerColumn({ values, activeValue, renderLabel, onSelect }: PickerColumnProps) {
+function PickerColumn({ name, values, activeValue, renderLabel, onSelect }: PickerColumnProps) {
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
@@ -153,6 +162,9 @@ function PickerColumn({ values, activeValue, renderLabel, onSelect }: PickerColu
         return (
           <Pressable
             key={String(value)}
+            accessibilityLabel={`${name} ${renderLabel(value)}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             onPress={() => onSelect(value)}
             style={[styles.option, active ? styles.optionActive : null]}>
             <Text style={[styles.optionText, active ? styles.optionTextActive : null]}>
@@ -173,7 +185,7 @@ type FooterActionProps = {
 
 function FooterAction({ label, onPress, primary }: FooterActionProps) {
   return (
-    <Pressable onPress={onPress} style={[styles.footerButton, primary ? styles.footerButtonPrimary : null]}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.footerButton, primary ? styles.footerButtonPrimary : null]}>
       <Text style={[styles.footerButtonText, primary ? styles.footerButtonTextPrimary : null]}>
         {label}
       </Text>

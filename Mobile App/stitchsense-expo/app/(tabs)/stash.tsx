@@ -504,7 +504,11 @@ export default function StashScreen() {
                     {editingItemId ? 'Update this stash item' : 'Record what you already have'}
                   </Text>
                 </View>
-                <Pressable onPress={() => resetForm()} style={styles.formModalClose}>
+                <Pressable
+                  accessibilityLabel="Close stash item form"
+                  accessibilityRole="button"
+                  onPress={() => resetForm()}
+                  style={styles.formModalClose}>
                   <MaterialCommunityIcons color={tokens.color.primary} name="close" size={20} />
                 </Pressable>
               </View>
@@ -779,7 +783,11 @@ export default function StashScreen() {
                 style={styles.swipeScroll}
                 contentContainerStyle={styles.swipeContent}>
                 <AppCard elevated style={[styles.itemCard, { width: stashCardWidth }]}>
-                  <Pressable onPress={() => startEdit(item)} style={styles.itemImageButton}>
+                  <Pressable
+                    accessibilityLabel={`Edit ${item.name}`}
+                    accessibilityRole="button"
+                    onPress={() => startEdit(item)}
+                    style={styles.itemImageButton}>
                     {stashImageSource(item) ? (
                       <Image
                         source={stashImageSource(item)}

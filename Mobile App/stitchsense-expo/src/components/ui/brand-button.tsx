@@ -51,6 +51,7 @@ export function BrandButton({
     <Animated.View style={[style, { transform: [{ scale: pressScale }] }]}>
       <Pressable
         accessibilityRole="button"
+        accessibilityState={{ busy: Boolean(loading), disabled: Boolean(disabled || loading) }}
         disabled={disabled || loading}
         onPress={onPress}
         onPressIn={() => {

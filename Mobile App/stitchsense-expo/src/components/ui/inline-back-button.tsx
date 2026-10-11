@@ -14,7 +14,7 @@ export function InlineBackButton({
   onPress,
 }: InlineBackButtonProps) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.button, pressed ? styles.pressed : null]}>
+    <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.button, pressed ? styles.pressed : null]}>
       <MaterialCommunityIcons color={tokens.color.text} name="arrow-left" size={24} />
       <Text style={styles.label}>{label}</Text>
     </Pressable>

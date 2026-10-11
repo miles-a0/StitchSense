@@ -2,6 +2,18 @@
 
 Use this with the physical-device acceptance matrix. Record screenshots or videos separately when they include account data.
 
+## Static Code Pass (2026-10-11)
+
+Code-only preparation. It does not replace the device checks below, which remain unexecuted.
+
+| Item | Result |
+| --- | --- |
+| Icon-only touchables without an accessible name | Scanned every `Pressable`/`TouchableOpacity` in `app/`, `src/` and `components/`. 12 found and labelled: project pin toggles (as switches with checked state), pattern and making-assistant close buttons, making-assistant send (with busy/disabled state) and open buttons, project photo thumbnails, stash form close and stash item image. The only remaining match is the unused Expo template `components/ui/collapsible.tsx`. |
+| Shared controls | `BrandButton` now exposes `disabled` and `busy` state. `SelectSheet` and `DeadlineSheet` options expose `selected` state, picker cells are named by column ("Day 12"), titles are headers, and tap-to-dismiss backdrops are named. `InlineBackButton` has an explicit button role. |
+| Counter | Quick counter Rows/Stitches toggles expose `selected`, voice commands is a switch with `checked`, and the count is a polite live region. |
+| Stitch Vision | Question input and photo preview are named; preset chips are buttons with a hint. |
+| Reduced motion | `MotionView` and `BrandButton` both skip animation when `useReducedMotion()` is true. Device confirmation still required. |
+
 ## Screen Reader
 
 | Check | iOS VoiceOver | Android TalkBack | Evidence / notes |
