@@ -1,3 +1,4 @@
+import { Directory } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -20,6 +21,7 @@ import {
   trialCountdown,
 } from '@/src/lib/entitlement-access';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
+import { buildUserExportFile } from '@/src/lib/user-export-file';
 import {
   openRevenueCatManagement,
   isUsingRevenueCatTestStore,
@@ -129,10 +131,22 @@ export default function AccountScreen() {
     setIsExporting(true);
     try {
       const response = await stitchSenseAPI.userExport(accessToken);
+      const exportFile = buildUserExportFile(response);
       setLastExportSummary(
-        `${response.patterns.length} patterns, ${response.projects.length} projects, ${response.stashItems.length} stash items, ${response.chatSessions.length} chats, ${response.chatMessages.length} messages, ${response.rewriteSessions.length} rewrites · exported ${new Date(response.exportedAt).toLocaleString()}`,
+        `${exportFile.summary} · exported ${new Date(response.exportedAt).toLocaleString()}`,
       );
-      setStatusMessage('Export prepared. Summary loaded below.');
+      setStatusMessage('Export prepared. Choose where to save it.');
+
+      let saveDirectory: Directory;
+      try {
+        saveDirectory = await Directory.pickDirectoryAsync();
+      } catch {
+        setStatusMessage('Export prepared but not saved. Choose a folder to save your data file.');
+        return;
+      }
+      const destination = saveDirectory.createFile(exportFile.filename, exportFile.mimeType);
+      destination.write(exportFile.contents);
+      setStatusMessage(`Saved ${destination.name} to your device.`);
     } catch (error) {
       setStatusMessage(
         getUserFacingErrorMessage(error, { fallback: 'Could not export data.' }),

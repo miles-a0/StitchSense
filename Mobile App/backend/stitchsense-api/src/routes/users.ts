@@ -91,6 +91,15 @@ export async function userRoutes(app: FastifyInstance) {
   });
 
   app.get('/user/export', { preHandler: app.authenticate }, async (request) => {
+    const account = await query(
+      'SELECT email, display_name, standard_trial_ends_at, created_at, updated_at FROM users WHERE id = $1',
+      [request.authUser.id],
+    );
+    const subscriptions = await query(
+      `SELECT provider, plan, status, current_period_end, created_at, updated_at
+       FROM subscriptions WHERE user_id = $1 ORDER BY created_at DESC`,
+      [request.authUser.id],
+    );
     const patterns = await query('SELECT * FROM user_patterns WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
     const projects = await query('SELECT * FROM projects WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
     const projectCounters = await query('SELECT * FROM project_counters WHERE user_id = $1 ORDER BY created_at DESC', [request.authUser.id]);
@@ -110,6 +119,8 @@ export async function userRoutes(app: FastifyInstance) {
     return {
       exportedAt: new Date().toISOString(),
       userId: request.authUser.id,
+      account: account.rows[0] ?? null,
+      subscriptions: subscriptions.rows,
       patterns: patterns.rows,
       projects: projects.rows,
       projectCounters: projectCounters.rows,

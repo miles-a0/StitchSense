@@ -381,6 +381,8 @@ export type WordPressPendingSyncResponse = WordPressPendingSyncStatus;
 export type UserExportResponse = {
   exportedAt: string;
   userId: string;
+  account: unknown;
+  subscriptions: unknown[];
   patterns: unknown[];
   projects: unknown[];
   projectCounters: unknown[];

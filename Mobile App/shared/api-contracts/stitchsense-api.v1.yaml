@@ -69,6 +69,11 @@ paths:
   /user/export:
     get:
       summary: Export current user's StitchSense data
+      description: >-
+        Returns the authenticated user's account profile, subscription status, patterns, projects
+        (counters, work log, marks, photos), stash, chats and messages, rewrites, settings, and
+        linked-service metadata. Connection tokens, password hashes, and store transaction IDs are
+        excluded. The mobile app saves this response as a JSON file chosen by the user.
       responses:
         "200":
           description: Data export
