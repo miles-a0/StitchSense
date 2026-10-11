@@ -80,7 +80,7 @@ EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY=goog_...
 EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID=pro
 ```
 
-Only public RevenueCat SDK keys belong in the mobile app. The webhook authorization secret and RevenueCat REST API key belong only on the backend/VPS. The backend uses the REST API key to reconcile a user's store entitlement after purchase or restore if webhook delivery is delayed.
+Only public RevenueCat SDK keys belong in the mobile app. The webhook authorization secret belongs only on the backend/VPS, and so does the RevenueCat REST API key. The backend uses the REST API key to reconcile a user's store entitlement after purchase or restore if webhook delivery is delayed.
 
 See `docs/EXPO_BUILD_AND_RELEASE_RUNBOOK.md` for the native build profiles and acceptance matrix. Expo Go can preview subscription screens, but real RevenueCat purchases require a development build, TestFlight build, or Google Play internal/closed testing build.
 
