@@ -161,6 +161,13 @@ jobs:
         shell: bash
         run: git ls-files -z '*.php' | xargs -0 -n1 php -l
 
+      - name: Install locked PHPStan tooling
+        run: composer install --no-interaction --no-progress --working-dir=tools/phpstan
+
+      - name: Static analysis against the recorded baseline
+        working-directory: tools/phpstan
+        run: vendor/bin/phpstan analyse --configuration=phpstan.neon --no-progress --memory-limit=1G
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-24.04

@@ -1,0 +1,127 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<string, array\{name\: non\-empty\-string, type\: non\-empty\-string, size\: int\<0, max\>, tmp_name\: non\-empty\-string, error\: int\<0, 8\>, full_path\?\: non\-empty\-string\}\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Left side of && is always true\.$#'
+			identifier: booleanAnd.leftAlwaysTrue
+			count: 1
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Method StitchSense_Library\:\:merge_bridge_chat_messages\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Method StitchSense_Library\:\:merge_bridge_patterns\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Method StitchSense_Library\:\:merge_bridge_records_by_id\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Offset ''content'' on non\-empty\-array\<mixed\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Offset ''size'' on array\{name\: non\-empty\-string, type\: non\-empty\-string, size\: int\<0, max\>, tmp_name\: non\-falsy\-string, error\: 0, full_path\?\: non\-empty\-string\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\<mixed\>\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 3
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-empty\-string and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 3
+			path: ../../class-stitchsense-library.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: ../../class-stitchsense-platform-client.php
+
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: ../../class-stitchsense-ravelry.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<int\|string, array\<mixed\>\|string\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: ../../class-stitchsense-ravelry.php
+
+		-
+			message: '#^Ternary operator condition is always true\.$#'
+			identifier: ternary.alwaysTrue
+			count: 1
+			path: ../../class-stitchsense-ravelry.php
+
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 13
+			path: ../../stitchsense-assistant-hub-pro.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<mixed, mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: ../../stitchsense-assistant-hub-pro.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 6
+			path: ../../stitchsense-assistant-hub-pro.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: ../../stitchsense-assistant-hub-pro.php
+
+		-
+			message: '#^Instanceof between WP_User and WP_User will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: ../../stitchsense-assistant-hub-pro.php
+
+		-
+			message: '#^Method StitchSense_Assistant_Hub_Pro_V5\:\:load_platform_access_snapshot\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: ../../stitchsense-assistant-hub-pro.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: ../../stitchsense-assistant-hub-pro.php

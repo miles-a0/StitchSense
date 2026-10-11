@@ -1,0 +1,15 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+    phpVersion: 80100
+    paths:
+        - ../../class-stitchsense-library.php
+        - ../../class-stitchsense-platform-client.php
+        - ../../class-stitchsense-ravelry.php
+        - ../../class-stitchsense-workflow-client.php
+        - ../../stitchsense-assistant-hub-pro.php
+        - ../../stitchsense-chat-proxy.php
+        - ../../stitchsense-image-proxy.php
+        - ../../stitchsense-upload-proxy.php
