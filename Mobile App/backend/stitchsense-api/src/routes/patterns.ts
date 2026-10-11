@@ -862,8 +862,11 @@ export async function patternRoutes(app: FastifyInstance) {
       workflowPatch = Object.fromEntries(Object.entries(workflowPatch).filter(([, value]) => value));
     } catch (error) {
       request.log.error({ error, patternId: id }, 'Upload workflow indexing failed');
+      // Upstream detail can name server configuration, so it stays in the log; the client gets a generic message.
       workflowPatch = {
-        upload_workflow_error: error instanceof Error ? error.message : 'Upload workflow indexing failed',
+        upload_workflow_error:
+          'The pattern file uploaded, but StitchSense could not finish indexing the full instructions. Please try the upload again.',
+        upload_workflow_request_id: request.id,
         upload_workflow_failed_at: new Date().toISOString(),
       };
     }

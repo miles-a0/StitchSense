@@ -73,8 +73,13 @@ test('pattern upload route stores text files and sends indexing workflow payload
 
   const uploadRequests = [];
   const originalFetch = globalThis.fetch;
+  let rejectNextUploadSecret = false;
   globalThis.fetch = async (input, init = {}) => {
     uploadRequests.push({ input, init });
+    if (rejectNextUploadSecret) {
+      rejectNextUploadSecret = false;
+      return new Response('', { status: 401 });
+    }
     assert.equal(String(input), 'http://workflow.test/upload');
     assert.equal(init.method, 'POST');
     assert.equal(init.headers['accept'], 'application/json');
@@ -288,6 +293,34 @@ test('pattern upload route stores text files and sends indexing workflow payload
     );
     assert.equal(normaliseContentType(storedObject.ContentType), 'text/plain; charset=utf-8');
     assert.equal(await storedObject.Body.transformToString(), uploadBody);
+
+    rejectNextUploadSecret = true;
+    const rejectedWorkflow = await app.inject({
+      method: 'POST',
+      url: `/patterns/${patternId}/file`,
+      headers: {
+        authorization,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: multipartBody({
+        boundary,
+        fieldName: 'file',
+        filename: 'notes.txt',
+        contentType: 'text/plain',
+        body: uploadBody,
+      }),
+    });
+    assert.equal(rejectedWorkflow.statusCode, 201, rejectedWorkflow.body);
+    const rejectedBody = rejectedWorkflow.json();
+    assert.equal(rejectedBody.indexed, false);
+    assert.match(rejectedBody.indexingError, /could not finish indexing/);
+    assert.doesNotMatch(rejectedWorkflow.body, /N8N_|secret|API server/i);
+
+    const rejectedMetadata = (
+      await client.query('SELECT metadata FROM user_patterns WHERE id = $1', [patternId])
+    ).rows[0].metadata;
+    assert.doesNotMatch(JSON.stringify(rejectedMetadata), /N8N_|secret|API server/i);
+    assert.equal(typeof rejectedMetadata.upload_workflow_request_id, 'string');
   } finally {
     globalThis.fetch = originalFetch;
     if (app) await app.close();
