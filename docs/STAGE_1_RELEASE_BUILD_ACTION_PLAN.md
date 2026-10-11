@@ -22,6 +22,8 @@ Stage 1 can ship when:
 - Run heavy DB/storage/native/store checks in CI, staging, EAS, or real devices.
 - Treat every unchecked item in this document as either a blocker or an explicit defer decision.
 
+Checklist states: `[x]` evidence recorded and the gate is genuinely closed; `[d]` documented or prepared but not yet executed; `[ ]` not started.
+
 ## Track 0: Local Baseline And Branch Cleanup
 
 Goal: make the current project state trustworthy before more launch work.
@@ -29,7 +31,7 @@ Goal: make the current project state trustworthy before more launch work.
 - [x] Fix local Node command resolution so project scripts use the intended Node 22 path without requiring broad machine upgrades. *(2026-10-06: `tools/run-with-node22.sh` now routes mobile/backend npm scripts through an installed NVM Node 22 without requiring a system-wide Node replacement.)*
 - [x] Document the low-resource local command path for the older development machine. *(2026-10-06: `docs/EXPO_BUILD_AND_RELEASE_RUNBOOK.md` documents the lightweight local path and keeps native/heavy checks in CI, staging, EAS, or real-device passes.)*
 - [x] Re-run local lightweight gates with Node 22 first in `PATH`. *(2026-10-06: wrapper-backed npm scripts pass locally without manually overriding `PATH`.)*
-- [x] Review the dirty working tree and split changes into focused commits. *(2026-10-06: current local changes are grouped in `docs/RELEASE_HARDENING_CHANGESET_PLAN.md`; commits/PRs still need to be created intentionally.)*
+- [x] Review the dirty working tree and split changes into focused commits. *(2026-10-06: current local changes are grouped in `docs/RELEASE_HARDENING_CHANGESET_PLAN.md`; 2026-10-11: the changeset is committed in focused commits on `test/chat-history-route-coverage` (PR #67) and CI is green on all six jobs from a clean checkout, including the production image build.)*
 - [x] Remove or defer unrelated experiments and generated noise. *(2026-10-07: ignored local artifacts such as `.kilo/`, `tools/codex-relay/`, backend `dist/`, app/backend `node_modules/`, Expo `.expo/`, generated `expo-env.d.ts`, and local `.env.vps` have zero matches in the tracked/non-ignored releasable file set.)*
 - [ ] Push the release-hardening branch and confirm CI runs from a clean checkout. *(2026-10-08: `.github/workflows/ci.yml` defines backend, Expo, PHP, secret-scan, operations, and production-image gates; remote push and clean-checkout CI evidence remain.)*
 - [ ] Enable branch protection/rulesets when the GitHub plan supports it. *(2026-10-08: `docs/BRANCH_PROTECTION_SETUP.md` lists required status-check names and desired ruleset settings; GitHub-side enforcement remains account/plan dependent.)*

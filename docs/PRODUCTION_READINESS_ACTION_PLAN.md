@@ -29,6 +29,8 @@ Close exploitable security and recoverability risks first, then run application 
 
 ## Action Items
 
+Checklist states: `[x]` evidence recorded and the gate is genuinely closed; `[d]` documented or prepared but not yet executed; `[ ]` not started.
+
 ### 1. Establish a recoverable baseline — P0
 
 - [x] Create one project-wide Git repository that includes the Expo app, API, WordPress plugin source, migrations, scripts, and release documentation.
@@ -37,7 +39,7 @@ Close exploitable security and recoverability risks first, then run application 
 - [ ] Enable protected-main enforcement for required checks when the GitHub repository plan supports rulesets/branch protection.
 - [x] Remove published demo credentials and disable or rotate the live demo account before public testing.
 - [x] Inventory production services, versions, owners, DNS/proxy configuration, and credential locations without copying secret values into documentation.
-- [x] Take and verify a PostgreSQL backup and document the object-storage backup/recovery method. *(2026-09-26: `docs/BACKUP_RESTORE_EVIDENCE.md` added for repeatable backup snapshot, verification, isolated restore, deleted-account replay/check, and decision evidence. Fresh pre-release backup/restore execution still required.)*
+- [d] Take and verify a PostgreSQL backup and document the object-storage backup/recovery method. *(2026-09-26: `docs/BACKUP_RESTORE_EVIDENCE.md` added for repeatable backup snapshot, verification, isolated restore, deleted-account replay/check, and decision evidence. Fresh pre-release backup/restore execution still required.)*
 
 **Exit gate:** The entire release source is versioned and remotely recoverable; production data has a verified backup; no public reusable credentials remain.
 
@@ -153,7 +155,7 @@ Close exploitable security and recoverability risks first, then run application 
 ### 8. Harden deployment and production operations — P1
 
 - [x] Add versioned migration tracking and a controlled migrate-before-release job with backward-compatible rollout rules.
-- [x] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels. *(VPS-local API/Postgres/MinIO staging stack provisioned on 2026-09-06 with separate generated secrets, localhost-only ports, dedicated Compose project/image identity, schema migrations 001-008 applied, and staging MinIO bucket created. 2026-09-25: staging Postgres and MinIO images are digest-pinned, VPS MinIO now uses the same pinned Quay image as CI, and a reusable API health/readiness smoke script is documented for staging checks. Pending public proxy/app-channel wiring and representative-data validation.)*
+- [d] Add staging infrastructure using separate database, storage, webhooks, secrets, and app build channels. *(VPS-local API/Postgres/MinIO staging stack provisioned on 2026-09-06 with separate generated secrets, localhost-only ports, dedicated Compose project/image identity, schema migrations 001-008 applied, and staging MinIO bucket created. 2026-09-25: staging Postgres and MinIO images are digest-pinned, VPS MinIO now uses the same pinned Quay image as CI, and a reusable API health/readiness smoke script is documented for staging checks. Pending public proxy/app-channel wiring and representative-data validation. 2026-10-11: migration `009` (RevenueCat event replay index) is not recorded as applied to staging; apply it before staging billing tests.)*
 - [x] Run the API container as a non-root user with a health check, minimal production dependencies, localhost-only host binding, and private reverse-proxy networking.
 - [x] Add and validate graceful shutdown behaviour and explicit CPU/memory resource limits.
 - [ ] Add structured logs, request correlation IDs, crash reporting, uptime checks, latency/error metrics, and alert routing. *(2026-09-11: backend request IDs, structured slow-request logs, redaction, and a guarded Prometheus-style `/metrics` endpoint now provide API request totals and latency buckets. 2026-09-25: `/metrics` also exports low-cardinality workflow attempt counters/latency histograms by workflow type, outcome, and status class, plus billing webhook counters/latency histograms by provider, outcome, and status class. Regression coverage proves workflow metrics omit endpoint URLs, payload IDs, and secrets, and billing webhook metrics omit event IDs, transaction IDs, and authorization material. The shared smoke script now optionally verifies guarded metrics access when `STITCHSENSE_METRICS_SHARED_SECRET` is configured, and the scheduled uptime workflow reuses that script. 2026-09-26: `docs/CRASH_REPORTING_PLAN.md` added for provider selection, required crash signals, privacy rules, and rollout thresholds. `docs/N8N_WORKFLOW_RELEASE_CHECKLIST.md` added for workflow release contracts, rollback, and metrics privacy. `docs/INCIDENT_POSTMORTEM_TEMPLATE.md` added for production incident, release-hold, store-review blocker, billing, data-integrity, and pattern-context postmortems. External crash-reporting implementation and live alert routing remain.)*
