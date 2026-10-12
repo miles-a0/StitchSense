@@ -28,6 +28,18 @@ Treat n8n as an external service boundary. Workflow changes must preserve user o
 | --- | --- | --- |
 | Upload requests send the pattern file only as the `file` multipart field (previously also `data` and `pattern_file`) | Upload workflow `Validate File` node must select the `file` binary key, as the repository export does. Import the current export before deploying this backend change; an older workflow that reads `data` would reject every upload with "No file uploaded." |  |
 | n8n secrets and Qdrant/embedding URLs read from `$env` in the exports | `N8N_CHAT_SHARED_SECRET`, `N8N_UPLOAD_SHARED_SECRET`/`N8N_SHARED_SECRET`, `STITCHSENSE_QDRANT_URL`, `STITCHSENSE_EMBEDDINGS_URL`, `STITCHSENSE_STIRLING_URL` and `QDRANT_API_KEY` set in the n8n environment |  |
+| Chat retrieval filter (`Prepare Qdrant Search`) uses `platform_user_id`, not `user_id` | Upload indexing writes the raw platform user ID to each point's `platform_user_id`; API chat, rewrite, summary and Stitch Vision requests all send it. `user_id` is a per-session scope string (`pattern:{user}:{pattern}:{session}`) that never equals the indexed `pattern:{user}:{pattern}`, so filtering on it would return no chunks. |  |
+| Requests with no pattern scope return no chunks | General helper chat no longer searches the whole `knitting_knowledge` collection. Confirm helper chat still answers from the model without retrieved pattern context. |  |
+
+## Open Follow-up: Owner Scope For WordPress Web Chat
+
+Interim state: requests without `platform_user_id` (the WordPress website chat, now restricted to signed-in users) are filtered by `project_id`/`file_id`/`job_id` only, as before. The website never sends an owner ID and website uploads are indexed without one, so enforcing owner scope there today would remove pattern retrieval from website chat.
+
+To close it:
+
+1. Decide the owner key for website users (linked platform user ID, or a `wp:{user_id}` key for WordPress-only accounts) and have the WordPress chat and upload proxies set it server-side from the signed-in user, overwriting any browser-supplied value.
+2. Inspect the live `knitting_knowledge` points and backfill the owner key on existing points.
+3. Change `scopedFilter` to fail closed when the owner key is missing.
 
 ## Release Steps
 

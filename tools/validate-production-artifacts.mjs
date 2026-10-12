@@ -244,6 +244,33 @@ const requiredFiles = [
     markers: ['## Decision Options', '## QA Matrix', '## Decision'],
   },
   {
+    path: 'StitchSense Chat API - Qdrant RAG + Client History - UK Metric.json',
+    json: true,
+    markers: [
+      '$env.N8N_CHAT_SHARED_SECRET',
+      '$env.N8N_SHARED_SECRET',
+      '$env.STITCHSENSE_EMBEDDINGS_URL',
+      '$env.STITCHSENSE_QDRANT_URL',
+      "String(req.platform_user_id || req.platformUserId || '').trim()",
+      "key: 'platform_user_id'",
+      'noResultsFilter(patternPriority ?',
+    ],
+  },
+  {
+    path: 'Pattern Helper AI - RAG Chat API - v7.6.0 - Google Drive Storage.json',
+    json: true,
+    markers: [
+      '$env.N8N_UPLOAD_SHARED_SECRET',
+      '$env.N8N_SHARED_SECRET',
+      '$env.STITCHSENSE_EMBEDDINGS_URL',
+      '$env.STITCHSENSE_QDRANT_URL',
+      '$env.STITCHSENSE_STIRLING_URL',
+      "Object.keys(binary).includes('file') ? 'file'",
+      'inputDataFieldName": "={{ $json.upload_key }}"',
+      'platform_user_id: $json.platform_user_id',
+    ],
+  },
+  {
     path: 'ops/monitoring/stitchsense-dashboard.json',
     json: true,
     markers: ['stitchsense_api_requests_total', 'stitchsense_workflow_requests_total'],
