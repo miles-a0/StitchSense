@@ -2,7 +2,7 @@
 /**
  * Plugin Name: StitchSense StitchSense AI Assistant Hub Pro
  * Description: Premium StitchSense AI assistant hub with inline FilePond upload canvas and hybrid uploaded-pattern/core-knowledge chat, pattern help, stitch dictionary, gauge tools and UK metric-first guidance.
- * Version: 7.7.41
+ * Version: 7.7.43
  * Author: Zu-Media
  * Text Domain: stitchsense-assistant-hub-pro
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// v7.7.41 - Require sign-in for assistant proxies
+// v7.7.43 - Fix uploaded pattern file access and stale PDF viewer
 require_once __DIR__ . '/class-stitchsense-library.php';
 require_once __DIR__ . '/class-stitchsense-platform-client.php';
 require_once __DIR__ . '/class-stitchsense-workflow-client.php';
@@ -21,7 +21,7 @@ StitchSense_Protected_Files::register();
 
 if (!class_exists('StitchSense_Assistant_Hub_Pro_V5')) {
     final class StitchSense_Assistant_Hub_Pro_V5 {
-        const VERSION = '7.7.41';
+        const VERSION = '7.7.43';
         const SHORTCODE = 'stitchsense_assistant_hub';
 
         const OPENROUTER_VISION_MODELS = [

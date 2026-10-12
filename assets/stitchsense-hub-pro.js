@@ -366,7 +366,7 @@
 
     return new Response(JSON.stringify({
       success: false,
-      error: 'StitchSense chat proxy is not reachable from WordPress. Tried: ' + (attempts.join(', ') || 'no proxy candidates') + '. Active plugin build expected: 7.7.41.'
+      error: 'StitchSense chat proxy is not reachable from WordPress. Tried: ' + (attempts.join(', ') || 'no proxy candidates') + '. Active plugin build expected: 7.7.43.'
     }), {
       status: 502,
       headers: { 'Content-Type': 'application/json' }
@@ -5043,8 +5043,21 @@
       });
     }
 
+    let pdfViewerLoadToken = 0;
+
     function loadPdfIntoViewer(viewer) {
       const parts = getPdfViewerParts(viewer);
+      // Drop the previous pattern's document so it can never show under another pattern's title.
+      const loadToken = ++pdfViewerLoadToken;
+      pdfViewerState.doc = null;
+      pdfViewerState.pending = false;
+      if (parts.canvas) {
+        parts.canvas.hidden = true;
+        const ctx = parts.canvas.getContext && parts.canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, parts.canvas.width, parts.canvas.height);
+      }
+      if (parts.pages) parts.pages.textContent = '1';
+      if (parts.page) parts.page.textContent = '1';
       const ext = uploadedProject ? String(uploadedProject.file_extension || getFileExtension(uploadedProject.original_filename || '')).toLowerCase() : '';
       if (uploadedProject && ext && ext !== 'pdf') {
         showPdfFallback(viewer, 'Preview is currently available for PDF uploads only. This ' + ext.toUpperCase() + ' pattern has still been uploaded, extracted and analysed, so you can keep asking questions about it in Pattern Help.');
@@ -5066,12 +5079,17 @@
         if (!url) throw new Error('No PDF file source available.');
         return window.pdfjsLib.getDocument({ url: url, withCredentials: false }).promise;
       }).then(function(doc) {
+        if (loadToken !== pdfViewerLoadToken) {
+          if (doc && doc.destroy) doc.destroy();
+          return;
+        }
         pdfViewerState.doc = doc;
         pdfViewerState.page = 1;
         pdfViewerState.scale = 1.15;
         if (parts.pages) parts.pages.textContent = String(doc.numPages || 1);
         return renderPdfPage(viewer, { fit: true });
       }).catch(function(err) {
+        if (loadToken !== pdfViewerLoadToken) return;
         if (window.ssDebug === true) console.warn('StitchSense PDF.js load failed:', err);
         showPdfFallback(viewer, 'I could not load the PDF preview from the uploaded file. Please re-upload the pattern and try View Pattern again.');
       });

@@ -78,6 +78,14 @@ test('signatures change with the path, the expiry, and the secret', () => {
   assert.notEqual(files.signWordPressPatternFile('stitchsense/patterns/user-4/a.pdf', 100, 'another-secret'), base);
 });
 
+test('the WordPress user ID is read from the stored site|user link', () => {
+  assert.equal(files.wordpressUserIdFromLink('https://knit.example.test|4', { wpUserId: '4' }), '4');
+  assert.equal(files.wordpressUserIdFromLink('https://knit.example.test|4', {}), '4');
+  assert.equal(files.wordpressUserIdFromLink('https://knit.example.test|4', null), '4');
+  assert.equal(files.wordpressUserIdFromLink('https://knit.example.test|', {}), null);
+  assert.equal(files.wordpressUserIdFromLink('https://knit.example.test|4x', {}), null);
+});
+
 test('legacy file owners are assigned only when exactly one user references the file', () => {
   const legacy = 'https://knit.example.test/wp-content/uploads/stitchsense/ravelry/2026/06/Hat-12.pdf';
   const shared = 'https://knit.example.test/wp-content/uploads/stitchsense/ravelry/2026/07/Socks-34.pdf';
