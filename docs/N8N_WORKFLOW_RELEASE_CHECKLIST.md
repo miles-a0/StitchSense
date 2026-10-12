@@ -15,7 +15,7 @@ Treat n8n as an external service boundary. Workflow changes must preserve user o
 
 | Check | Evidence |
 | --- | --- |
-| Shared-secret header is required and rotated in staging before production |  |
+| Shared-secret header is required and rotated in staging before production | Not rotated: owner accepted the exposed secret on 2026-10-12 (see `docs/RELEASE_RISK_REGISTER.md`). Set the existing value as `N8N_SHARED_SECRET` in the n8n environment before importing the updated exports. |
 | Payload includes user owner and selected resource IDs |  |
 | Pattern chat/rewrite cannot receive Pattern B context while viewing Pattern A |  |
 | Workflow failure surfaces useful non-secret error information |  |
