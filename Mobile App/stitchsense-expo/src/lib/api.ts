@@ -1,3 +1,5 @@
+import { File } from 'expo-file-system';
+
 import { config } from '@/src/lib/config';
 import {
   DELETE_ACCOUNT_CONFIRMATION,
@@ -5,6 +7,7 @@ import {
 } from '@/src/lib/destructive-actions';
 import { APIError } from './api-error';
 import { clearTokens, loadTokens, saveTokens } from '@/src/lib/token-store';
+import { uploadFilePart } from '@/src/lib/upload-file-part';
 import type {
   AuthResponse,
   BillingCheckoutResponse,
@@ -61,6 +64,10 @@ type RequestOptions = {
 let refreshInFlight: Promise<string | null> | null = null;
 const CLIENT_SURFACE = 'expo-mobile';
 const DEFAULT_TIMEOUT_MS = 30000;
+
+function readUploadBytes(uri: string) {
+  return new File(uri).bytes();
+}
 
 function createRequestId() {
   return `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1225,14 +1232,7 @@ export const stitchSenseAPI = {
   ) {
     const makeFormData = () => {
       const formData = new FormData();
-      formData.append(
-        'file',
-        {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType ?? 'image/jpeg',
-        } as unknown as Blob,
-      );
+      formData.append('file', uploadFilePart(file, 'image/jpeg', readUploadBytes) as unknown as Blob);
       if (file.caption) {
         formData.append('caption', file.caption);
       }
@@ -1386,14 +1386,7 @@ export const stitchSenseAPI = {
   ) {
     const makeFormData = () => {
       const formData = new FormData();
-      formData.append(
-        'file',
-        {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType ?? 'image/jpeg',
-        } as unknown as Blob,
-      );
+      formData.append('file', uploadFilePart(file, 'image/jpeg', readUploadBytes) as unknown as Blob);
       return formData;
     };
 
@@ -1659,14 +1652,7 @@ export const stitchSenseAPI = {
   ) {
     const makeFormData = () => {
       const formData = new FormData();
-      formData.append(
-        'file',
-        {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType ?? 'application/pdf',
-        } as unknown as Blob,
-      );
+      formData.append('file', uploadFilePart(file, 'application/pdf', readUploadBytes) as unknown as Blob);
       return formData;
     };
 
