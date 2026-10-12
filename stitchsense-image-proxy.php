@@ -39,6 +39,12 @@ if (!$wp_load) {
 require_once $wp_load;
 require_once __DIR__ . '/class-stitchsense-workflow-client.php';
 
+if (!is_user_logged_in()) {
+    http_response_code(401);
+    echo wp_json_encode(['success' => false, 'error' => 'You must be signed in to use StitchSense assistant tools.']);
+    exit;
+}
+
 $file = $_FILES['image'];
 if (!empty($file['error'])) {
     http_response_code(400);
