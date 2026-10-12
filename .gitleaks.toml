@@ -1,0 +1,15 @@
+title = "StitchSense secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "stitchsense-hardcoded-shared-secret"
+description = "Detect hardcoded StitchSense/n8n shared-secret assignments in workflow exports and scripts."
+regex = '''(?i)(expectedSecret|sharedSecret|webhookSecret)\s*(?:=|:)\s*\\?['"][A-Za-z0-9_+/=-]{32,}\\?['"]'''
+entropy = 3.5
+keywords = [
+  "expectedSecret",
+  "sharedSecret",
+  "webhookSecret",
+]
