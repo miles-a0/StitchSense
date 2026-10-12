@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { hasFeature, resolveEntitlement } from '../services/entitlements.js';
+import { externalServiceErrorLogContext } from '../services/externalServiceErrorLog.js';
 import {
   buildScopedWorkflowUserId,
   patternHasScopedContent,
@@ -165,7 +166,7 @@ export async function visionRoutes(app: FastifyInstance) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? 'WordPress image proxy failed');
       request.log.warn(
-        { err: message, userId: request.authUser.id },
+        { error: externalServiceErrorLogContext(error), userId: request.authUser.id },
         'WordPress image proxy failed; falling back to direct workflow',
       );
 

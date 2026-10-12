@@ -17,18 +17,7 @@ function sharedSecretFor(type: WorkflowType) {
 }
 
 function workflowErrorMessage(type: WorkflowType, status: number, body: unknown) {
-  if (body && typeof body === 'object' && !Array.isArray(body)) {
-    const record = body as { error?: unknown; message?: unknown };
-    const detail = record.error ?? record.message;
-    if (typeof detail === 'string' && detail.trim()) {
-      return detail.trim();
-    }
-  }
-
-  if (type === 'upload' && status === 401) {
-    return 'Upload workflow rejected the API secret. Check N8N_UPLOAD_SHARED_SECRET on the StitchSense API server, or update the StitchSense WordPress plugin so the mobile API can use the WordPress upload bridge.';
-  }
-
+  void body;
   return `Workflow ${type} failed with ${status}`;
 }
 
@@ -36,9 +25,9 @@ function workflowFailureMessage(type: WorkflowType, body: unknown) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return '';
   }
-  const record = body as { success?: unknown; ok?: unknown; error?: unknown; message?: unknown };
+  const record = body as { success?: unknown; ok?: unknown };
   if (record.success === false || record.ok === false) {
-    return String(record.error ?? record.message ?? `Workflow ${type} failed`);
+    return `Workflow ${type} reported failure`;
   }
   return '';
 }

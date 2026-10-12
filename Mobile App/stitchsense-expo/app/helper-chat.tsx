@@ -33,7 +33,7 @@ const skillLevels = ['beginner', 'confident', 'expert'] as const;
 function userFacingChatError(error: unknown) {
   if (error instanceof APIError) {
     if (error.message.includes('Workflow chat failed with 401')) {
-      return 'The StitchSense helper workflow rejected this request. The N8N shared secret likely needs checking.';
+      return 'StitchSense could not complete that helper request right now. Please try again shortly.';
     }
     if (error.message.includes('Workflow chat failed with 404')) {
       return 'The StitchSense helper workflow is not reachable yet.';

@@ -73,6 +73,32 @@ const passwordResetConfirmBody = z.object({
   password: z.string().min(8).max(128),
 });
 
+function wordpressBridgeClientError(kind: 'login' | 'register', status: number) {
+  if (kind === 'login') {
+    return status === 401
+      ? 'WordPress authentication failed. Please check your details and try again.'
+      : 'WordPress authentication is unavailable. Please try again.';
+  }
+
+  if (status === 409) {
+    return 'WordPress could not create the account because those details are already in use.';
+  }
+
+  if (status >= 400 && status < 500) {
+    return 'WordPress could not create the account with those details.';
+  }
+
+  return 'WordPress registration is unavailable. Please try again.';
+}
+
+function wordpressBridgeLogContext(status: number, upstreamMessage: string) {
+  return {
+    upstreamStatus: status,
+    hasUpstreamMessage: upstreamMessage.length > 0,
+    upstreamMessageLength: upstreamMessage.length,
+  };
+}
+
 async function issueTokens(app: FastifyInstance, userId: string) {
   const accessToken = app.jwt.sign({ sub: userId }, { expiresIn: '15m' });
   const refreshToken = createRefreshToken();
@@ -365,11 +391,16 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       if (!response.ok || !payload || typeof payload !== 'object') {
-        const message =
+        const upstreamMessage =
           payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
             ? payload.error
             : `WordPress authentication failed with HTTP ${response.status}`;
-        return reply.code(response.status >= 400 ? response.status : 502).send({ error: message });
+        const status = response.status >= 400 ? response.status : 502;
+        request.log.warn(
+          wordpressBridgeLogContext(response.status, upstreamMessage),
+          'WordPress login bridge rejected account verification',
+        );
+        return reply.code(status).send({ error: wordpressBridgeClientError('login', status) });
       }
 
       const parsed = wordpressBridgeBody.parse({ ...(payload as Record<string, unknown>), siteUrl });
@@ -426,11 +457,16 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       if (!response.ok || !payload || typeof payload !== 'object') {
-        const message =
+        const upstreamMessage =
           payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
             ? payload.error
             : `WordPress registration failed with HTTP ${response.status}`;
-        return reply.code(response.status >= 400 ? response.status : 502).send({ error: message });
+        const status = response.status >= 400 ? response.status : 502;
+        request.log.warn(
+          wordpressBridgeLogContext(response.status, upstreamMessage),
+          'WordPress register bridge rejected account creation',
+        );
+        return reply.code(status).send({ error: wordpressBridgeClientError('register', status) });
       }
 
       const parsed = wordpressBridgeBody.parse({ ...(payload as Record<string, unknown>), siteUrl });

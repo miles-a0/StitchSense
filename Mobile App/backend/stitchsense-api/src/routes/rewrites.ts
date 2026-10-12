@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { hasFeature, resolveEntitlement } from '../services/entitlements.js';
+import { externalServiceErrorLogContext } from '../services/externalServiceErrorLog.js';
 import {
   buildEnglishWorkflowPrompt,
   buildScopedWorkflowUserId,
@@ -187,7 +188,10 @@ export async function rewriteRoutes(app: FastifyInstance) {
     try {
       workflow = await callWorkflow('chat', workflowPayload);
     } catch (error) {
-      request.log.warn({ error }, 'Direct rewrite workflow failed; trying WordPress chat proxy fallback');
+      request.log.warn(
+        { error: externalServiceErrorLogContext(error), patternId: body.patternId },
+        'Direct rewrite workflow failed; trying WordPress chat proxy fallback',
+      );
       workflow = await callWordPressChatProxy(request.authUser.id, workflowPayload);
     }
     const answer =

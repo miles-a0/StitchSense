@@ -17,6 +17,8 @@ test('chat history routes cover scoped sessions, imported messages, ordering, an
   process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-32-characters';
   process.env.N8N_CHAT_URL = 'http://workflow.test/chat-history';
   process.env.N8N_CHAT_SHARED_SECRET = 'test-chat-secret';
+  process.env.WORDPRESS_BRIDGE_SHARED_SECRET = 'test-wordpress-secret-with-more-than-32-characters';
+  process.env.WORDPRESS_SITE_URL = 'http://wordpress.test/site';
 
   let app;
   let pool;
@@ -269,4 +271,48 @@ test('chat history routes cover scoped sessions, imported messages, ordering, an
     requestId: 'chat-workflow-failure-test',
   });
   assert.doesNotMatch(workflowFailure.body, /N8N_UPLOAD_SHARED_SECRET|leaked upstream detail/);
+
+  await client.query(
+    `INSERT INTO linked_accounts (user_id, provider, provider_user_id, metadata)
+     VALUES ($1, 'wordpress', $2, $3::jsonb)`,
+    [
+      ownerId,
+      'http://wordpress.test/site|789',
+      JSON.stringify({ siteUrl: 'http://wordpress.test/site', wpUserId: 789 }),
+    ],
+  );
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url === 'http://workflow.test/chat-history') {
+      return new Response(JSON.stringify({ error: 'N8N_UPLOAD_SHARED_SECRET leaked direct detail' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    assert.equal(url, 'http://wordpress.test/site/wp-json/stitchsense/v1/platform-chat-proxy?wpUserId=789');
+    assert.equal(init.headers['x-stitchsense-wordpress-secret'], 'test-wordpress-secret-with-more-than-32-characters');
+    return new Response(JSON.stringify({ error: 'N8N_UPLOAD_SHARED_SECRET leaked WordPress proxy detail' }), {
+      status: 503,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  const wordpressProxyFailure = await app.inject({
+    method: 'POST',
+    url: `/chats/${createdGeneralChat.json().session.id}/messages`,
+    headers: {
+      authorization: ownerAuthorization,
+      'x-request-id': 'chat-wordpress-proxy-failure-test',
+    },
+    payload: { content: 'Can you help again?', toolMode: 'pattern_chat' },
+  });
+  assert.equal(wordpressProxyFailure.statusCode, 502, wordpressProxyFailure.body);
+  assert.deepEqual(wordpressProxyFailure.json(), {
+    error: 'StitchSense could not reach the chat workflow. Please try again.',
+    requestId: 'chat-wordpress-proxy-failure-test',
+  });
+  assert.doesNotMatch(
+    wordpressProxyFailure.body,
+    /N8N_UPLOAD_SHARED_SECRET|leaked direct detail|leaked WordPress proxy detail/,
+  );
 });

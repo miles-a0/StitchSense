@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { resolveEntitlement } from '../services/entitlements.js';
+import { externalServiceErrorLogContext } from '../services/externalServiceErrorLog.js';
 import { recordBillingWebhookMetrics } from '../services/metrics.js';
 import { secureStringEquals } from '../services/secureCompare.js';
 import { upsertStripeSubscriptionFromStripe } from '../services/stripeSubscriptions.js';
@@ -467,7 +468,10 @@ export async function billingRoutes(app: FastifyInstance) {
       await syncRevenueCatSubscriber(request.authUser.id);
       return { entitlement: await resolveEntitlement(request.authUser.id) };
     } catch (error) {
-      request.log.error({ err: error, userId: request.authUser.id }, 'RevenueCat subscriber sync failed');
+      request.log.error(
+        { error: externalServiceErrorLogContext(error), userId: request.authUser.id },
+        'RevenueCat subscriber sync failed',
+      );
       return reply.code(502).send({
         error: 'Could not sync subscription status right now',
         requestId: request.id,

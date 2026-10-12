@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { hasFeature, resolveEntitlement } from '../services/entitlements.js';
+import { externalServiceErrorLogContext } from '../services/externalServiceErrorLog.js';
 import { renderPatternThumbnail, renderPatternThumbnailDataUri } from '../services/patternThumbnails.js';
 import {
   buildScopedWorkflowUserId,
@@ -571,11 +572,17 @@ export async function patternRoutes(app: FastifyInstance) {
     try {
       workflow = await callWorkflow('chat', workflowPayload);
     } catch (error) {
-      request.log.warn({ error }, 'Direct pattern summary workflow failed; trying WordPress chat proxy fallback');
+      request.log.warn(
+        { error: externalServiceErrorLogContext(error), patternId: id },
+        'Direct pattern summary workflow failed; trying WordPress chat proxy fallback',
+      );
       try {
         workflow = await callWordPressChatProxy(request.authUser.id, workflowPayload);
       } catch (fallbackError) {
-        request.log.error({ error: fallbackError }, 'Pattern summary refresh failed');
+        request.log.error(
+          { error: externalServiceErrorLogContext(fallbackError), patternId: id },
+          'Pattern summary refresh failed',
+        );
         return reply.code(502).send({
           error: 'StitchSense could not refresh the pattern summary. Please try again.',
           requestId: request.id,
@@ -826,14 +833,14 @@ export async function patternRoutes(app: FastifyInstance) {
         });
       } catch (multipartError) {
         request.log.warn(
-          { error: multipartError, patternId: id },
+          { error: externalServiceErrorLogContext(multipartError), patternId: id },
           'Multipart upload workflow failed; retrying with JSON file_data_uri',
         );
         try {
           uploadWorkflow = await callWorkflow('upload', dataUriPayload);
         } catch (jsonError) {
           request.log.warn(
-            { error: jsonError, patternId: id },
+            { error: externalServiceErrorLogContext(jsonError), patternId: id },
             'Direct JSON upload workflow failed; retrying through WordPress upload bridge with signed file URL',
           );
           uploadWorkflow = await callWordPressUploadProxy(request.authUser.id, wordpressUrlPayload);
@@ -861,8 +868,11 @@ export async function patternRoutes(app: FastifyInstance) {
       };
       workflowPatch = Object.fromEntries(Object.entries(workflowPatch).filter(([, value]) => value));
     } catch (error) {
-      request.log.error({ error, patternId: id }, 'Upload workflow indexing failed');
-      // Upstream detail can name server configuration, so it stays in the log; the client gets a generic message.
+      request.log.error(
+        { error: externalServiceErrorLogContext(error), patternId: id },
+        'Upload workflow indexing failed',
+      );
+      // Upstream detail can name server configuration, so logs and clients keep only safe request context.
       workflowPatch = {
         upload_workflow_error:
           'The pattern file uploaded, but StitchSense could not finish indexing the full instructions. Please try the upload again.',

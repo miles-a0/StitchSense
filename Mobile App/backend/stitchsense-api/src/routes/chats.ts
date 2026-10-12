@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { hasFeature, resolveEntitlement } from '../services/entitlements.js';
+import { externalServiceErrorLogContext } from '../services/externalServiceErrorLog.js';
 import {
   buildOwnedSourceRequiredResponse,
   englishOnlyInstruction,
@@ -95,6 +96,16 @@ function workflowLogContext(params: {
     promptChars: params.promptChars,
     historyCount: params.historyCount,
     directPatternTextChars: params.directPatternTextChars,
+  };
+}
+
+function workflowResponseLogContext(value: unknown) {
+  const record = workflowRecord(value);
+  return {
+    workflowPayloadType: Array.isArray(value) ? 'array' : typeof value,
+    workflowKeys: Object.keys(record).slice(0, 12),
+    contextCount: workflowNumber(record.context_count ?? record.contextCount) ?? 0,
+    usingPatternSummaryFallback: Boolean(record.using_pattern_summary_fallback ?? record.usingPatternSummaryFallback),
   };
 }
 
@@ -649,7 +660,10 @@ export async function chatRoutes(app: FastifyInstance) {
           'Direct chat workflow completed',
         );
       } catch (error) {
-        request.log.warn({ error }, 'Direct chat workflow failed; trying WordPress chat proxy fallback');
+        request.log.warn(
+          { error: externalServiceErrorLogContext(error), ...aiLogContext },
+          'Direct chat workflow failed; trying WordPress chat proxy fallback',
+        );
         ai = null;
       }
       answer = workflowAnswerOrNull(ai);
@@ -706,7 +720,10 @@ export async function chatRoutes(app: FastifyInstance) {
         };
       }
     } catch (error) {
-      request.log.error({ error, ...aiLogContext }, 'Chat workflow failed');
+      request.log.error(
+        { error: externalServiceErrorLogContext(error), ...aiLogContext },
+        'Chat workflow failed',
+      );
       return reply.code(502).send({
         error: 'StitchSense could not reach the chat workflow. Please try again.',
         requestId: request.id,
@@ -714,7 +731,10 @@ export async function chatRoutes(app: FastifyInstance) {
     }
 
     if (!answer) {
-      request.log.error({ ...aiLogContext, ai }, 'Chat workflow returned no usable answer');
+      request.log.error(
+        { ...aiLogContext, ...workflowResponseLogContext(ai) },
+        'Chat workflow returned no usable answer',
+      );
       return reply.code(502).send({
         error: 'StitchSense could not get a usable chat answer from the workflow. Please try again.',
         requestId: request.id,

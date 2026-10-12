@@ -64,7 +64,7 @@ const quickPromptMap: Record<(typeof goals)[number], readonly string[]> = {
 function userFacingRewriteError(error: unknown) {
   if (error instanceof APIError) {
     if (error.message.includes('Workflow chat failed with 401')) {
-      return 'The StitchSense rewrite workflow rejected this request. The N8N shared secret likely needs checking.';
+      return 'StitchSense could not generate that rewrite right now. Please try again shortly.';
     }
     if (error.message.includes('Workflow chat failed with 404')) {
       return 'The StitchSense rewrite workflow is not reachable yet.';

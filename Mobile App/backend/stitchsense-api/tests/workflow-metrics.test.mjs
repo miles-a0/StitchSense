@@ -29,7 +29,7 @@ test('workflow metrics record success, workflow errors, HTTP errors, and excepti
   };
 
   await callWorkflow('chat', { question: 'hello' });
-  await assert.rejects(callWorkflow('chat', { question: 'bad' }), /workflow rejected/);
+  await assert.rejects(callWorkflow('chat', { question: 'bad' }), /Workflow chat reported failure/);
   await assert.rejects(
     callUploadWorkflowWithFile({
       payload: { pattern_id: 'pattern-1' },
@@ -37,7 +37,7 @@ test('workflow metrics record success, workflow errors, HTTP errors, and excepti
       filename: 'pattern.txt',
       mimeType: 'text/plain',
     }),
-    /unauthorized/i,
+    /Workflow upload failed with 401/,
   );
   await assert.rejects(callWorkflow('chat', { question: 'network' }), /network unavailable/);
 
