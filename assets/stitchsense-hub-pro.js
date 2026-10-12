@@ -366,7 +366,7 @@
 
     return new Response(JSON.stringify({
       success: false,
-      error: 'StitchSense chat proxy is not reachable from WordPress. Tried: ' + (attempts.join(', ') || 'no proxy candidates') + '. Active plugin build expected: 7.7.38.'
+      error: 'StitchSense chat proxy is not reachable from WordPress. Tried: ' + (attempts.join(', ') || 'no proxy candidates') + '. Active plugin build expected: 7.7.41.'
     }), {
       status: 502,
       headers: { 'Content-Type': 'application/json' }
