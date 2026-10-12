@@ -161,6 +161,9 @@ jobs:
         shell: bash
         run: git ls-files -z '*.php' | xargs -0 -n1 php -l
 
+      - name: Protected pattern file checks
+        run: php tools/php-tests/protected-files.test.php
+
       - name: Install locked PHPStan tooling
         run: composer install --no-interaction --no-progress --working-dir=tools/phpstan
 

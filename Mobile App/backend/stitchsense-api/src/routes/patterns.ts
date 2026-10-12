@@ -18,6 +18,13 @@ import { callUploadWorkflowWithFile, callWorkflow } from '../services/workflows.
 import { callWordPressChatProxy, callWordPressUploadProxy } from '../services/wordpressBridge.js';
 import { config } from '../config.js';
 import { configuredWordPressSiteUrl } from '../services/wordpressSite.js';
+import {
+  appFileLinkTtlSeconds,
+  normaliseIncomingPatternFileUrl,
+  normaliseIncomingPatternMetadata,
+  withWordPressFileAccessUrls,
+  wordpressPatternFileAccess,
+} from '../services/wordpressPatternFiles.js';
 
 const patternBody = z.object({
   title: z.string().default('Untitled'),
@@ -354,7 +361,7 @@ export async function patternRoutes(app: FastifyInstance) {
        LIMIT 100`,
       [request.authUser.id, search || null],
     );
-    return { patterns: result.rows };
+    return { patterns: await withWordPressFileAccessUrls(request.authUser.id, result.rows) };
   });
 
   app.post('/patterns', { preHandler: app.authenticate }, async (request, reply) => {
@@ -363,6 +370,8 @@ export async function patternRoutes(app: FastifyInstance) {
       return reply.code(402).send({ error: 'Subscription required', entitlement });
 
     const body = patternBody.parse(request.body);
+    body.fileUrl = normaliseIncomingPatternFileUrl(body.fileUrl);
+    body.metadata = normaliseIncomingPatternMetadata(body.metadata);
     const result = await query(
       `INSERT INTO user_patterns
        (user_id, title, craft_type, original_filename, file_url, file_key, pattern_summary_html, pattern_summary_text, pattern_summary_structured, source, metadata)
@@ -396,7 +405,8 @@ export async function patternRoutes(app: FastifyInstance) {
         body.metadata ?? {},
       ],
     );
-    return reply.code(201).send({ pattern: result.rows[0] });
+    const [created] = await withWordPressFileAccessUrls(request.authUser.id, result.rows);
+    return reply.code(201).send({ pattern: created });
   });
 
   app.get('/patterns/:id', { preHandler: app.authenticate }, async (request, reply) => {
@@ -406,12 +416,15 @@ export async function patternRoutes(app: FastifyInstance) {
       request.authUser.id,
     ]);
     if (!result.rowCount) return reply.code(404).send({ error: 'Pattern not found' });
-    return { pattern: result.rows[0] };
+    const [pattern] = await withWordPressFileAccessUrls(request.authUser.id, result.rows);
+    return { pattern };
   });
 
   app.put('/patterns/:id', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = patternBody.partial().parse(request.body);
+    body.fileUrl = normaliseIncomingPatternFileUrl(body.fileUrl);
+    body.metadata = normaliseIncomingPatternMetadata(body.metadata);
     const result = await query(
       `UPDATE user_patterns
        SET title = COALESCE($3, title),
@@ -447,7 +460,8 @@ export async function patternRoutes(app: FastifyInstance) {
       ],
     );
     if (!result.rowCount) return reply.code(404).send({ error: 'Pattern not found' });
-    return { pattern: result.rows[0] };
+    const [updated] = await withWordPressFileAccessUrls(request.authUser.id, result.rows);
+    return { pattern: updated };
   });
 
   app.post('/patterns/:id/summary/refresh', { preHandler: app.authenticate }, async (request, reply) => {
@@ -968,6 +982,11 @@ export async function patternRoutes(app: FastifyInstance) {
         expiresIn: 900,
       };
     }
+    const access = await wordpressPatternFileAccess(request.authUser.id, row.file_url, appFileLinkTtlSeconds);
+    if (access.managed) {
+      if (!access.url) return reply.code(404).send({ error: 'Pattern file not available' });
+      return { fileUrl: access.url, fileKey: null, expiresIn: appFileLinkTtlSeconds };
+    }
     return {
       fileUrl: row.file_url,
       fileKey: null,
@@ -998,7 +1017,11 @@ export async function patternRoutes(app: FastifyInstance) {
     }
 
     if (row.file_url) {
-      return reply.redirect(String(row.file_url));
+      const access = await wordpressPatternFileAccess(request.authUser.id, row.file_url, appFileLinkTtlSeconds);
+      if (access.managed && !access.url) {
+        return reply.code(404).send({ error: 'Pattern file not available' });
+      }
+      return reply.redirect(access.managed && access.url ? access.url : String(row.file_url));
     }
 
     return reply.code(404).send({ error: 'No file is linked to this pattern yet' });
@@ -1038,10 +1061,20 @@ export async function patternRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'No PDF thumbnail is available for this pattern' });
     }
 
+    let sourceUrl: string | null = null;
+    if (!row.file_key) {
+      // Only fetch WordPress files the user owns; arbitrary stored URLs are never fetched server-side.
+      const access = await wordpressPatternFileAccess(request.authUser.id, row.file_url, appFileLinkTtlSeconds);
+      if (!access.managed || !access.url) {
+        return reply.code(404).send({ error: 'No PDF thumbnail is available for this pattern' });
+      }
+      sourceUrl = access.url;
+    }
+
     try {
       const thumbnail = await renderPatternThumbnail({
         fileKey: row.file_key,
-        fileUrl: row.file_url,
+        fileUrl: sourceUrl,
       });
       reply.header('content-type', 'image/jpeg');
       reply.header('cache-control', 'private, max-age=300');

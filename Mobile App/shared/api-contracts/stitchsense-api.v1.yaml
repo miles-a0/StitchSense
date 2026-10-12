@@ -86,6 +86,12 @@ paths:
   /patterns:
     get:
       summary: List the current user's patterns
+      description: >-
+        Each pattern also carries `file_access_url` and `parent_file_access_url`: six-hour signed
+        WordPress links for files stored in WordPress uploads that the user owns, or null. The stored
+        `file_url` is the permanent address and is not directly downloadable. Pattern create, get and
+        update responses include the same fields, and signed links sent back as `fileUrl` are stored as
+        the permanent address.
       parameters:
         - name: since
           in: query
@@ -141,11 +147,17 @@ paths:
   /patterns/{id}/file-url:
     get:
       summary: Get a short-lived signed pattern file URL
+      description: >-
+        Object-storage files return a 15-minute presigned URL. Files stored in WordPress uploads return a
+        15-minute signed WordPress link when the user owns the file, judged by the `user-<id>` folder or the
+        legacy owner registry; otherwise 404.
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
         "200":
           description: Signed URL
+        "404":
+          description: Pattern not found, or its WordPress file is not owned by the user
   /patterns/{id}/chats:
     get:
       summary: List chat sessions for a pattern
