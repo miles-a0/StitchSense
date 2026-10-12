@@ -310,6 +310,14 @@ if (!class_exists('StitchSense_Library')) {
             $metadata = $pattern['metadata'] ?? [];
             if (!is_array($metadata)) $metadata = [];
 
+            // Uploads are no longer publicly readable; the API supplies owner-checked signed links instead.
+            if (!empty($pattern['file_access_url'])) {
+                $pattern['file_url'] = $pattern['file_access_url'];
+            }
+            if (!empty($pattern['parent_file_access_url'])) {
+                $metadata['parent_file_url'] = $pattern['parent_file_access_url'];
+            }
+
             return array_merge($pattern, [
                 'craft_type' => $pattern['craft_type'] ?? $pattern['craftType'] ?? '',
                 'original_filename' => $pattern['original_filename'] ?? $pattern['originalFilename'] ?? '',

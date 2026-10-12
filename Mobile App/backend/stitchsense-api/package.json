@@ -19,6 +19,7 @@
     "audit:wordpress-export": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/audit-wordpress-export.js; else node dist/scripts/audit-wordpress-export.js; fi",
     "migration:wordpress": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/import-wordpress-library.js; else node dist/scripts/import-wordpress-library.js; fi",
     "seed:demo": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/seed-demo-user.js; else node dist/scripts/seed-demo-user.js; fi",
+    "wordpress:file-owners": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/build-wordpress-file-owners.js; else node dist/scripts/build-wordpress-file-owners.js; fi",
     "validate:pattern-files": "if [ -f ../../../tools/run-with-node22.sh ]; then bash ../../../tools/run-with-node22.sh node dist/scripts/validate-pattern-file-links.js; else node dist/scripts/validate-pattern-file-links.js; fi"
   },
   "dependencies": {

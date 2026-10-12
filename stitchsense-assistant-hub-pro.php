@@ -16,6 +16,8 @@ require_once __DIR__ . '/class-stitchsense-library.php';
 require_once __DIR__ . '/class-stitchsense-platform-client.php';
 require_once __DIR__ . '/class-stitchsense-workflow-client.php';
 require_once __DIR__ . '/class-stitchsense-ravelry.php';
+require_once __DIR__ . '/class-stitchsense-protected-files.php';
+StitchSense_Protected_Files::register();
 
 if (!class_exists('StitchSense_Assistant_Hub_Pro_V5')) {
     final class StitchSense_Assistant_Hub_Pro_V5 {
@@ -3775,12 +3777,28 @@ if (!class_exists('StitchSense_Assistant_Hub_Pro_V5')) {
                 }
             }
 
+            if (!empty($payload['file_url']) && class_exists('StitchSense_Protected_Files')) {
+                $signed_relative = StitchSense_Protected_Files::relative_path_from_url((string) $payload['file_url']);
+                if ($signed_relative !== '') {
+                    $candidates[] = trailingslashit($uploads['basedir']) . $signed_relative;
+                }
+            }
+
+            // Only the signed-in user's own pattern folders may be forwarded for indexing.
+            $uid = (int) get_current_user_id();
+            if ($uid <= 0) return '';
+            $allowed_roots = [
+                $base_dir . '/stitchsense/patterns/user-' . $uid . '/',
+                $base_dir . '/stitchsense/ravelry/user-' . $uid . '/',
+            ];
+
             foreach ($candidates as $candidate) {
                 $real = realpath($candidate);
                 if (!$real || !is_readable($real)) continue;
                 $normal = wp_normalize_path($real);
-                if (strpos($normal, $base_dir . '/') !== 0) continue;
-                return $normal;
+                foreach ($allowed_roots as $root) {
+                    if (strpos($normal, $root) === 0) return $normal;
+                }
             }
 
             return '';

@@ -592,7 +592,8 @@ if (!class_exists('StitchSense_Ravelry')) {
             if (!empty($uploads['error']) || empty($uploads['basedir']) || empty($uploads['baseurl'])) {
                 return new WP_Error('ravelry_uploads_unavailable', 'WordPress uploads are unavailable for saving the Ravelry PDF.', ['status' => 500]);
             }
-            $subdir = 'stitchsense/ravelry/' . gmdate('Y/m');
+            // Per-user folders let the API decide ownership from the path alone.
+            $subdir = 'stitchsense/ravelry/user-' . (int) $uid . '/' . gmdate('Y/m');
             $dir = trailingslashit($uploads['basedir']) . $subdir;
             if (!wp_mkdir_p($dir)) {
                 return new WP_Error('ravelry_upload_dir_failed', 'Could not create the StitchSense Ravelry uploads folder.', ['status' => 500]);

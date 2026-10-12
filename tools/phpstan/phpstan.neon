@@ -7,6 +7,7 @@ parameters:
     paths:
         - ../../class-stitchsense-library.php
         - ../../class-stitchsense-platform-client.php
+        - ../../class-stitchsense-protected-files.php
         - ../../class-stitchsense-ravelry.php
         - ../../class-stitchsense-workflow-client.php
         - ../../stitchsense-assistant-hub-pro.php

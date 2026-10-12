@@ -138,6 +138,25 @@ Verify:
 curl -fsS http://127.0.0.1:4445/ready
 ```
 
+## Pattern file protection (WordPress uploads)
+
+Pattern PDFs in `wp-content/uploads/stitchsense/` are served only through signed links from `/wp-json/stitchsense/v1/pattern-files`, signed with the WordPress bridge secret after the API checks ownership. The plugin writes a deny-all `.htaccess` in that folder on load.
+
+Deploy order: API first, then the plugin, minutes apart. Between the two, app links point at a route the old plugin lacks; the reverse order would block website viewing until the API catches up.
+
+1. Deploy the API and run migrations (adds `wordpress_pattern_file_owners`).
+2. Record owners of pre-existing Ravelry files (dry run first, then apply):
+
+```bash
+cd /opt/stitchsense-mobile/backend
+docker compose --env-file stitchsense-api/.env.vps -f docker-compose.vps.yml run --rm --no-deps api node dist/scripts/build-wordpress-file-owners.js
+docker compose --env-file stitchsense-api/.env.vps -f docker-compose.vps.yml run --rm --no-deps api node dist/scripts/build-wordpress-file-owners.js --apply
+```
+
+Files referenced by more than one user are reported as conflicts and stay blocked; assign them by inserting the owner into `wordpress_pattern_file_owners` once confirmed.
+
+3. Package and install the plugin, then verify in a private window that a direct `wp-content/uploads/stitchsense/...pdf` address returns 403 and that pattern viewing works on the website and in the app.
+
 ## Rollback procedure
 
 Use rollback when a deployment causes failed health/readiness checks, elevated errors, data-integrity risk, or broken critical flows.

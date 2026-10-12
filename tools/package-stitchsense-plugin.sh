@@ -40,6 +40,7 @@ zip -r "${ZIP_LATEST}" \
   class-stitchsense-platform-client.php \
   class-stitchsense-ravelry.php \
   class-stitchsense-workflow-client.php \
+  class-stitchsense-protected-files.php \
   stitchsense-chat-proxy.php \
   stitchsense-image-proxy.php \
   stitchsense-upload-proxy.php \
