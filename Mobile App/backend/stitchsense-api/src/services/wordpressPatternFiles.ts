@@ -94,14 +94,22 @@ export function signedWordPressPatternFileUrl(relativePath: string, ttlSeconds: 
   return url.toString();
 }
 
+// provider_user_id is stored as "{siteUrl}|{wpUserId}"; the WordPress user ID is the part after the last "|".
+export function wordpressUserIdFromLink(providerUserId: string, metadata?: unknown) {
+  const meta = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {};
+  const candidate = String(meta.wpUserId ?? providerUserId.split('|').pop() ?? '').trim();
+  return /^\d+$/.test(candidate) ? candidate : null;
+}
+
 export async function linkedWordPressUserId(userId: string) {
-  const result = await query<{ provider_user_id: string }>(
-    `SELECT provider_user_id FROM linked_accounts
+  const result = await query<{ provider_user_id: string; metadata: unknown }>(
+    `SELECT provider_user_id, metadata FROM linked_accounts
      WHERE user_id = $1 AND provider = 'wordpress'
      ORDER BY created_at ASC LIMIT 1`,
     [userId],
   );
-  return result.rows[0]?.provider_user_id ?? null;
+  const row = result.rows[0];
+  return row ? wordpressUserIdFromLink(row.provider_user_id, row.metadata) : null;
 }
 
 export async function userOwnsWordPressPatternFile(userId: string, relativePath: string, wpUserId?: string | null) {

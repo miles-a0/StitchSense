@@ -38,11 +38,12 @@ test('WordPress-hosted pattern files are only reachable through owner-checked si
   const ownerId = idFor('wp-owner@example.test');
   const otherId = idFor('wp-other@example.test');
   const unlinkedId = idFor('unlinked@example.test');
+  // Same shape as /auth/wordpress-session writes: "{siteUrl}|{wpUserId}". The other user has no metadata copy.
   await client.query(
-    `INSERT INTO linked_accounts (user_id, provider, provider_user_id) VALUES
-       ($1, 'wordpress', '4'),
-       ($2, 'wordpress', '9')`,
-    [ownerId, otherId],
+    `INSERT INTO linked_accounts (user_id, provider, provider_user_id, metadata) VALUES
+       ($1, 'wordpress', $3, $4),
+       ($2, 'wordpress', $5, '{}')`,
+    [ownerId, otherId, `${site}|4`, { wpUserId: '4', siteUrl: site }, `${site}|9`],
   );
   await client.query(
     `INSERT INTO manual_entitlements (user_id, type, reason)
