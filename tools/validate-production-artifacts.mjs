@@ -253,7 +253,8 @@ const requiredFiles = [
       '$env.STITCHSENSE_QDRANT_URL',
       "String(req.platform_user_id || req.platformUserId || '').trim()",
       "key: 'platform_user_id'",
-      'noResultsFilter(patternPriority ?',
+      "noResultsFilter('pattern_priority_without_scope')",
+      'function sharedKnowledgeFilter()',
     ],
   },
   {
