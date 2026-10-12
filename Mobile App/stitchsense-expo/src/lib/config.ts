@@ -7,6 +7,7 @@ const extra = expoConfig?.extra as
       wordpressBaseUrl?: string;
       revenueCatIosApiKey?: string;
       revenueCatAndroidApiKey?: string;
+      revenueCatTestStoreApiKey?: string;
       revenueCatEntitlementId?: string;
   }
   | undefined;
@@ -16,16 +17,24 @@ const configured = (value: string | undefined) => {
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 };
 
+const revenueCatTestStoreApiKey =
+  configured(extra?.revenueCatTestStoreApiKey) ?? configured(process.env.EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY);
+
 export const config = {
   apiBaseUrl: configured(extra?.apiBaseUrl) ?? 'https://stitchsense.zu-auto.co.uk',
   wordpressBaseUrl: configured(extra?.wordpressBaseUrl) ?? 'https://catlowyarns.co.uk',
   revenueCat: {
     iosApiKey:
-      configured(extra?.revenueCatIosApiKey) ?? configured(process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY) ?? '',
+      configured(extra?.revenueCatIosApiKey) ??
+      configured(process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY) ??
+      revenueCatTestStoreApiKey ??
+      '',
     androidApiKey:
       configured(extra?.revenueCatAndroidApiKey) ??
       configured(process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY) ??
+      revenueCatTestStoreApiKey ??
       '',
+    testStoreApiKey: revenueCatTestStoreApiKey ?? '',
     entitlementId:
       configured(extra?.revenueCatEntitlementId) ??
       configured(process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID) ??

@@ -135,3 +135,25 @@ test('invalid refresh tokens clear saved credentials and leave the session signe
   assert.equal(restored, null);
   assert.deepEqual(calls, ['refresh:bad-refresh', 'clear']);
 });
+
+test('unauthorized entitlement after refresh clears rotated credentials', async () => {
+  const { calls, dependencies } = createDependencies({
+    async entitlement(accessToken: string) {
+      calls.push(`entitlement:${accessToken}`);
+      throw { statusCode: 401 };
+    },
+  });
+
+  const restored = await restoreSessionFromTokens(
+    { accessToken: null, refreshToken: 'saved-refresh' },
+    dependencies,
+  );
+
+  assert.equal(restored, null);
+  assert.deepEqual(calls, [
+    'refresh:saved-refresh',
+    'save:fresh-access:fresh-refresh',
+    'entitlement:fresh-access',
+    'clear',
+  ]);
+});

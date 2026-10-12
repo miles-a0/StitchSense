@@ -64,6 +64,42 @@ curl -fsS \
   http://127.0.0.1:4445/metrics
 ```
 
+The reusable smoke script checks `/health` and `/ready` by default. When `STITCHSENSE_METRICS_SHARED_SECRET` is set, it also verifies that unauthenticated `/metrics` requests are rejected and authenticated metrics include the expected API counters:
+
+```bash
+STITCHSENSE_API_BASE_URL=http://127.0.0.1:4445 \
+STITCHSENSE_METRICS_SHARED_SECRET="$METRICS_SHARED_SECRET" \
+scripts/smoke-api.sh
+```
+
+The same endpoint also exports low-cardinality workflow counters and latency histograms:
+
+- `stitchsense_workflow_requests_total`
+- `stitchsense_workflow_request_duration_seconds`
+- `stitchsense_billing_webhook_requests_total`
+- `stitchsense_billing_webhook_request_duration_seconds`
+
+Prometheus-compatible starter alert rules live in `ops/monitoring/stitchsense-alerts.yml`. A starter dashboard lives in `ops/monitoring/stitchsense-dashboard.json` and covers API traffic, API errors, latency, workflow failures, billing webhook failures, and auth client failures. Validate edits before deployment with:
+
+```bash
+promtool check rules ops/monitoring/stitchsense-alerts.yml
+ruby -e 'require "json"; JSON.parse(File.read("ops/monitoring/stitchsense-dashboard.json"))'
+node tools/validate-production-artifacts.mjs
+```
+
+Alert on sustained `outcome="http_error"`, `outcome="workflow_error"`, or `outcome="exception"` for `workflow_type="chat"`, `workflow_type="upload"`, `workflow_type="library"`, and `workflow_type="image"`.
+Alert on sustained `outcome="unauthorized"`, `outcome="invalid_payload"`, `outcome="configuration_error"`, or `outcome="exception"` for billing webhook `provider="revenuecat"` or `provider="stripe"`.
+
+Alert routing should page the production owner for API scrape loss, elevated API 5xx rate, auth client-failure spikes, workflow exceptions, billing webhook authorization failures, billing configuration errors, and billing webhook exceptions. Route workflow HTTP errors, route-specific API error bursts, invalid webhook payload bursts, auth failure bursts, and latency alerts to the support/engineering triage channel unless they coincide with user-visible outage indicators.
+
+Record deployment, rollback, restore, secret-rotation, and incident-response rehearsals in `docs/OPERATIONS_REHEARSAL_LOG.md`. Keep screenshots, terminal captures, and dashboard exports out of git when they include private infrastructure details or account data.
+
+Use `docs/MIGRATION_ROLLBACK_REHEARSAL.md` before schema/data migrations and `docs/ENVIRONMENT_CONFIGURATION_MATRIX.md` before release-candidate builds to avoid crossing staging and production configuration.
+
+Use `docs/N8N_WORKFLOW_RELEASE_CHECKLIST.md` before changing chat, upload/indexing, library/Ravelry, or Stitch Vision workflows. Use `docs/RELEASE_RISK_REGISTER.md` with `docs/RELEASE_DECISION_LOG.md` before widening any beta, internal-test, or store rollout.
+
+Use `docs/INCIDENT_POSTMORTEM_TEMPLATE.md` after P0/P1 incidents, store-review blockers caused by product behaviour, release holds, suspected cross-user access, billing entitlement mismatch, data loss, or pattern-context contamination.
+
 ## Staging deployment
 
 Staging is private by default. It has its own API container, Postgres database, MinIO bucket, compose project, and generated secrets.
@@ -72,7 +108,9 @@ Staging is private by default. It has its own API container, Postgres database, 
 cd /opt/stitchsense-mobile/backend
 docker compose --env-file .env.staging.compose -f docker-compose.staging.yml up -d --build
 docker compose --env-file .env.staging.compose -f docker-compose.staging.yml run --rm api npm run migrate
-curl -fsS http://127.0.0.1:4447/ready
+STITCHSENSE_API_BASE_URL=http://127.0.0.1:4447 \
+STITCHSENSE_METRICS_SHARED_SECRET="$METRICS_SHARED_SECRET" \
+scripts/smoke-api.sh
 ```
 
 Do not expose staging publicly until a dedicated reverse-proxy host and app build channel are intentionally configured.

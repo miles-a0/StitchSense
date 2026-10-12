@@ -1,9 +1,15 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { APIError, stitchSenseAPI } from '@/src/lib/api';
+import { effectiveEntitlement } from '@/src/lib/entitlement-access';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import { saveOnboardingPending } from '@/src/lib/onboarding-store';
-import { configureRevenueCat, hasRevenueCatApiKey, revenueCatLogOut, usesRevenueCatStoreBilling } from '@/src/lib/revenuecat';
+import {
+  getRevenueCatEntitlement,
+  hasRevenueCatApiKey,
+  revenueCatLogOut,
+  usesRevenueCatStoreBilling,
+} from '@/src/lib/revenuecat';
 import { restoreSessionFromTokens } from '@/src/lib/session-restoration';
 import { clearTokens, loadTokens, saveTokens } from '@/src/lib/token-store';
 import type { Entitlement, User } from '@/src/lib/models';
@@ -31,6 +37,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: React.PropsWithChildren) {
   const [user, setUser] = useState<User | null>(null);
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
+  const [storeEntitlement, setStoreEntitlement] = useState<Entitlement | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -45,6 +52,19 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     return error instanceof APIError && [500, 502, 503].includes(error.statusCode);
   }, []);
 
+  const refreshStoreEntitlement = useCallback(async (userId: string) => {
+    if (!usesRevenueCatStoreBilling() || !hasRevenueCatApiKey()) {
+      setStoreEntitlement(null);
+      return;
+    }
+
+    try {
+      setStoreEntitlement(await getRevenueCatEntitlement(userId));
+    } catch {
+      setStoreEntitlement(null);
+    }
+  }, []);
+
   const applyAuth = useCallback(async (response: {
     user: User;
     accessToken: string;
@@ -54,17 +74,16 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     setAccessToken(response.accessToken);
     setRefreshToken(response.refreshToken);
     await saveTokens(response.accessToken, response.refreshToken);
-    if (usesRevenueCatStoreBilling() && hasRevenueCatApiKey()) {
-      await configureRevenueCat(response.user.id);
-    }
+    await refreshStoreEntitlement(response.user.id);
     const entitlementResponse = await stitchSenseAPI.entitlement(response.accessToken);
     setEntitlement(entitlementResponse.entitlement);
-  }, []);
+  }, [refreshStoreEntitlement]);
 
   const signOut = useCallback(async () => {
     const tokenToRevoke = refreshToken;
     setUser(null);
     setEntitlement(null);
+    setStoreEntitlement(null);
     setAccessToken(null);
     setRefreshToken(null);
     setErrorMessage(null);
@@ -103,6 +122,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
       ]);
       setUser(meResponse.user);
       setEntitlement(entitlementResponse.entitlement);
+      await refreshStoreEntitlement(meResponse.user.id);
     } catch (error) {
       if (error instanceof APIError && error.statusCode === 401 && refreshToken) {
         try {
@@ -116,7 +136,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
       }
       throw error;
     }
-  }, [accessToken, applyAuth, refreshToken, signOut]);
+  }, [accessToken, applyAuth, refreshStoreEntitlement, refreshToken, signOut]);
 
   useEffect(() => {
     let isMounted = true;
@@ -142,9 +162,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
           setEntitlement(restored.entitlement);
           setAccessToken(restored.accessToken);
           setRefreshToken(restored.refreshToken);
-          if (usesRevenueCatStoreBilling() && hasRevenueCatApiKey()) {
-            await configureRevenueCat(restored.user.id);
-          }
+          await refreshStoreEntitlement(restored.user.id);
         }
       } finally {
         if (isMounted) {
@@ -158,7 +176,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refreshStoreEntitlement]);
 
   const signIn = useCallback(
     async (identifier: string, password: string) => {
@@ -251,7 +269,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
   const value = useMemo<SessionContextValue>(
     () => ({
       user,
-      entitlement,
+      entitlement: effectiveEntitlement(entitlement, storeEntitlement),
       accessToken,
       isReady,
       isLoading,
@@ -264,6 +282,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
     [
       accessToken,
       entitlement,
+      storeEntitlement,
       errorMessage,
       isLoading,
       isReady,

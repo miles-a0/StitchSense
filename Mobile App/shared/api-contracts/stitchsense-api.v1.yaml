@@ -39,6 +39,17 @@ paths:
       responses:
         "200":
           description: Token refreshed
+  /auth/wordpress:
+    post:
+      security: []
+      summary: Trusted WordPress bridge login/bootstrap endpoint
+      responses:
+        "200":
+          description: WordPress-linked user authenticated
+        "401":
+          description: Invalid WordPress bridge secret
+        "400":
+          description: WordPress site URL does not match the configured bridge site
   /me:
     get:
       summary: Current user profile
@@ -51,9 +62,18 @@ paths:
       responses:
         "200":
           description: Current entitlement decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
   /user/export:
     get:
       summary: Export current user's StitchSense data
+      description: >-
+        Returns the authenticated user's account profile, subscription status, patterns, projects
+        (counters, work log, marks, photos), stash, chats and messages, rewrites, settings, and
+        linked-service metadata. Connection tokens, password hashes, and store transaction IDs are
+        excluded. The mobile app saves this response as a JSON file chosen by the user.
       responses:
         "200":
           description: Data export
@@ -114,6 +134,10 @@ paths:
       responses:
         "201":
           description: File stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatternFileUploadResponse"
   /patterns/{id}/file-url:
     get:
       summary: Get a short-lived signed pattern file URL
@@ -202,17 +226,74 @@ paths:
       responses:
         "200":
           description: Webhook accepted
+  /billing/revenuecat/webhook:
+    post:
+      security: []
+      summary: RevenueCat webhook endpoint for native app-store subscriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevenueCatWebhookRequest"
+      responses:
+        "200":
+          description: Webhook accepted, replayed, or intentionally ignored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevenueCatWebhookResponse"
+        "401":
+          description: Invalid RevenueCat authorization header
+  /billing/revenuecat/sync:
+    post:
+      summary: Sync the authenticated user's RevenueCat subscriber state into backend entitlements
+      responses:
+        "200":
+          description: Current backend entitlement after sync
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
+        "401":
+          description: Authentication required
+        "502":
+          description: RevenueCat subscriber sync failed
+  /admin/users/access:
+    get:
+      summary: List users with resolved manual, store, or trial access state
+      responses:
+        "200":
+          description: User access summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserAccessList"
   /admin/entitlements:
     get:
       summary: List manual entitlement grants
       responses:
         "200":
           description: Grants
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualEntitlementGrantList"
     post:
       summary: Grant manual lifetime or timed access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualEntitlementGrantRequest"
       responses:
         "201":
           description: Grant created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualEntitlementGrantResponse"
   /admin/entitlements/{id}:
     delete:
       summary: Revoke a manual entitlement grant
@@ -236,6 +317,12 @@ components:
         type: string
         format: uuid
   schemas:
+    EntitlementResponse:
+      type: object
+      required: [entitlement]
+      properties:
+        entitlement:
+          $ref: "#/components/schemas/Entitlement"
     Entitlement:
       type: object
       required: [status, accessSource, features]
@@ -256,3 +343,217 @@ components:
           type: object
           additionalProperties:
             type: boolean
+    AdminUserAccessList:
+      type: object
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUserAccessSummary"
+    AdminUserAccessSummary:
+      type: object
+      required: [platformUserId, email, role, entitlement, subscription]
+      properties:
+        platformUserId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [user, admin]
+        wpUserId:
+          type: string
+          nullable: true
+        siteUrl:
+          type: string
+          nullable: true
+        entitlement:
+          $ref: "#/components/schemas/AdminEntitlementSummary"
+        subscription:
+          $ref: "#/components/schemas/AdminSubscriptionSummary"
+    AdminEntitlementSummary:
+      type: object
+      required: [plan, status, accessSource, trialEndsAt]
+      properties:
+        plan:
+          type: string
+        status:
+          type: string
+          enum: [active, trialing, expired]
+        accessSource:
+          type: string
+          enum: [manual_lifetime, manual_trial, courtesy_access, stripe, apple, google, standard_trial, none]
+        trialEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+    AdminSubscriptionSummary:
+      type: object
+      required: [status, currentPeriodEnd, metadata]
+      properties:
+        status:
+          type: string
+          nullable: true
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+    RevenueCatWebhookRequest:
+      type: object
+      required: [event]
+      properties:
+        event:
+          $ref: "#/components/schemas/RevenueCatWebhookEvent"
+    RevenueCatWebhookEvent:
+      type: object
+      required: [id, type, app_user_id]
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        app_user_id:
+          type: string
+          description: Must equal the StitchSense backend user ID.
+        store:
+          type: string
+          enum: [APP_STORE, MAC_APP_STORE, PLAY_STORE]
+        product_id:
+          type: string
+        period_type:
+          type: string
+        transaction_id:
+          type: string
+        original_transaction_id:
+          type: string
+        expiration_at_ms:
+          type: number
+          nullable: true
+        purchased_at_ms:
+          type: number
+          nullable: true
+        cancel_reason:
+          type: string
+        expiration_reason:
+          type: string
+        entitlement_ids:
+          type: array
+          items:
+            type: string
+    RevenueCatWebhookResponse:
+      oneOf:
+        - type: object
+          required: [received]
+          properties:
+            received:
+              type: boolean
+            replayed:
+              type: boolean
+        - type: object
+          required: [ignored, reason]
+          properties:
+            ignored:
+              type: boolean
+            reason:
+              type: string
+    ManualEntitlementGrantType:
+      type: string
+      enum: [lifetime_pro, extended_trial, courtesy_access]
+      description: Admin-assigned access type. Public mobile checkout does not expose a lifetime product.
+    ManualEntitlementGrantRequest:
+      type: object
+      required: [userId, type]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/ManualEntitlementGrantType"
+        startsAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        reason:
+          type: string
+          maxLength: 500
+    ManualEntitlementGrant:
+      type: object
+      required: [id, user_id, type, starts_at, revoked_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/ManualEntitlementGrantType"
+        starts_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+    ManualEntitlementGrantList:
+      type: object
+      required: [grants]
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ManualEntitlementGrant"
+    ManualEntitlementGrantResponse:
+      type: object
+      required: [grant]
+      properties:
+        grant:
+          $ref: "#/components/schemas/ManualEntitlementGrant"
+    PatternFileUploadResponse:
+      type: object
+      required: [fileKey, fileSize, storageProvider, indexed, indexingError]
+      properties:
+        fileKey:
+          type: string
+        fileSize:
+          type: integer
+          nullable: true
+        storageProvider:
+          type: string
+          nullable: true
+        projectId:
+          type: string
+          nullable: true
+        fileId:
+          type: string
+          nullable: true
+        jobId:
+          type: string
+          nullable: true
+        indexed:
+          type: boolean
+          description: True only when the upload workflow produced scoped pattern identifiers for AI retrieval.
+        indexingError:
+          type: string
+          nullable: true
+          description: Workflow failure detail when the file was stored but not indexed.

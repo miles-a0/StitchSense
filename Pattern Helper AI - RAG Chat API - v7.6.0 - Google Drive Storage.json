@@ -24,7 +24,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first();\nconst headers = item.json.headers || {};\nlet body = item.json.body || item.json || {};\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\nif (body && typeof body.body === 'string') {\n  try { body.body = JSON.parse(body.body); } catch (e) {}\n}\nif (body && typeof body.payload === 'string') {\n  const outerSecret = body.secret || '';\n  try {\n    const parsedPayload = JSON.parse(body.payload);\n    if (parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)) {\n      body = { ...parsedPayload, secret: parsedPayload.secret || outerSecret };\n    }\n  } catch (e) {}\n}\nif (body && body.body && typeof body.body === 'object' && (body.body.secret || body.body.file_data_uri)) {\n  body = body.body;\n}\nconst expectedSecret = $env.STITCHSENSE_UPLOAD_SECRET || 'uigfbwejbCHNRwjrwehrbcvHBWEVENVEKEWVBJWE';\nconst normalisedHeaders = {};\nfor (const key of Object.keys(headers)) normalisedHeaders[key.toLowerCase()] = headers[key];\nconst providedSecret = normalisedHeaders['x-stitchsense-secret'] || body.secret || body.STITCHSENSE_UPLOAD_SECRET || '';\nif (expectedSecret && providedSecret !== expectedSecret) {\n  return [{ json: { ok:false, statusCode:401, error:'Unauthorised upload request.' } }];\n}\nreturn [{ json: { ok:true, body, headers, received_at:new Date().toISOString() }, binary:item.binary }];"
+        "jsCode": "const item = $input.first();\nconst headers = item.json.headers || {};\nlet body = item.json.body || item.json || {};\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\nif (body && typeof body.body === 'string') {\n  try { body.body = JSON.parse(body.body); } catch (e) {}\n}\nif (body && typeof body.payload === 'string') {\n  const outerSecret = body.secret || '';\n  try {\n    const parsedPayload = JSON.parse(body.payload);\n    if (parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)) {\n      body = { ...parsedPayload, secret: parsedPayload.secret || outerSecret };\n    }\n  } catch (e) {}\n}\nif (body && body.body && typeof body.body === 'object' && (body.body.secret || body.body.file_data_uri)) {\n  body = body.body;\n}\nconst expectedSecret = $env.STITCHSENSE_UPLOAD_SECRET || $env.N8N_UPLOAD_SHARED_SECRET || $env.N8N_SHARED_SECRET || '';\nconst normalisedHeaders = {};\nfor (const key of Object.keys(headers)) normalisedHeaders[key.toLowerCase()] = headers[key];\nconst providedSecret = normalisedHeaders['x-stitchsense-secret'] || body.secret || body.STITCHSENSE_UPLOAD_SECRET || '';\nfunction secretsMatch(expected, provided) {\n  if (!expected || !provided || expected.length !== provided.length) return false;\n  let mismatch = 0;\n  for (let i = 0; i < expected.length; i += 1) mismatch |= expected.charCodeAt(i) ^ provided.charCodeAt(i);\n  return mismatch === 0;\n}\nif (!secretsMatch(expectedSecret, providedSecret)) {\n  return [{ json: { ok:false, statusCode:401, error:'Unauthorised upload request.' } }];\n}\nreturn [{ json: { ok:true, body, headers, received_at:new Date().toISOString() }, binary:item.binary }];"
       },
       "id": "707b7b05-ea8b-4117-bda7-7843cd2e2dc2",
       "name": "Validate Secret",
@@ -87,7 +87,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst item = $input.first();\nlet body = item.json.body || item.json || {};\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\nif (body && typeof body.body === 'string') {\n  try { body.body = JSON.parse(body.body); } catch (e) {}\n}\nif (body && typeof body.payload === 'string') {\n  const outerSecret = body.secret || '';\n  try {\n    const parsedPayload = JSON.parse(body.payload);\n    if (parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)) {\n      body = { ...parsedPayload, secret: parsedPayload.secret || outerSecret };\n    }\n  } catch (e) {}\n}\nif (body && body.body && typeof body.body === 'object' && (body.body.file_data_uri || body.body.file_name)) {\n  body = body.body;\n}\nlet binary = item.binary || {};\nlet uploadKey = Object.keys(binary).includes('file') ? 'file' : Object.keys(binary)[0];\n\nfunction normaliseDataUri(value) {\n  const raw = String(value || '').trim();\n  const match = raw.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/i);\n  if (!match) return null;\n  return { mime: (match[1] || '').toLowerCase(), base64: match[2] || '' };\n}\n\n// v7.4.26 accepts JSON/base64 uploads from WordPress/browser as well as legacy multipart.\nif (!uploadKey && body.file_data_uri) {\n  const parsed = normaliseDataUri(body.file_data_uri);\n  if (!parsed || !parsed.base64) {\n    return [{ json:{ ok:false, statusCode:400, error:'The uploaded file payload was not readable. Please try uploading the file again.' } }];\n  }\n  const fileNameFromBody = String(body.file_name || body.filename || 'pattern-upload').trim() || 'pattern-upload';\n  const mimeFromBody = String(body.mime_type || body.mimeType || parsed.mime || 'application/octet-stream').toLowerCase();\n  binary = {\n    file: {\n      data: parsed.base64,\n      mimeType: mimeFromBody,\n      fileName: fileNameFromBody,\n      fileSize: Number(body.file_size || body.fileSize || Math.floor(parsed.base64.length * 0.75) || 0)\n    }\n  };\n  uploadKey = 'file';\n}\n\nconst binaryKeys = Object.keys(binary);\nif (!binaryKeys.length || !uploadKey) return [{ json:{ ok:false, statusCode:400, error:'No file uploaded.' } }];\nconst file = binary[uploadKey];\nconst mimeType = String(file.mimeType || file.mime_type || body.mime_type || body.mimeType || '').toLowerCase();\nconst fileName = file.fileName || file.filename || body.file_name || body.filename || 'pattern-upload';\nconst extMatch = String(fileName).toLowerCase().match(/\\.([a-z0-9]+)$/);\nconst ext = extMatch ? extMatch[1] : '';\nconst supported = ['pdf','docx','txt','rtf','odt','md','html','htm','epub','csv','xlsx','json','xml','jpg','jpeg','png','webp','gif','tif','tiff'];\nif (!supported.includes(ext)) {\n  return [{ json:{ ok:false, statusCode:415, error:`Unsupported file type: ${ext || mimeType || fileName}. Please upload PDF, DOCX, TXT, RTF, ODT, MD, HTML, EPUB, CSV, XLSX, JSON, XML, JPG, PNG, WebP, GIF or TIFF.` } }];\n}\nconst size = Number(file.fileSize || file.fileSizeBytes || file.file_size || body.file_size || 0);\nconst maxSize = 20 * 1024 * 1024;\nif (size > maxSize) return [{ json:{ ok:false, statusCode:413, error:'File too large. Maximum upload size is 20MB.' } }];\nconst directTextExts = ['txt','md','html','htm','json','xml','csv','rtf'];\nconst imageExts = ['jpg','jpeg','png','webp','gif','tif','tiff'];\nconst safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 160);\nconst stamp = Date.now();\nconst projectName = String(body.project_name || body.projectName || safeName.replace(/\\.[^.]+$/, '') || 'Untitled project').trim();\nreturn [{ json:{ ok:true, upload_key:uploadKey, original_filename:fileName, stored_filename:`${stamp}-${safeName}`, mime_type:mimeType || 'application/octet-stream', file_extension:ext, is_pdf:ext === 'pdf' || mimeType === 'application/pdf', is_direct_text:directTextExts.includes(ext), is_image:imageExts.includes(ext), file_size:size, project_name:projectName, craft_type:String(body.craft_type || body.craftType || '').trim(), project_type:String(body.project_type || body.projectType || 'uploaded_pattern').trim(), user_email:String(body.email || body.user_email || '').trim(), wp_user_id:body.wp_user_id || body.wpUserId || null, storage_path:`/opt/stitchsense/uploads/${stamp}-${safeName}`, received_at:item.json.received_at || new Date().toISOString() }, binary }];\n"
+        "jsCode": "\nconst item = $input.first();\nlet body = item.json.body || item.json || {};\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = {}; }\n}\nif (body && typeof body.body === 'string') {\n  try { body.body = JSON.parse(body.body); } catch (e) {}\n}\nif (body && typeof body.payload === 'string') {\n  const outerSecret = body.secret || '';\n  try {\n    const parsedPayload = JSON.parse(body.payload);\n    if (parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload)) {\n      body = { ...parsedPayload, secret: parsedPayload.secret || outerSecret };\n    }\n  } catch (e) {}\n}\nif (body && body.body && typeof body.body === 'object' && (body.body.file_data_uri || body.body.file_name)) {\n  body = body.body;\n}\nlet binary = item.binary || {};\nlet uploadKey = Object.keys(binary).includes('file') ? 'file' : Object.keys(binary)[0];\n\nfunction normaliseDataUri(value) {\n  const raw = String(value || '').trim();\n  const match = raw.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/i);\n  if (!match) return null;\n  return { mime: (match[1] || '').toLowerCase(), base64: match[2] || '' };\n}\n\n// v7.4.26 accepts JSON/base64 uploads from WordPress/browser as well as legacy multipart.\nif (!uploadKey && body.file_data_uri) {\n  const parsed = normaliseDataUri(body.file_data_uri);\n  if (!parsed || !parsed.base64) {\n    return [{ json:{ ok:false, statusCode:400, error:'The uploaded file payload was not readable. Please try uploading the file again.' } }];\n  }\n  const fileNameFromBody = String(body.file_name || body.filename || 'pattern-upload').trim() || 'pattern-upload';\n  const mimeFromBody = String(body.mime_type || body.mimeType || parsed.mime || 'application/octet-stream').toLowerCase();\n  binary = {\n    file: {\n      data: parsed.base64,\n      mimeType: mimeFromBody,\n      fileName: fileNameFromBody,\n      fileSize: Number(body.file_size || body.fileSize || Math.floor(parsed.base64.length * 0.75) || 0)\n    }\n  };\n  uploadKey = 'file';\n}\n\nconst binaryKeys = Object.keys(binary);\nif (!binaryKeys.length || !uploadKey) return [{ json:{ ok:false, statusCode:400, error:'No file uploaded.' } }];\nconst file = binary[uploadKey];\nconst mimeType = String(file.mimeType || file.mime_type || body.mime_type || body.mimeType || '').toLowerCase();\nconst fileName = file.fileName || file.filename || body.file_name || body.filename || 'pattern-upload';\nconst extMatch = String(fileName).toLowerCase().match(/\\.([a-z0-9]+)$/);\nconst ext = extMatch ? extMatch[1] : '';\nconst supported = ['pdf','docx','txt','rtf','odt','md','html','htm','epub','csv','xlsx','json','xml','jpg','jpeg','png','webp','gif','tif','tiff'];\nif (!supported.includes(ext)) {\n  return [{ json:{ ok:false, statusCode:415, error:`Unsupported file type: ${ext || mimeType || fileName}. Please upload PDF, DOCX, TXT, RTF, ODT, MD, HTML, EPUB, CSV, XLSX, JSON, XML, JPG, PNG, WebP, GIF or TIFF.` } }];\n}\nconst size = Number(file.fileSize || file.fileSizeBytes || file.file_size || body.file_size || 0);\nconst maxSize = 20 * 1024 * 1024;\nif (size > maxSize) return [{ json:{ ok:false, statusCode:413, error:'File too large. Maximum upload size is 20MB.' } }];\nconst directTextExts = ['txt','md','html','htm','json','xml','csv','rtf'];\nconst imageExts = ['jpg','jpeg','png','webp','gif','tif','tiff'];\nconst safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 160);\nconst stamp = Date.now();\nconst projectName = String(body.project_name || body.projectName || safeName.replace(/\\.[^.]+$/, '') || 'Untitled project').trim();\nreturn [{ json:{ ok:true, upload_key:uploadKey, original_filename:fileName, stored_filename:`${stamp}-${safeName}`, mime_type:mimeType || 'application/octet-stream', file_extension:ext, is_pdf:ext === 'pdf' || mimeType === 'application/pdf', is_direct_text:directTextExts.includes(ext), is_image:imageExts.includes(ext), file_size:size, project_name:projectName, craft_type:String(body.craft_type || body.craftType || '').trim(), project_type:String(body.project_type || body.projectType || 'uploaded_pattern').trim(), user_email:String(body.email || body.user_email || '').trim(), user_id:String(body.user_id || body.userId || '').trim(), platform_user_id:String(body.platform_user_id || body.platformUserId || '').trim(), wp_user_id:body.wp_user_id || body.wpUserId || null, storage_path:`/opt/stitchsense/uploads/${stamp}-${safeName}`, received_at:item.json.received_at || new Date().toISOString() }, binary }];\n"
       },
       "id": "b034bb5c-a4a8-4a14-ad32-e3c5c985b97d",
       "name": "Validate File",
@@ -297,7 +297,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://173.249.40.161:8990/api/v1/misc/ocr-pdf",
+        "url": "={{ $env.STITCHSENSE_STIRLING_URL }}/api/v1/misc/ocr-pdf",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -343,7 +343,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://173.249.40.161:8990/api/v1/convert/file/pdf",
+        "url": "={{ $env.STITCHSENSE_STIRLING_URL }}/api/v1/convert/file/pdf",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -377,7 +377,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://173.249.40.161:8990/api/v1/convert/img/pdf",
+        "url": "={{ $env.STITCHSENSE_STIRLING_URL }}/api/v1/convert/img/pdf",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -411,7 +411,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://173.249.40.161:8990/api/v1/misc/ocr-pdf",
+        "url": "={{ $env.STITCHSENSE_STIRLING_URL }}/api/v1/misc/ocr-pdf",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -485,7 +485,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://173.249.40.161:2010/api/embeddings",
+        "url": "={{ $env.STITCHSENSE_EMBEDDINGS_URL }}/api/embeddings",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { model: 'nomic-embed-text', prompt: $json.chunk_text } }}",
@@ -518,7 +518,7 @@
     {
       "parameters": {
         "method": "PUT",
-        "url": "http://173.249.40.161:6333/collections/knitting_knowledge/points",
+        "url": "={{ $env.STITCHSENSE_QDRANT_URL }}/collections/knitting_knowledge/points",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -530,7 +530,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { points: [ { id: $json.point_id, vector: $json.embedding, payload: { title: $json.project_name, source: 'uploaded_pattern', project_id: $json.project_id, file_id: $json.file_id, job_id: $json.job_id, content_hash: $json.content_hash, chunk_index: $json.chunk_index, content: $json.chunk_text, original_filename: $json.original_filename, mime_type: $json.mime_type, file_extension: $json.file_extension, scraped_at: $json.scraped_at } } ] } }}",
+        "jsonBody": "={{ { points: [ { id: $json.point_id, vector: $json.embedding, payload: { title: $json.project_name, source: 'uploaded_pattern', user_id: $json.user_id, platform_user_id: $json.platform_user_id, project_id: $json.project_id, file_id: $json.file_id, job_id: $json.job_id, content_hash: $json.content_hash, chunk_index: $json.chunk_index, content: $json.chunk_text, original_filename: $json.original_filename, mime_type: $json.mime_type, file_extension: $json.file_extension, scraped_at: $json.scraped_at } } ] } }}",
         "options": {
           "timeout": 300000
         }

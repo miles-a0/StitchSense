@@ -72,6 +72,24 @@ test('Stitch Vision route gates entitlement and handles WordPress bridge fallbac
     [ownerId],
   );
 
+  const patternRows = await client.query(
+    `INSERT INTO user_patterns (
+       user_id, title, source, file_key, project_id, file_id, job_id,
+       pattern_summary_text, metadata, deleted_at
+     ) VALUES
+       ($1, 'Owner pattern', 'upload', 'owner/pattern.pdf', 'owner-project', 'owner-file', 'owner-job',
+        'Owner pattern summary only.', '{"source":"owner"}'::jsonb, NULL),
+       ($2, 'Other pattern', 'upload', 'other/pattern.pdf', 'other-project', 'other-file', 'other-job',
+        'Other user pattern summary.', '{"source":"other"}'::jsonb, NULL),
+       ($1, 'Deleted pattern', 'upload', 'owner/deleted.pdf', 'deleted-project', 'deleted-file', 'deleted-job',
+        'Deleted pattern summary.', '{"source":"deleted"}'::jsonb, NOW())
+     RETURNING id, title`,
+    [ownerId, unlinkedId],
+  );
+  const ownerPatternId = patternRows.rows.find((row) => row.title === 'Owner pattern').id;
+  const otherPatternId = patternRows.rows.find((row) => row.title === 'Other pattern').id;
+  const deletedPatternId = patternRows.rows.find((row) => row.title === 'Deleted pattern').id;
+
   const { buildApp } = await import('../dist/app.js');
   ({ pool } = await import('../dist/db/pool.js'));
   app = await buildApp();
@@ -102,6 +120,45 @@ test('Stitch Vision route gates entitlement and handles WordPress bridge fallbac
   assert.equal(denied.statusCode, 402, denied.body);
   assert.equal(denied.json().error, 'Subscription required');
   assert.equal(denied.json().entitlement.features.stitchVision, false);
+  assert.equal(fetchCalls.length, 0);
+
+  const unknownScopeField = await app.inject({
+    method: 'POST',
+    url: '/vision/analyse',
+    headers: { authorization: ownerAuthorization },
+    payload: {
+      imageDataUri: 'data:image/png;base64,abc',
+      file_id: 'other-file',
+      job_id: 'other-job',
+      project_id: 'other-project',
+    },
+  });
+  assert.equal(unknownScopeField.statusCode, 400, unknownScopeField.body);
+  assert.match(unknownScopeField.body, /file_id/);
+  assert.equal(fetchCalls.length, 0);
+
+  const crossUserPattern = await app.inject({
+    method: 'POST',
+    url: '/vision/analyse',
+    headers: { authorization: ownerAuthorization },
+    payload: {
+      imageDataUri: 'data:image/png;base64,abc',
+      patternId: otherPatternId,
+    },
+  });
+  assert.equal(crossUserPattern.statusCode, 404, crossUserPattern.body);
+  assert.equal(fetchCalls.length, 0);
+
+  const deletedPattern = await app.inject({
+    method: 'POST',
+    url: '/vision/analyse',
+    headers: { authorization: ownerAuthorization },
+    payload: {
+      imageDataUri: 'data:image/png;base64,abc',
+      patternId: deletedPatternId,
+    },
+  });
+  assert.equal(deletedPattern.statusCode, 404, deletedPattern.body);
   assert.equal(fetchCalls.length, 0);
 
   queuedResponses.push(
@@ -140,12 +197,18 @@ test('Stitch Vision route gates entitlement and handles WordPress bridge fallbac
     imageDataUri: 'data:image/png;base64,abc',
     question: 'What stitch is this?',
     skillLevel: 'intermediate',
-    toolMode: 'freeform',
     image_data_uri: 'data:image/png;base64,abc',
     tool_mode: 'stitch_image_analysis',
+    toolMode: 'stitch_image_analysis',
     requested_tool_mode: 'freeform',
+    requestedToolMode: 'freeform',
     skill_level: 'intermediate',
+    answer_mode: 'general_stitch_dictionary',
+    pattern_available: false,
     user_id: ownerId,
+    userId: ownerId,
+    platform_user_id: ownerId,
+    platformUserId: ownerId,
   });
 
   const beforeFallbackCalls = fetchCalls.length;
@@ -194,9 +257,52 @@ test('Stitch Vision route gates entitlement and handles WordPress bridge fallbac
   assert.equal(directWorkflowBody.requested_tool_mode, undefined);
   assert.equal(directWorkflowBody.skill_level, 'beginner');
   assert.equal(directWorkflowBody.user_id, ownerId);
+  assert.equal(directWorkflowBody.platform_user_id, ownerId);
+  assert.equal(directWorkflowBody.pattern_id, undefined);
+  assert.equal(directWorkflowBody.file_id, undefined);
   assert.equal(directWorkflowBody.secret, 'test-workflow-secret-with-32-characters');
   assert.equal(directWorkflowBody.question.length <= 1150, true);
   assert.equal(/\s{2,}/.test(directWorkflowBody.question), false);
+
+  const beforePatternScopedCalls = fetchCalls.length;
+  queuedResponses.push(
+    new Response(JSON.stringify({ error: 'No route found' }), {
+      status: 404,
+      headers: { 'content-type': 'application/json' },
+    }),
+    new Response(JSON.stringify({ error: 'Not found' }), {
+      status: 404,
+      headers: { 'content-type': 'application/json' },
+    }),
+    new Response(JSON.stringify({ answer: 'Pattern scoped direct answer' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+  const patternScoped = await app.inject({
+    method: 'POST',
+    url: '/vision/analyse',
+    headers: { authorization: ownerAuthorization },
+    payload: {
+      imageDataUri: 'data:image/png;base64,abc',
+      question: 'What should I check?',
+      patternId: ownerPatternId,
+      file_id: undefined,
+    },
+  });
+  assert.equal(patternScoped.statusCode, 201, patternScoped.body);
+  const patternScopedWorkflowBody = JSON.parse(fetchCalls.slice(beforePatternScopedCalls)[2].init.body);
+  assert.equal(patternScopedWorkflowBody.pattern_id, ownerPatternId);
+  assert.equal(patternScopedWorkflowBody.patternId, ownerPatternId);
+  assert.equal(patternScopedWorkflowBody.project_id, 'owner-project');
+  assert.equal(patternScopedWorkflowBody.file_id, 'owner-file');
+  assert.equal(patternScopedWorkflowBody.job_id, 'owner-job');
+  assert.equal(patternScopedWorkflowBody.user_id, `pattern:${ownerId}:${ownerPatternId}`);
+  assert.equal(patternScopedWorkflowBody.userId, `pattern:${ownerId}:${ownerPatternId}`);
+  assert.equal(patternScopedWorkflowBody.platform_user_id, ownerId);
+  assert.equal(patternScopedWorkflowBody.answer_mode, 'pattern_priority');
+  assert.equal(patternScopedWorkflowBody.pattern_available, true);
+  assert.equal(patternScopedWorkflowBody.uploaded_pattern_summary, 'Owner pattern summary only.');
 
   const beforeUnlinkedCalls = fetchCalls.length;
   queuedResponses.push(
@@ -237,5 +343,9 @@ test('Stitch Vision route gates entitlement and handles WordPress bridge fallbac
     },
   });
   assert.equal(bridgeFailure.statusCode, 502, bridgeFailure.body);
-  assert.deepEqual(bridgeFailure.json(), { error: 'WordPress image service unavailable' });
+  assert.deepEqual(bridgeFailure.json(), {
+    error: 'StitchSense could not reach the image analysis service. Please try again.',
+    requestId: bridgeFailure.headers['x-request-id'],
+  });
+  assert.doesNotMatch(bridgeFailure.body, /WordPress image service unavailable/);
 });

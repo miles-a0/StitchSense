@@ -47,7 +47,17 @@ async function restoreWithRefreshToken(
   }
 
   await dependencies.saveTokens(refreshResponse.accessToken, refreshResponse.refreshToken);
-  const entitlementResponse = await dependencies.entitlement(refreshResponse.accessToken);
+  let entitlementResponse: Awaited<ReturnType<SessionRestorationDependencies['entitlement']>>;
+
+  try {
+    entitlementResponse = await dependencies.entitlement(refreshResponse.accessToken);
+  } catch (error) {
+    if (isUnauthorized(error)) {
+      await dependencies.clearTokens();
+      return null;
+    }
+    throw error;
+  }
 
   return {
     user: refreshResponse.user,

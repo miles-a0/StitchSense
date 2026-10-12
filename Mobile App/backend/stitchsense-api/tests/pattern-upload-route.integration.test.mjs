@@ -21,6 +21,13 @@ function multipartBody({ boundary, fieldName, filename, contentType, body }) {
   ]);
 }
 
+function normaliseContentType(value) {
+  return value
+    .split(';')
+    .map((part) => part.trim().toLowerCase())
+    .join('; ');
+}
+
 test('pattern upload route stores text files and sends indexing workflow payload', {
   skip: databaseUrl && objectStorageEndpoint ? false : 'TEST_DATABASE_URL and OBJECT_STORAGE_ENDPOINT are not configured',
 }, async () => {
@@ -66,8 +73,13 @@ test('pattern upload route stores text files and sends indexing workflow payload
 
   const uploadRequests = [];
   const originalFetch = globalThis.fetch;
+  let rejectNextUploadSecret = false;
   globalThis.fetch = async (input, init = {}) => {
     uploadRequests.push({ input, init });
+    if (rejectNextUploadSecret) {
+      rejectNextUploadSecret = false;
+      return new Response('', { status: 401 });
+    }
     assert.equal(String(input), 'http://workflow.test/upload');
     assert.equal(init.method, 'POST');
     assert.equal(init.headers['accept'], 'application/json');
@@ -82,6 +94,10 @@ test('pattern upload route stores text files and sends indexing workflow payload
     assert.equal(payload.secret, 'test-upload-secret');
     assert.equal(payload.upload_transport, 'stitchsense_platform_file');
     assert.equal(payload.platform_pattern_id, patternId);
+    assert.equal(payload.user_id, `pattern:${userId}:${patternId}`);
+    assert.equal(payload.userId, `pattern:${userId}:${patternId}`);
+    assert.equal(payload.platform_user_id, userId);
+    assert.equal(payload.platformUserId, userId);
     assert.equal(payload.project_name, 'Seeded upload pattern');
     assert.equal(payload.file_name, 'notes.txt');
     assert.equal(payload.mime_type, 'text/plain; charset=utf-8');
@@ -92,8 +108,8 @@ test('pattern upload route stores text files and sends indexing workflow payload
     assert.equal(workflowFile.name, 'notes.txt');
     assert.equal(workflowFile.type, 'text/plain; charset=utf-8');
     assert.equal(await workflowFile.text(), uploadBody);
-    assert.equal(await formData.get('data').text(), uploadBody);
-    assert.equal(await formData.get('pattern_file').text(), uploadBody);
+    const fileParts = [...formData.entries()].filter(([, value]) => typeof value !== 'string');
+    assert.deepEqual(fileParts.map(([name]) => name), ['file']);
 
     return new Response(
       JSON.stringify({
@@ -114,9 +130,10 @@ test('pattern upload route stores text files and sends indexing workflow payload
   let app;
   let pool;
   let patternId;
+  let userId;
   const uploadBody = 'Row 1: Knit across.\nRow 2: Purl across.\n';
   try {
-    const userId = (
+    userId = (
       await client.query(
         `INSERT INTO users (email, display_name)
          VALUES ('upload-owner@example.test', 'Upload Owner')
@@ -274,8 +291,36 @@ test('pattern upload route stores text files and sends indexing workflow payload
         Key: responseBody.fileKey,
       }),
     );
-    assert.equal(storedObject.ContentType, 'text/plain; charset=utf-8');
+    assert.equal(normaliseContentType(storedObject.ContentType), 'text/plain; charset=utf-8');
     assert.equal(await storedObject.Body.transformToString(), uploadBody);
+
+    rejectNextUploadSecret = true;
+    const rejectedWorkflow = await app.inject({
+      method: 'POST',
+      url: `/patterns/${patternId}/file`,
+      headers: {
+        authorization,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: multipartBody({
+        boundary,
+        fieldName: 'file',
+        filename: 'notes.txt',
+        contentType: 'text/plain',
+        body: uploadBody,
+      }),
+    });
+    assert.equal(rejectedWorkflow.statusCode, 201, rejectedWorkflow.body);
+    const rejectedBody = rejectedWorkflow.json();
+    assert.equal(rejectedBody.indexed, false);
+    assert.match(rejectedBody.indexingError, /could not finish indexing/);
+    assert.doesNotMatch(rejectedWorkflow.body, /N8N_|secret|API server/i);
+
+    const rejectedMetadata = (
+      await client.query('SELECT metadata FROM user_patterns WHERE id = $1', [patternId])
+    ).rows[0].metadata;
+    assert.doesNotMatch(JSON.stringify(rejectedMetadata), /N8N_|secret|API server/i);
+    assert.equal(typeof rejectedMetadata.upload_workflow_request_id, 'string');
   } finally {
     globalThis.fetch = originalFetch;
     if (app) await app.close();

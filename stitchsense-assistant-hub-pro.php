@@ -156,13 +156,10 @@ if (!class_exists('StitchSense_Assistant_Hub_Pro_V5')) {
             add_action('admin_init', [$this, 'handle_stripe_subscription_admin_action']);
             add_action('admin_enqueue_scripts', [$this, 'register_admin_assets']);
             add_action('wp_ajax_stitchsense_image_analysis_proxy', [$this, 'image_analysis_proxy']);
-            add_action('wp_ajax_nopriv_stitchsense_image_analysis_proxy', [$this, 'image_analysis_proxy']);
             add_action('wp_ajax_stitchsense_chat_proxy', [$this, 'chat_proxy']);
-            add_action('wp_ajax_nopriv_stitchsense_chat_proxy', [$this, 'chat_proxy']);
             add_action('wp_ajax_stitchsense_rest_nonce', [$this, 'ajax_rest_nonce']);
             add_action('wp_ajax_nopriv_stitchsense_rest_nonce', [$this, 'ajax_rest_nonce']);
             add_action('admin_post_stitchsense_chat_proxy', [$this, 'chat_proxy']);
-            add_action('admin_post_nopriv_stitchsense_chat_proxy', [$this, 'chat_proxy']);
             add_action('rest_api_init', [$this, 'register_rest_routes']);
             add_filter('rest_pre_serve_request', [$this, 'send_stitchsense_nocache_headers'], 10, 4);
         }
@@ -2838,6 +2835,13 @@ if (!class_exists('StitchSense_Assistant_Hub_Pro_V5')) {
 
         public function chat_proxy($request = null) {
             try {
+                if (!($request instanceof WP_REST_Request) && !is_user_logged_in()) {
+                    return $this->chat_proxy_response([
+                        'success' => false,
+                        'error' => 'You must be signed in to use StitchSense assistant tools.',
+                    ], 401);
+                }
+
                 if ($request instanceof WP_REST_Request) {
                     $payload = $request->get_json_params();
                     if (!is_array($payload)) {
@@ -2891,6 +2895,13 @@ if (!class_exists('StitchSense_Assistant_Hub_Pro_V5')) {
             $max_bytes = 50 * 1024 * 1024;
 
             try {
+                if (!($request instanceof WP_REST_Request) && !is_user_logged_in()) {
+                    return $this->image_proxy_response([
+                        'success' => false,
+                        'error' => 'You must be signed in to use StitchSense assistant tools.',
+                    ], 401);
+                }
+
                 if ($request instanceof WP_REST_Request) {
                     $payload = $request->get_json_params();
                     if (!is_array($payload)) {

@@ -1,11 +1,74 @@
 import type { Entitlement } from '@/src/lib/models';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
+type StoreAccessSource = 'apple' | 'google';
+
+type RevenueCatEntitlementSnapshot = {
+  activeSubscriptions?: string[];
+  entitlements?: {
+    active?: Record<string, { productIdentifier?: string | null } | undefined>;
+  };
+};
+
+const manualAccessSources = new Set(['manual_lifetime', 'manual_trial', 'courtesy_access']);
+
+function storePlanFromProductId(productId?: string | null) {
+  const normalized = productId?.toLowerCase() ?? '';
+  if (normalized.includes('annual') || normalized.includes('year')) {
+    return 'pro_annual';
+  }
+  return 'pro_monthly';
+}
 
 export function hasActiveEntitlementAccess(entitlement?: Pick<Entitlement, 'status' | 'accessSource'> | null) {
   if (!entitlement) return false;
-  if (entitlement.status === 'expired') return false;
+  if (entitlement.status !== 'active' && entitlement.status !== 'trialing') return false;
   return entitlement.accessSource !== 'none';
+}
+
+export function isManualEntitlementSource(source?: string | null) {
+  return source ? manualAccessSources.has(source) : false;
+}
+
+export function effectiveEntitlement(
+  backendEntitlement: Entitlement | null,
+  storeEntitlement: Entitlement | null,
+) {
+  if (
+    backendEntitlement &&
+    isManualEntitlementSource(backendEntitlement.accessSource) &&
+    hasActiveEntitlementAccess(backendEntitlement)
+  ) {
+    return backendEntitlement;
+  }
+
+  return storeEntitlement ?? backendEntitlement;
+}
+
+export function revenueCatEntitlementSnapshot(
+  customerInfo: RevenueCatEntitlementSnapshot,
+  entitlementId: string,
+  accessSource: StoreAccessSource,
+): Entitlement | null {
+  const activeEntitlement = customerInfo.entitlements?.active?.[entitlementId];
+  if (!activeEntitlement) {
+    return null;
+  }
+
+  const productId = activeEntitlement.productIdentifier ?? customerInfo.activeSubscriptions?.[0] ?? null;
+  return {
+    accessSource,
+    features: {
+      aiChat: true,
+      patternUploads: true,
+      ravelryImport: true,
+      rewrite: true,
+      stitchVision: true,
+    },
+    plan: storePlanFromProductId(productId),
+    status: 'active',
+    trialEndsAt: null,
+  };
 }
 
 export function formatAccessSource(source?: string | null) {
@@ -28,6 +91,62 @@ export function formatAccessSource(source?: string | null) {
       return 'No active entitlement';
     default:
       return 'Pending';
+  }
+}
+
+export function formatEntitlementPlan(plan?: string | null) {
+  switch (plan) {
+    case 'pro_annual':
+      return 'Pro Annual';
+    case 'pro_monthly':
+      return 'Pro Monthly';
+    case 'standard_trial':
+      return 'Trial';
+    case 'manual_lifetime':
+      return 'Lifetime Pro';
+    case 'manual_trial':
+      return 'Extended Trial';
+    case 'courtesy_access':
+      return 'Courtesy Pro';
+    case 'free':
+    case 'none':
+      return 'Free';
+    case undefined:
+    case null:
+    case '':
+      return 'Free';
+    default:
+      return plan
+        .split(/[_\s-]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+  }
+}
+
+export function formatEntitlementStatus(status?: string | null) {
+  switch (status) {
+    case 'active':
+      return 'Active';
+    case 'trialing':
+      return 'Trialing';
+    case 'expired':
+      return 'Expired';
+    case 'cancelled':
+    case 'canceled':
+      return 'Cancelled';
+    case 'pending':
+      return 'Pending';
+    case undefined:
+    case null:
+    case '':
+      return 'Unknown';
+    default:
+      return status
+        .split(/[_\s-]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
   }
 }
 

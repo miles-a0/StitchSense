@@ -32,6 +32,10 @@ export function getUserFacingErrorMessage(
       return 'This feature needs an active StitchSense Pro plan.';
     }
 
+    if (error.statusCode === 408 || /timed out|too long to respond|aborted/i.test(rawMessage)) {
+      return withSupportCode('The server took too long to respond. Please check your connection and try again.', error.requestId);
+    }
+
     if (
       error.statusCode === 404 &&
       /route .*not found|no route was found matching the url/i.test(rawMessage)
@@ -45,6 +49,10 @@ export function getUserFacingErrorMessage(
 
     if (error.statusCode === 429 || /rate limit|please wait \d+/i.test(rawMessage)) {
       return 'You’re doing a lot at once. Please wait a moment and try again.';
+    }
+
+    if (/network request failed|failed to fetch|internet connection appears to be offline/i.test(rawMessage)) {
+      return 'StitchSense could not reach the server. Please check your connection and try again.';
     }
 
     if (/invalid key provided to securestore/i.test(rawMessage)) {
@@ -67,6 +75,14 @@ export function getUserFacingErrorMessage(
 
     if (/rate limit|please wait \d+/i.test(rawMessage)) {
       return 'You’re doing a lot at once. Please wait a moment and try again.';
+    }
+
+    if (/timed out|too long to respond|aborted/i.test(rawMessage)) {
+      return 'The server took too long to respond. Please check your connection and try again.';
+    }
+
+    if (/network request failed|failed to fetch|internet connection appears to be offline/i.test(rawMessage)) {
+      return 'StitchSense could not reach the server. Please check your connection and try again.';
     }
 
     if (/invalid key provided to securestore/i.test(rawMessage)) {

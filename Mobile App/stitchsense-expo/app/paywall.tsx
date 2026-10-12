@@ -3,21 +3,30 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BrandButton } from '@/src/components/ui/brand-button';
+import { stitchSenseAPI } from '@/src/lib/api';
 import {
   hasActiveEntitlementAccess,
+  formatAccessSource,
+  formatEntitlementPlan,
+  formatEntitlementStatus,
   paywallAccessCopy,
   paywallAccessHeadline,
   paywallTrialLabel,
+  isManualEntitlementSource,
   purchaseStatusMessage,
 } from '@/src/lib/entitlement-access';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import {
   openRevenueCatManagement,
+  getRevenueCatPlanPricing,
+  isUsingRevenueCatTestStore,
   purchaseRevenueCatPlan,
   restoreRevenueCatPurchases,
   usesRevenueCatStoreBilling,
   type RevenueCatPlan,
+  type RevenueCatPlanPricing,
 } from '@/src/lib/revenuecat';
+import { annualSavingsLabel } from '@/src/lib/revenuecat-pricing';
 import { useSession } from '@/src/providers/session-provider';
 import { tokens } from '@/src/theme/tokens';
 
@@ -26,23 +35,18 @@ type BillingPlan = RevenueCatPlan;
 const planOptions: {
   id: BillingPlan;
   label: string;
-  price: string;
   cadence: string;
   helper: string;
-  badge?: string;
 }[] = [
   {
     id: 'annual',
     label: 'Annual',
-    price: '£96',
     cadence: 'per year',
     helper: 'Best value if StitchSense will be part of your regular making routine.',
-    badge: 'Save £24',
   },
   {
     id: 'monthly',
     label: 'Monthly',
-    price: '£10',
     cadence: 'per month',
     helper: 'Flexible access while you try the full platform or work through a project.',
   },
@@ -67,6 +71,7 @@ const reassuranceRows = [
 ];
 
 const usesStoreBilling = usesRevenueCatStoreBilling();
+const usesRevenueCatTestStore = isUsingRevenueCatTestStore();
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -89,17 +94,21 @@ export default function PaywallScreen() {
   const [isRestoringPurchases, setIsRestoringPurchases] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [planPricing, setPlanPricing] = useState<RevenueCatPlanPricing>({});
+  const [isLoadingPricing, setIsLoadingPricing] = useState(false);
 
   const hasActivePaidOrCourtesyAccess = useMemo(() => {
     return hasActiveEntitlementAccess(entitlement);
   }, [entitlement]);
 
   const selectedPlanOption = planOptions.find((option) => option.id === selectedPlan) ?? planOptions[0];
+  const savingsLabel = annualSavingsLabel(planPricing);
   const promoCode = typeof params.promoCode === 'string' ? params.promoCode : '';
   const couponId = typeof params.couponId === 'string' ? params.couponId : '';
   const promotionCodeId = typeof params.promotionCodeId === 'string' ? params.promotionCodeId : '';
   const trialStatus = paywallTrialLabel(entitlement?.trialEndsAt);
   const hasLegacyWebBilling = entitlement?.accessSource === 'stripe';
+  const hasManualAccess = hasActivePaidOrCourtesyAccess && isManualEntitlementSource(entitlement?.accessSource);
   const canManageStoreBilling = entitlement?.accessSource === 'apple' || entitlement?.accessSource === 'google';
 
   useEffect(() => {
@@ -107,6 +116,37 @@ export default function PaywallScreen() {
       setSelectedPlan(requestedPlan);
     }
   }, [requestedPlan]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    async function loadPricing() {
+      if (!usesStoreBilling || !user?.id) {
+        setPlanPricing({});
+        return;
+      }
+
+      setIsLoadingPricing(true);
+      try {
+        const pricing = await getRevenueCatPlanPricing(user.id);
+        if (isCurrent) {
+          setPlanPricing(pricing);
+        }
+      } catch {
+        if (isCurrent) {
+          setPlanPricing({});
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingPricing(false);
+        }
+      }
+    }
+
+    void loadPricing();
+    return () => {
+      isCurrent = false;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (params.autoCheckout === '1' && requestedPlan && accessToken) {
@@ -130,6 +170,9 @@ export default function PaywallScreen() {
       setStatusMessage(purchaseStatusMessage(purchase.status, purchase.hasActiveEntitlement));
       if (purchase.status === 'cancelled') {
         return;
+      }
+      if (purchase.hasActiveEntitlement) {
+        await stitchSenseAPI.syncRevenueCatEntitlement(accessToken);
       }
       await wait(1500);
       await refreshAccount();
@@ -156,6 +199,9 @@ export default function PaywallScreen() {
     try {
       if (!usesStoreBilling || !user?.id || !canManageStoreBilling) {
         throw new Error('Store subscription management is available after a mobile store subscription is active.');
+      }
+      if (usesRevenueCatTestStore) {
+        throw new Error('Subscription management is available after a real App Store or Google Play purchase. RevenueCat Test Store purchases can be changed from the RevenueCat dashboard.');
       }
       await openRevenueCatManagement(user.id);
       setStatusMessage('Checking your subscription status...');
@@ -184,6 +230,9 @@ export default function PaywallScreen() {
           ? 'Store purchase restored. Syncing your StitchSense access...'
           : 'No active store subscription was found for this account.',
       );
+      if (restored.hasActiveEntitlement && accessToken) {
+        await stitchSenseAPI.syncRevenueCatEntitlement(accessToken);
+      }
       await wait(1500);
       await refreshAccount();
     } catch (error) {
@@ -261,14 +310,16 @@ export default function PaywallScreen() {
                 <View style={styles.planHeader}>
                   <View>
                     <Text style={styles.planLabel}>{option.label}</Text>
-                    <Text style={styles.planPrice}>{option.price}</Text>
+                    <Text style={styles.planPrice}>
+                      {planPricing[option.id]?.priceString ?? (isLoadingPricing ? 'Loading price' : 'Store price')}
+                    </Text>
                     <Text style={styles.planMeta}>{option.cadence}</Text>
                   </View>
                   <View style={[styles.radio, isSelected ? styles.radioActive : null]}>
                     {isSelected ? <View style={styles.radioDot} /> : null}
                   </View>
                 </View>
-                {option.badge ? <Text style={styles.savingsBadge}>{option.badge}</Text> : null}
+                {option.id === 'annual' && savingsLabel ? <Text style={styles.savingsBadge}>{savingsLabel}</Text> : null}
                 <Text style={styles.planCopy}>{option.helper}</Text>
               </Pressable>
             );
@@ -278,10 +329,14 @@ export default function PaywallScreen() {
           label={
             hasLegacyWebBilling
               ? 'Legacy web plan active'
+              : hasManualAccess
+                ? 'Admin access active'
               : canManageStoreBilling
                 ? isOpeningPortal
                   ? 'Opening store settings...'
-                  : 'Manage or change plan'
+                  : usesRevenueCatTestStore
+                    ? 'Test Store purchase active'
+                    : 'Manage or change plan'
               : usesStoreBilling
                 ? isLaunchingCheckout === selectedPlan
                   ? 'Opening store purchase...'
@@ -290,15 +345,19 @@ export default function PaywallScreen() {
                 ? 'Opening store purchase...'
                 : 'Open this on iOS or Android'
           }
-          onPress={() => void (hasLegacyWebBilling ? refreshStatus() : canManageStoreBilling ? openBillingPortal() : launchCheckout(selectedPlan))}
+          onPress={() => void (hasLegacyWebBilling || hasManualAccess ? refreshStatus() : canManageStoreBilling ? openBillingPortal() : launchCheckout(selectedPlan))}
           loading={canManageStoreBilling ? isOpeningPortal : isLaunchingCheckout === selectedPlan}
           style={styles.fullWidth}
         />
         <Text style={styles.meta}>
           {hasLegacyWebBilling
             ? 'This account has an active legacy web subscription. New mobile subscriptions are handled by the App Store or Google Play.'
+            : hasManualAccess
+              ? 'This account has StitchSense admin-managed access. You do not need to subscribe in the App Store or Google Play.'
             : canManageStoreBilling
-              ? 'Your store subscription is managed through the App Store or Google Play.'
+              ? usesRevenueCatTestStore
+                ? 'This is a RevenueCat Test Store purchase. Real store management appears after App Store or Google Play products are connected.'
+                : 'Your store subscription is managed through the App Store or Google Play.'
               : usesStoreBilling
                 ? 'You will review the final price in the App Store or Google Play before paying.'
                 : 'Mobile subscriptions require an iOS or Android store build.'}
@@ -331,13 +390,13 @@ export default function PaywallScreen() {
         <Text style={styles.sectionTitle}>Current access</Text>
         <View style={styles.pillRow}>
           <View style={styles.pill}>
-            <Text style={styles.pillLabel}>{entitlement?.plan ?? 'free'}</Text>
+            <Text style={styles.pillLabel}>{formatEntitlementPlan(entitlement?.plan)}</Text>
           </View>
           <View style={styles.pill}>
-            <Text style={styles.pillLabel}>{entitlement?.status ?? 'unknown'}</Text>
+            <Text style={styles.pillLabel}>{formatEntitlementStatus(entitlement?.status)}</Text>
           </View>
           <View style={styles.pill}>
-            <Text style={styles.pillLabel}>{entitlement?.accessSource ?? 'pending'}</Text>
+            <Text style={styles.pillLabel}>{formatAccessSource(entitlement?.accessSource)}</Text>
           </View>
         </View>
         {entitlement?.trialEndsAt ? (
@@ -358,7 +417,13 @@ export default function PaywallScreen() {
           />
           {canManageStoreBilling ? (
             <BrandButton
-              label={isOpeningPortal ? 'Opening store settings...' : 'Manage store subscription'}
+              label={
+                usesRevenueCatTestStore
+                  ? 'Test Store purchase active'
+                  : isOpeningPortal
+                    ? 'Opening store settings...'
+                    : 'Manage store subscription'
+              }
               onPress={() => void openBillingPortal()}
               loading={isOpeningPortal}
               style={styles.fullWidth}

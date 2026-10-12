@@ -1,9 +1,22 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
 import test from 'node:test';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+
+const parseEnvExample = (filePath) => {
+  const env = { PATH: process.env.PATH };
+  for (const rawLine of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const separatorIndex = line.indexOf('=');
+    if (separatorIndex === -1) continue;
+    env[line.slice(0, separatorIndex)] = line.slice(separatorIndex + 1);
+  }
+  return env;
+};
 
 process.env.NODE_ENV = 'production';
 process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-32-characters';
@@ -95,4 +108,122 @@ test('production startup rejects missing security configuration', async () => {
     }),
     /Invalid production configuration/,
   );
+});
+
+test('production startup rejects missing billing webhook secrets', async () => {
+  const baseEnv = {
+    PATH: process.env.PATH,
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://stitchsense:stitchsense@db.example.test:5432/stitchsense',
+    JWT_SECRET: 'test-only-jwt-secret-with-more-than-32-characters',
+    PUBLIC_API_BASE_URL: 'https://stitchsense.example.test',
+    CORS_ORIGINS: 'https://catlowyarns.co.uk',
+    TRUST_PROXY: '127.0.0.1',
+    N8N_CHAT_URL: 'https://workflow.example.test/chat',
+    N8N_UPLOAD_URL: 'https://workflow.example.test/upload',
+    N8N_LIBRARY_PROXY_URL: 'https://workflow.example.test/library',
+    N8N_IMAGE_URL: 'https://workflow.example.test/image',
+    N8N_SHARED_SECRET: 'test-only-n8n-secret-with-more-than-32-characters',
+    N8N_CHAT_SHARED_SECRET: 'test-only-chat-secret-with-more-than-32-characters',
+    N8N_UPLOAD_SHARED_SECRET: 'test-only-upload-secret-with-more-than-32-characters',
+    OBJECT_STORAGE_ENDPOINT: 'https://storage.example.test',
+    OBJECT_STORAGE_BUCKET: 'stitchsense-patterns',
+    OBJECT_STORAGE_ACCESS_KEY: 'not-the-dev-access-key',
+    OBJECT_STORAGE_SECRET_KEY: 'not-the-dev-secret-key',
+  };
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      "import('./dist/config.js').then(({validateProductionConfig}) => validateProductionConfig())",
+    ], {
+      cwd: process.cwd(),
+      env: baseEnv,
+    }),
+    /REVENUECAT_WEBHOOK_AUTHORIZATION/,
+  );
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      "import('./dist/config.js').then(({validateProductionConfig}) => validateProductionConfig())",
+    ], {
+      cwd: process.cwd(),
+      env: {
+        ...baseEnv,
+        REVENUECAT_WEBHOOK_AUTHORIZATION: 'Bearer revenuecat-test-secret-with-more-than-32-characters',
+        STRIPE_SECRET_KEY: 'stripe-secret-key-configured-for-test',
+      },
+    }),
+    /STRIPE_WEBHOOK_SECRET/,
+  );
+});
+
+test('production startup validates workflow secrets and accepts a complete launch config', async () => {
+  const completeEnv = {
+    PATH: process.env.PATH,
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://stitchsense:stitchsense@db.example.test:5432/stitchsense',
+    JWT_SECRET: 'test-only-jwt-secret-with-more-than-32-characters',
+    PUBLIC_API_BASE_URL: 'https://stitchsense.example.test',
+    CORS_ORIGINS: 'https://catlowyarns.co.uk',
+    TRUST_PROXY: '127.0.0.1',
+    N8N_CHAT_URL: 'https://workflow.example.test/chat',
+    N8N_UPLOAD_URL: 'https://workflow.example.test/upload',
+    N8N_LIBRARY_PROXY_URL: 'https://workflow.example.test/library',
+    N8N_IMAGE_URL: 'https://workflow.example.test/image',
+    N8N_SHARED_SECRET: 'test-only-n8n-secret-with-more-than-32-characters',
+    N8N_CHAT_SHARED_SECRET: 'test-only-chat-secret-with-more-than-32-characters',
+    N8N_UPLOAD_SHARED_SECRET: 'test-only-upload-secret-with-more-than-32-characters',
+    OBJECT_STORAGE_ENDPOINT: 'https://storage.example.test',
+    OBJECT_STORAGE_BUCKET: 'stitchsense-patterns',
+    OBJECT_STORAGE_ACCESS_KEY: 'not-the-dev-access-key',
+    OBJECT_STORAGE_SECRET_KEY: 'not-the-dev-secret-key',
+    REVENUECAT_WEBHOOK_AUTHORIZATION: 'Bearer revenuecat-test-secret-with-more-than-32-characters',
+    REVENUECAT_API_KEY: 'test-revenuecat-api-key-with-more-than-32-characters',
+    REVENUECAT_API_BASE_URL: 'https://api.revenuecat.example.test/v1',
+    REVENUECAT_ENTITLEMENT_ID: 'pro',
+    WORDPRESS_SITE_URL: 'https://catlowyarns.co.uk',
+    WORDPRESS_BRIDGE_SHARED_SECRET: 'test-wordpress-secret-with-more-than-32-characters',
+  };
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      "import('./dist/config.js').then(({validateProductionConfig}) => validateProductionConfig())",
+    ], {
+      cwd: process.cwd(),
+      env: {
+        ...completeEnv,
+        N8N_CHAT_URL: 'http://workflow.example.test/chat',
+        N8N_UPLOAD_SHARED_SECRET: 'short',
+      },
+    }),
+    /N8N_CHAT_URL/,
+  );
+
+  await execFileAsync(process.execPath, [
+    '--input-type=module',
+    '--eval',
+    "import('./dist/config.js').then(({validateProductionConfig}) => validateProductionConfig())",
+  ], {
+    cwd: process.cwd(),
+    env: completeEnv,
+  });
+});
+
+test('production-like env examples satisfy startup validation placeholders', async () => {
+  for (const envExample of ['.env.vps.example', '.env.staging.example']) {
+    await execFileAsync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      "import('./dist/config.js').then(({validateProductionConfig}) => validateProductionConfig())",
+    ], {
+      cwd: process.cwd(),
+      env: parseEnvExample(envExample),
+    });
+  }
 });

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { hasFeature, resolveEntitlement } from '../services/entitlements.js';
+import { externalServiceErrorLogContext } from '../services/externalServiceErrorLog.js';
 import {
   buildOwnedSourceRequiredResponse,
   englishOnlyInstruction,
@@ -78,6 +79,34 @@ function logPatternRouting(
     },
     'Resolved pattern-aware chat routing',
   );
+}
+
+function workflowLogContext(params: {
+  patternId: string | null;
+  sessionId: string;
+  toolMode: string;
+  promptChars: number;
+  historyCount: number;
+  directPatternTextChars: number;
+}) {
+  return {
+    patternId: params.patternId,
+    sessionId: params.sessionId,
+    toolMode: params.toolMode,
+    promptChars: params.promptChars,
+    historyCount: params.historyCount,
+    directPatternTextChars: params.directPatternTextChars,
+  };
+}
+
+function workflowResponseLogContext(value: unknown) {
+  const record = workflowRecord(value);
+  return {
+    workflowPayloadType: Array.isArray(value) ? 'array' : typeof value,
+    workflowKeys: Object.keys(record).slice(0, 12),
+    contextCount: workflowNumber(record.context_count ?? record.contextCount) ?? 0,
+    usingPatternSummaryFallback: Boolean(record.using_pattern_summary_fallback ?? record.usingPatternSummaryFallback),
+  };
 }
 
 function buildSessionTitleFromPrompt(content: string) {
@@ -600,6 +629,14 @@ export async function chatRoutes(app: FastifyInstance) {
       locale: 'en-GB',
       system_instruction: [englishOnlyInstruction(), guideSystemInstruction].filter(Boolean).join('\n'),
     };
+    const aiLogContext = workflowLogContext({
+      patternId: session.pattern_id,
+      sessionId: session.id,
+      toolMode: workflowToolMode,
+      promptChars: workflowQuestion.length,
+      historyCount: aiPayload.history.length,
+      directPatternTextChars: directPatternText?.length ?? 0,
+    });
 
     logPatternRouting(request, {
       toolMode: workflowToolMode,
@@ -623,7 +660,10 @@ export async function chatRoutes(app: FastifyInstance) {
           'Direct chat workflow completed',
         );
       } catch (error) {
-        request.log.warn({ error }, 'Direct chat workflow failed; trying WordPress chat proxy fallback');
+        request.log.warn(
+          { error: externalServiceErrorLogContext(error), ...aiLogContext },
+          'Direct chat workflow failed; trying WordPress chat proxy fallback',
+        );
         ai = null;
       }
       answer = workflowAnswerOrNull(ai);
@@ -665,7 +705,10 @@ export async function chatRoutes(app: FastifyInstance) {
         !hasReliablePatternRetrieval(ai)
       ) {
         request.log.warn(
-          { aiPayload, ai },
+          {
+            ...aiLogContext,
+            contextCount: workflowNumber(workflowRecord(ai).context_count ?? workflowRecord(ai).contextCount) ?? 0,
+          },
           'Pattern step guide blocked because workflow returned no reliable scoped pattern retrieval',
         );
         answer = patternEvidenceRequiredMessage();
@@ -677,15 +720,24 @@ export async function chatRoutes(app: FastifyInstance) {
         };
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Workflow chat failed';
-      request.log.error({ error, aiPayload }, 'Chat workflow failed');
-      return reply.code(502).send({ error: message });
+      request.log.error(
+        { error: externalServiceErrorLogContext(error), ...aiLogContext },
+        'Chat workflow failed',
+      );
+      return reply.code(502).send({
+        error: 'StitchSense could not reach the chat workflow. Please try again.',
+        requestId: request.id,
+      });
     }
 
     if (!answer) {
-      request.log.error({ aiPayload, ai }, 'Chat workflow returned no usable answer');
+      request.log.error(
+        { ...aiLogContext, ...workflowResponseLogContext(ai) },
+        'Chat workflow returned no usable answer',
+      );
       return reply.code(502).send({
         error: 'StitchSense could not get a usable chat answer from the workflow. Please try again.',
+        requestId: request.id,
       });
     }
     const saved = await query(

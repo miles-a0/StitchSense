@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 
 const baseUrl = process.env.STITCH_CAPTURE_BASE_URL || 'http://127.0.0.1:8082';
+const apiBaseUrl = process.env.STITCH_CAPTURE_API_BASE_URL || 'https://stitchsense.zu-auto.co.uk';
 const username = process.env.STITCH_CAPTURE_USERNAME;
 const password = process.env.STITCH_CAPTURE_PASSWORD;
 const outputDir = process.env.STITCH_CAPTURE_OUTPUT;
@@ -95,8 +96,8 @@ async function capture(page, name, route, expectedText) {
     if (!token) return {};
     const headers = { authorization: `Bearer ${token}` };
     const [patternsResponse, projectsResponse] = await Promise.all([
-      fetch('https://stitchsense.zu-auto.co.uk/patterns', { headers }),
-      fetch('https://stitchsense.zu-auto.co.uk/projects', { headers }),
+      fetch(`${apiBaseUrl}/patterns`, { headers }),
+      fetch(`${apiBaseUrl}/projects`, { headers }),
     ]);
     const patternsPayload = await patternsResponse.json();
     const projectsPayload = await projectsResponse.json();

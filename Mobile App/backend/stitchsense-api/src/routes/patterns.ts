@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { hasFeature, resolveEntitlement } from '../services/entitlements.js';
+import { externalServiceErrorLogContext } from '../services/externalServiceErrorLog.js';
 import { renderPatternThumbnail, renderPatternThumbnailDataUri } from '../services/patternThumbnails.js';
 import {
   buildScopedWorkflowUserId,
@@ -571,13 +572,21 @@ export async function patternRoutes(app: FastifyInstance) {
     try {
       workflow = await callWorkflow('chat', workflowPayload);
     } catch (error) {
-      request.log.warn({ error }, 'Direct pattern summary workflow failed; trying WordPress chat proxy fallback');
+      request.log.warn(
+        { error: externalServiceErrorLogContext(error), patternId: id },
+        'Direct pattern summary workflow failed; trying WordPress chat proxy fallback',
+      );
       try {
         workflow = await callWordPressChatProxy(request.authUser.id, workflowPayload);
       } catch (fallbackError) {
-        const message = fallbackError instanceof Error ? fallbackError.message : 'Workflow chat failed';
-        request.log.error({ error: fallbackError }, 'Pattern summary refresh failed');
-        return reply.code(502).send({ error: message });
+        request.log.error(
+          { error: externalServiceErrorLogContext(fallbackError), patternId: id },
+          'Pattern summary refresh failed',
+        );
+        return reply.code(502).send({
+          error: 'StitchSense could not refresh the pattern summary. Please try again.',
+          requestId: request.id,
+        });
       }
     }
 
@@ -670,7 +679,11 @@ export async function patternRoutes(app: FastifyInstance) {
             } catch {
               // Keep the default detail string if the bridge did not return JSON.
             }
-            return reply.code(502).send({ error: detail });
+            request.log.error({ error: detail, patternId: id }, 'WordPress library delete failed');
+            return reply.code(502).send({
+              error: 'StitchSense could not delete the WordPress library item. Please try again.',
+              requestId: request.id,
+            });
           }
         }
       }
@@ -756,6 +769,7 @@ export async function patternRoutes(app: FastifyInstance) {
     let summaryText: string | null = null;
     let summaryHtml: string | null = null;
     let summaryStructured: Record<string, unknown> | null = null;
+    const scopedWorkflowUserId = buildScopedWorkflowUserId(request.authUser.id, id);
     const workflowPayload = {
       file_name: filename,
       mime_type: validatedMimeType,
@@ -766,6 +780,10 @@ export async function patternRoutes(app: FastifyInstance) {
       upload_nonce: `mobile_${id}`,
       upload_transport: 'stitchsense_platform_file',
       platform_pattern_id: id,
+      user_id: scopedWorkflowUserId,
+      userId: scopedWorkflowUserId,
+      platform_user_id: request.authUser.id,
+      platformUserId: request.authUser.id,
       source_url: pattern.source_url ?? '',
       file_extension: filename.split('.').pop()?.toLowerCase() ?? '',
       response_language: 'english',
@@ -815,14 +833,14 @@ export async function patternRoutes(app: FastifyInstance) {
         });
       } catch (multipartError) {
         request.log.warn(
-          { error: multipartError, patternId: id },
+          { error: externalServiceErrorLogContext(multipartError), patternId: id },
           'Multipart upload workflow failed; retrying with JSON file_data_uri',
         );
         try {
           uploadWorkflow = await callWorkflow('upload', dataUriPayload);
         } catch (jsonError) {
           request.log.warn(
-            { error: jsonError, patternId: id },
+            { error: externalServiceErrorLogContext(jsonError), patternId: id },
             'Direct JSON upload workflow failed; retrying through WordPress upload bridge with signed file URL',
           );
           uploadWorkflow = await callWordPressUploadProxy(request.authUser.id, wordpressUrlPayload);
@@ -850,9 +868,15 @@ export async function patternRoutes(app: FastifyInstance) {
       };
       workflowPatch = Object.fromEntries(Object.entries(workflowPatch).filter(([, value]) => value));
     } catch (error) {
-      request.log.error({ error, patternId: id }, 'Upload workflow indexing failed');
+      request.log.error(
+        { error: externalServiceErrorLogContext(error), patternId: id },
+        'Upload workflow indexing failed',
+      );
+      // Upstream detail can name server configuration, so logs and clients keep only safe request context.
       workflowPatch = {
-        upload_workflow_error: error instanceof Error ? error.message : 'Upload workflow indexing failed',
+        upload_workflow_error:
+          'The pattern file uploaded, but StitchSense could not finish indexing the full instructions. Please try the upload again.',
+        upload_workflow_request_id: request.id,
         upload_workflow_failed_at: new Date().toISOString(),
       };
     }
@@ -1023,8 +1047,11 @@ export async function patternRoutes(app: FastifyInstance) {
       reply.header('cache-control', 'private, max-age=300');
       return reply.send(thumbnail);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not generate a PDF thumbnail.';
-      return reply.code(502).send({ error: message });
+      request.log.error({ error, patternId: id }, 'Could not generate a PDF thumbnail');
+      return reply.code(502).send({
+        error: 'StitchSense could not generate a PDF thumbnail. Please try again.',
+        requestId: request.id,
+      });
     }
   });
 }

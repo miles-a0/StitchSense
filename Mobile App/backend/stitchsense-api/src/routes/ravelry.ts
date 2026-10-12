@@ -283,8 +283,8 @@ export async function ravelryRoutes(app: FastifyInstance) {
     try {
       await syncWordPressLibraryForUser(request.authUser.id);
     } catch (error) {
-      responsePayload.syncWarning =
-        error instanceof Error ? error.message : 'WordPress sync after import failed.';
+      request.log.warn({ error }, 'WordPress sync after Ravelry import failed');
+      responsePayload.syncWarning = 'WordPress sync after import failed.';
     }
 
     const importedId = typeof result.id === 'string' ? result.id.trim() : '';

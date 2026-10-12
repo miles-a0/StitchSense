@@ -96,5 +96,5 @@ export async function resolveEntitlement(userId: string): Promise<EntitlementDec
 }
 
 export function hasFeature(entitlement: EntitlementDecision, feature: keyof EntitlementDecision['features']) {
-  return entitlement.status !== 'expired' && entitlement.features[feature] === true;
+  return (entitlement.status === 'active' || entitlement.status === 'trialing') && entitlement.features[feature] === true;
 }

@@ -126,6 +126,13 @@ test('user data export and deletion are scoped to the authenticated user', {
     [ownerId],
   );
 
+  await client.query(
+    `INSERT INTO subscriptions (user_id, provider, provider_subscription_id, plan, status) VALUES
+       ($1, 'revenuecat', 'owner-store-transaction', 'annual', 'active'),
+       ($2, 'revenuecat', 'other-store-transaction', 'monthly', 'active')`,
+    [ownerId, otherId],
+  );
+
   const { buildApp } = await import('../dist/app.js');
   const { pool } = await import('../dist/db/pool.js');
   const app = await buildApp();
@@ -135,6 +142,13 @@ test('user data export and deletion are scoped to the authenticated user', {
   assert.equal(exportResponse.statusCode, 200, exportResponse.body);
   const exported = exportResponse.json();
   assert.equal(exported.userId, ownerId);
+  assert.equal(exported.account.email, 'export-owner@example.test');
+  assert.equal(exported.account.display_name, 'Export Owner');
+  assert.equal('password_hash' in exported.account, false);
+  assert.equal(exported.subscriptions.length, 1);
+  assert.equal(exported.subscriptions[0].status, 'active');
+  assert.equal('provider_subscription_id' in exported.subscriptions[0], false);
+  assert.equal(JSON.stringify(exported).includes('export-other@example.test'), false);
   assert.equal(exported.patterns.length, 1);
   assert.equal(exported.projects.length, 1);
   assert.equal(exported.projectCounters.length, 1);
@@ -214,7 +228,7 @@ test('user data export and deletion are scoped to the authenticated user', {
 
   const deleteAccountUser = await client.query(
     `INSERT INTO users (email, display_name, password_hash)
-     VALUES ('delete-account@example.test', 'Delete Account', crypt('delete-account-password', gen_salt('bf')))
+     VALUES ('delete-account@example.test', 'Delete Account', crypt('delete-account-password', gen_salt('bf', 10)))
      RETURNING id`,
   );
   const deleteAccountUserId = deleteAccountUser.rows[0].id;

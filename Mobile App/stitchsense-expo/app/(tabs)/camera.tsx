@@ -242,13 +242,20 @@ export default function CameraScreen() {
 
         <View style={styles.previewShell}>
           {imageUri ? (
-            <Image contentFit="cover" source={{ uri: imageUri }} style={styles.previewImage} />
+            <Image
+              accessibilityLabel="Selected photo for Stitch Vision"
+              accessible
+              contentFit="cover"
+              source={{ uri: imageUri }}
+              style={styles.previewImage}
+            />
           ) : (
             <Text style={styles.previewEmpty}>Preview appears here.</Text>
           )}
         </View>
 
         <TextInput
+          accessibilityLabel="Question about your photo"
           multiline
           onChangeText={setQuestion}
           placeholder="e.g. Is this twisted? What stitch is this? Does my tension look even?"
@@ -258,7 +265,12 @@ export default function CameraScreen() {
         />
         <View style={styles.presetRow}>
           {questionPresets.map((preset) => (
-            <Pressable key={preset} onPress={() => setQuestion(preset)} style={styles.presetChip}>
+            <Pressable
+              key={preset}
+              accessibilityHint="Fills in the question"
+              accessibilityRole="button"
+              onPress={() => setQuestion(preset)}
+              style={styles.presetChip}>
               <Text style={styles.presetChipText}>{preset}</Text>
             </Pressable>
           ))}

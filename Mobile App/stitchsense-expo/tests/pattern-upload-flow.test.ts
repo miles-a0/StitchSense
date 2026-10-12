@@ -41,7 +41,10 @@ test('pattern upload flow creates, uploads, refreshes, and returns the created p
         name: 'autumn-cardigan.pdf',
         mimeType: 'application/pdf',
       });
-      return { fileKey: 'pattern-1/file.pdf' };
+      return {
+        fileKey: 'pattern-1/file.pdf',
+        indexed: true,
+      };
     },
     async deletePattern() {
       calls.push('delete');
@@ -193,6 +196,66 @@ test('pattern upload flow stops before creating a record when no active token re
   );
 
   assert.deepEqual(calls, ['refreshAccount', 'loadTokens']);
+});
+
+test('pattern upload flow rolls back a created pattern when file indexing fails', async () => {
+  const calls: string[] = [];
+  const createdPattern = pattern('pattern-to-clean-up');
+  const api: PatternUploadApi = {
+    async createPattern(token, body) {
+      calls.push(`create:${token}:${body.title}`);
+      return createdPattern;
+    },
+    async uploadPatternFile(id, token) {
+      calls.push(`upload:${id}:${token}`);
+      return {
+        indexed: false,
+        indexingError: 'File format not supported',
+      };
+    },
+    async deletePattern(id, token) {
+      calls.push(`delete:${id}:${token}`);
+    },
+  };
+
+  await assert.rejects(
+    uploadPatternWithRollback(
+      {
+        accessToken: 'original-token',
+        selectedFile: {
+          uri: 'file:///cache/unsupported.pdf',
+          name: 'unsupported.pdf',
+        },
+        title: '',
+        suggestedTitle: 'unsupported',
+        craftType: 'crochet',
+        sourceUrl: '',
+      },
+      {
+        api,
+        async loadTokens() {
+          calls.push('loadTokens');
+          return { accessToken: 'fresh-token' };
+        },
+        async refreshAccount() {
+          calls.push('refreshAccount');
+        },
+        async refreshPatterns() {
+          calls.push('refreshPatterns');
+        },
+      },
+    ),
+    /File format not supported/,
+  );
+
+  assert.deepEqual(calls, [
+    'refreshAccount',
+    'loadTokens',
+    'create:fresh-token:unsupported',
+    'upload:pattern-to-clean-up:fresh-token',
+    'loadTokens',
+    'delete:pattern-to-clean-up:fresh-token',
+  ]);
 });
 
 test('pattern upload helpers format filenames and launch-friendly errors', () => {

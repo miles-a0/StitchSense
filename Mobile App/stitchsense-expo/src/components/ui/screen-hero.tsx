@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { useReducedMotion } from '@/src/hooks/use-reduced-motion';
@@ -28,7 +28,7 @@ export function ScreenHero({
 }: ScreenHeroProps) {
   const { width } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
-  const iconFloat = useRef(new Animated.Value(0)).current;
+  const [iconFloat] = useState(() => new Animated.Value(0));
   const compact = width < 430;
   const extraCompact = width < 390;
   const ultraCompact = width < 360;

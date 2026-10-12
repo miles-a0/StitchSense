@@ -73,7 +73,7 @@ function clampVisionQuestion(value: string) {
 function chatError(error: unknown) {
   if (error instanceof APIError) {
     if (error.message.includes('Workflow chat failed with 401')) {
-      return 'The StitchSense chat workflow rejected this request. The shared secret likely needs checking.';
+      return 'StitchSense could not answer just now. Please try again shortly.';
     }
     if (error.message.includes('Workflow chat failed with 404')) {
       return 'The StitchSense chat workflow is not reachable yet.';

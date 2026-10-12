@@ -77,16 +77,8 @@ if [[ ! -d "$APP_DIR" ]]; then
   exit 1
 fi
 
-export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-if [[ -s "$NVM_DIR/nvm.sh" ]]; then
-  # shellcheck disable=SC1090
-  . "$NVM_DIR/nvm.sh"
-else
-  echo "nvm was not found at $NVM_DIR" >&2
-  exit 1
-fi
-
-nvm use 22.23.0 >/dev/null
+"$ROOT/tools/run-with-node22.sh" node -e "process.exit(0)"
+export PATH="$(dirname "$("$ROOT/tools/run-with-node22.sh" node -p "process.execPath")"):$PATH"
 
 pkill -f "expo start" 2>/dev/null || true
 pkill -f "node .*expo" 2>/dev/null || true
@@ -102,7 +94,9 @@ rm -rf "$APP_DIR/.expo"
 cd "$APP_DIR"
 
 LAN_IP="$(detect_lan_ip)"
-if [[ -n "$LAN_IP" ]]; then
+if [[ "$MODE" == "tunnel" ]]; then
+  unset REACT_NATIVE_PACKAGER_HOSTNAME
+elif [[ -n "$LAN_IP" ]]; then
   export REACT_NATIVE_PACKAGER_HOSTNAME="$LAN_IP"
 fi
 export STITCHSENSE_EXPO_NAME="StitchSense Preview"
@@ -118,7 +112,9 @@ if [[ "$MODE" == "doctor" ]]; then
     curl -fsS --max-time 12 "${EXPO_PUBLIC_API_BASE_URL%/}/health" || true
     echo
   fi
-  if [[ -n "${REACT_NATIVE_PACKAGER_HOSTNAME:-}" ]]; then
+  if [[ "$MODE" == "tunnel" ]]; then
+    echo "Tunnel mode: LAN host override disabled."
+  elif [[ -n "${REACT_NATIVE_PACKAGER_HOSTNAME:-}" ]]; then
     echo "Detected LAN host: ${REACT_NATIVE_PACKAGER_HOSTNAME}"
     echo "Expected Expo URL: exp://${REACT_NATIVE_PACKAGER_HOSTNAME}:8081"
   else
@@ -141,7 +137,9 @@ if command -v curl >/dev/null 2>&1; then
     echo "Expo will still start, but the app may show API errors until the server is healthy." >&2
   fi
 fi
-if [[ -n "${REACT_NATIVE_PACKAGER_HOSTNAME:-}" ]]; then
+if [[ "$MODE" == "tunnel" ]]; then
+  echo "Tunnel mode: not exporting REACT_NATIVE_PACKAGER_HOSTNAME."
+elif [[ -n "${REACT_NATIVE_PACKAGER_HOSTNAME:-}" ]]; then
   echo "Using LAN host ${REACT_NATIVE_PACKAGER_HOSTNAME}"
 fi
 echo "Open this with Expo Go on your iPhone after scanning the fresh QR code."

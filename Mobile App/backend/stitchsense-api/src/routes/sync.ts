@@ -218,9 +218,10 @@ export async function syncRoutes(app: FastifyInstance) {
     try {
       wordpressMirror = await wordpressMirrorSnapshotForUser(userId);
     } catch (error) {
+      request.log.warn({ error }, 'WordPress mirror snapshot failed during sync validation');
       wordpressMirror = {
         available: false,
-        reason: error instanceof Error ? error.message : 'wordpress_snapshot_failed',
+        reason: 'wordpress_snapshot_failed',
       };
     }
 

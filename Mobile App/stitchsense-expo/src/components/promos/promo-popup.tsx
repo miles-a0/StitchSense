@@ -119,6 +119,9 @@ export function PromoPopup() {
         if (purchase.status === 'cancelled') {
           return;
         }
+        if (purchase.hasActiveEntitlement && accessToken) {
+          await stitchSenseAPI.syncRevenueCatEntitlement(accessToken);
+        }
         await wait(1500);
         await refreshAccount();
         return;

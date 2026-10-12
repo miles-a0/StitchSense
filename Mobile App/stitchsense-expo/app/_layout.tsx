@@ -5,6 +5,7 @@ import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppTabBar } from '@/src/components/navigation/app-tab-bar';
 import { LibraryProvider } from '@/src/providers/library-provider';
 import { PromoPopup } from '@/src/components/promos/promo-popup';
 import { PreferencesProvider } from '@/src/providers/preferences-provider';
@@ -49,7 +50,7 @@ function HeaderBackButton({ fallback = '/(tabs)/dashboard' }: { fallback?: strin
 }
 
 function AppNavigator() {
-  const { isReady } = useSession();
+  const { accessToken, isReady } = useSession();
 
   if (!isReady) {
     return (
@@ -179,6 +180,7 @@ function AppNavigator() {
                 }}
               />
             </Stack>
+            {accessToken ? <AppTabBar /> : null}
             <PromoPopup />
             <StatusBar style="dark" />
           </StashProvider>

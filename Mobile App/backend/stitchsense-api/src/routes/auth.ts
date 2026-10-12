@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
 import { fetchWithTimeout } from '../services/http.js';
+import { secureStringEquals } from '../services/secureCompare.js';
 import { createRefreshToken, revokeRefreshToken, rotateRefreshToken, storeRefreshToken } from '../services/tokens.js';
 import { syncWordPressLibraryForUser } from '../services/wordpressSync.js';
 import { configuredWordPressSiteUrl } from '../services/wordpressSite.js';
@@ -12,6 +13,17 @@ const authBody = z.object({
   password: z.string().min(8),
   displayName: z.string().min(1).optional(),
 });
+
+const BCRYPT_COST = 10;
+
+function isPostgresUniqueViolation(error: unknown) {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505');
+}
+
+function bcryptCost(passwordHash: string | null) {
+  const match = passwordHash?.match(/^\$2[aby]\$(\d{2})\$/);
+  return match ? Number(match[1]) : null;
+}
 
 const refreshBody = z.object({
   refreshToken: z.string().min(32),
@@ -60,6 +72,32 @@ const passwordResetConfirmBody = z.object({
   code: z.string().regex(/^\d{6}$/),
   password: z.string().min(8).max(128),
 });
+
+function wordpressBridgeClientError(kind: 'login' | 'register', status: number) {
+  if (kind === 'login') {
+    return status === 401
+      ? 'WordPress authentication failed. Please check your details and try again.'
+      : 'WordPress authentication is unavailable. Please try again.';
+  }
+
+  if (status === 409) {
+    return 'WordPress could not create the account because those details are already in use.';
+  }
+
+  if (status >= 400 && status < 500) {
+    return 'WordPress could not create the account with those details.';
+  }
+
+  return 'WordPress registration is unavailable. Please try again.';
+}
+
+function wordpressBridgeLogContext(status: number, upstreamMessage: string) {
+  return {
+    upstreamStatus: status,
+    hasUpstreamMessage: upstreamMessage.length > 0,
+    upstreamMessageLength: upstreamMessage.length,
+  };
+}
 
 async function issueTokens(app: FastifyInstance, userId: string) {
   const accessToken = app.jwt.sign({ sub: userId }, { expiresIn: '15m' });
@@ -197,7 +235,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const result = await query(
       `UPDATE users
-       SET password_hash = crypt($2, gen_salt('bf')), updated_at = NOW()
+       SET password_hash = crypt($2, gen_salt('bf', ${BCRYPT_COST})), updated_at = NOW()
        WHERE email = $1
        RETURNING id`,
       [body.email.toLowerCase(), body.password],
@@ -216,12 +254,20 @@ export async function authRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const body = authBody.parse(request.body);
     const trialEnds = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    const result = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin' }>(
-      `INSERT INTO users (email, display_name, password_hash, standard_trial_ends_at)
-       VALUES ($1, $2, crypt($3, gen_salt('bf')), $4)
-       RETURNING id, email, display_name AS "displayName", role`,
-      [body.email.toLowerCase(), body.displayName ?? null, body.password, trialEnds],
-    );
+    let result;
+    try {
+      result = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin' }>(
+        `INSERT INTO users (email, display_name, password_hash, standard_trial_ends_at)
+         VALUES ($1, $2, crypt($3, gen_salt('bf', ${BCRYPT_COST})), $4)
+         RETURNING id, email, display_name AS "displayName", role`,
+        [body.email.toLowerCase(), body.displayName ?? null, body.password, trialEnds],
+      );
+    } catch (error) {
+      if (isPostgresUniqueViolation(error)) {
+        return reply.code(409).send({ error: 'An account already exists for this email address.' });
+      }
+      throw error;
+    }
     const user = result.rows[0];
     const tokens = await issueTokens(app, user.id);
     return reply.code(201).send({ user, ...tokens });
@@ -231,8 +277,8 @@ export async function authRoutes(app: FastifyInstance) {
     config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
   }, async (request, reply) => {
     const body = authBody.pick({ email: true, password: true }).parse(request.body);
-    const result = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin' }>(
-      `SELECT id, email, display_name AS "displayName", role
+    const result = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin'; password_hash: string | null }>(
+      `SELECT id, email, display_name AS "displayName", role, password_hash
        FROM users
        WHERE email = $1 AND password_hash = crypt($2, password_hash)`,
       [body.email.toLowerCase(), body.password],
@@ -241,6 +287,16 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
     const user = result.rows[0];
+    if ((bcryptCost(user.password_hash) ?? 0) < BCRYPT_COST) {
+      await query(
+        `UPDATE users
+         SET password_hash = crypt($2, gen_salt('bf', ${BCRYPT_COST})),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [user.id, body.password],
+      );
+    }
+    delete (user as Partial<typeof user>).password_hash;
     const tokens = await issueTokens(app, user.id);
     return { user, ...tokens };
   });
@@ -283,8 +339,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(503).send({ error: 'WordPress bridge is not configured' });
     }
 
-    const suppliedSecret = request.headers['x-stitchsense-wordpress-secret'];
-    if (Array.isArray(suppliedSecret) || suppliedSecret !== config.wordpress.sharedSecret) {
+    if (!secureStringEquals(config.wordpress.sharedSecret, request.headers['x-stitchsense-wordpress-secret'])) {
       return reply.code(401).send({ error: 'Invalid WordPress bridge secret' });
     }
 
@@ -336,11 +391,16 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       if (!response.ok || !payload || typeof payload !== 'object') {
-        const message =
+        const upstreamMessage =
           payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
             ? payload.error
             : `WordPress authentication failed with HTTP ${response.status}`;
-        return reply.code(response.status >= 400 ? response.status : 502).send({ error: message });
+        const status = response.status >= 400 ? response.status : 502;
+        request.log.warn(
+          wordpressBridgeLogContext(response.status, upstreamMessage),
+          'WordPress login bridge rejected account verification',
+        );
+        return reply.code(status).send({ error: wordpressBridgeClientError('login', status) });
       }
 
       const parsed = wordpressBridgeBody.parse({ ...(payload as Record<string, unknown>), siteUrl });
@@ -397,11 +457,16 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       if (!response.ok || !payload || typeof payload !== 'object') {
-        const message =
+        const upstreamMessage =
           payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
             ? payload.error
             : `WordPress registration failed with HTTP ${response.status}`;
-        return reply.code(response.status >= 400 ? response.status : 502).send({ error: message });
+        const status = response.status >= 400 ? response.status : 502;
+        request.log.warn(
+          wordpressBridgeLogContext(response.status, upstreamMessage),
+          'WordPress register bridge rejected account creation',
+        );
+        return reply.code(status).send({ error: wordpressBridgeClientError('register', status) });
       }
 
       const parsed = wordpressBridgeBody.parse({ ...(payload as Record<string, unknown>), siteUrl });

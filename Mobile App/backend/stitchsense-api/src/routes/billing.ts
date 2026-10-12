@@ -3,6 +3,10 @@ import Stripe from 'stripe';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
+import { resolveEntitlement } from '../services/entitlements.js';
+import { externalServiceErrorLogContext } from '../services/externalServiceErrorLog.js';
+import { recordBillingWebhookMetrics } from '../services/metrics.js';
+import { secureStringEquals } from '../services/secureCompare.js';
 import { upsertStripeSubscriptionFromStripe } from '../services/stripeSubscriptions.js';
 
 const stripe = config.stripe.secretKey ? new Stripe(config.stripe.secretKey, { apiVersion: '2025-02-24.acacia' }) : null;
@@ -34,10 +38,42 @@ const revenueCatWebhookBody = z.object({
       original_transaction_id: z.string().optional(),
       expiration_at_ms: z.number().nullable().optional(),
       purchased_at_ms: z.number().nullable().optional(),
+      cancel_reason: z.string().optional(),
+      expiration_reason: z.string().optional(),
       entitlement_ids: z.array(z.string()).optional(),
     })
     .passthrough(),
 });
+
+const revenueCatSubscriberResponse = z
+  .object({
+    subscriber: z
+      .object({
+        entitlements: z.record(
+          z.string(),
+          z
+            .object({
+              expires_date: z.string().nullable().optional(),
+              product_identifier: z.string().nullable().optional(),
+              purchase_date: z.string().nullable().optional(),
+            })
+            .passthrough(),
+        ).optional(),
+        subscriptions: z.record(
+          z.string(),
+          z
+            .object({
+              store: z.string().nullable().optional(),
+              expires_date: z.string().nullable().optional(),
+              original_purchase_date: z.string().nullable().optional(),
+              purchase_date: z.string().nullable().optional(),
+            })
+            .passthrough(),
+        ).optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
 function priceIdForPlan(plan: 'monthly' | 'annual') {
   return plan === 'annual' ? config.stripe.annualPriceId : config.stripe.monthlyPriceId;
@@ -157,8 +193,9 @@ async function handleStripeSubscription(subscription: Stripe.Subscription) {
 }
 
 export function providerForRevenueCatStore(store: string | undefined): 'apple' | 'google' | null {
-  if (store === 'APP_STORE' || store === 'MAC_APP_STORE') return 'apple';
-  if (store === 'PLAY_STORE') return 'google';
+  const normalized = store?.toLowerCase();
+  if (normalized === 'app_store' || normalized === 'mac_app_store') return 'apple';
+  if (normalized === 'play_store') return 'google';
   return null;
 }
 
@@ -170,9 +207,113 @@ export function planForRevenueCatProduct(productId: string | undefined) {
 
 export function statusForRevenueCatEvent(type: string, expirationAt: Date | null, now = new Date()) {
   if (type === 'EXPIRATION' || type === 'TRANSFER') return 'expired';
-  if (type === 'INITIAL_PURCHASE' || type === 'RENEWAL' || type === 'UNCANCELLATION') return 'active';
+  if (
+    type === 'INITIAL_PURCHASE' ||
+    type === 'RENEWAL' ||
+    type === 'UNCANCELLATION' ||
+    type === 'NON_RENEWING_PURCHASE' ||
+    type === 'SUBSCRIPTION_EXTENDED' ||
+    type === 'REFUND_REVERSED'
+  ) {
+    return 'active';
+  }
   if (type === 'CANCELLATION' && expirationAt && expirationAt.getTime() > now.getTime()) return 'active';
   return expirationAt && expirationAt.getTime() > now.getTime() ? 'active' : 'expired';
+}
+
+function parseRevenueCatDate(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function statusForRevenueCatSubscriber(expirationAt: Date | null, now = new Date()) {
+  return !expirationAt || expirationAt.getTime() > now.getTime() ? 'active' : 'expired';
+}
+
+async function fetchRevenueCatSubscriber(userId: string) {
+  const baseUrl = config.revenueCat.apiBaseUrl.replace(/\/+$/, '');
+  const response = await fetch(`${baseUrl}/subscribers/${encodeURIComponent(userId)}`, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${config.revenueCat.apiKey}`,
+    },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`RevenueCat subscriber sync failed with status ${response.status}`);
+  }
+
+  return revenueCatSubscriberResponse.parse(await response.json());
+}
+
+async function syncRevenueCatSubscriber(userId: string) {
+  if (!config.revenueCat.apiKey) {
+    throw new Error('RevenueCat API key is not configured');
+  }
+
+  const subscriberResponse = await fetchRevenueCatSubscriber(userId);
+  if (!subscriberResponse) {
+    await query(
+      `INSERT INTO audit_events (actor_user_id, target_user_id, event_type, metadata)
+       VALUES ($1,$1,'billing.revenuecat.sync.not_found',$2)`,
+      [userId, { syncedAt: new Date().toISOString() }],
+    );
+    return { synced: false, reason: 'subscriber_not_found' };
+  }
+
+  const entitlement = subscriberResponse.subscriber.entitlements?.[config.revenueCat.entitlementId];
+  const productId = entitlement?.product_identifier ?? null;
+  const subscription = productId ? subscriberResponse.subscriber.subscriptions?.[productId] : null;
+  const provider = providerForRevenueCatStore(subscription?.store ?? undefined);
+
+  if (!entitlement || !productId || !subscription || !provider) {
+    await query(
+      `INSERT INTO audit_events (actor_user_id, target_user_id, event_type, metadata)
+       VALUES ($1,$1,'billing.revenuecat.sync.no_matching_entitlement',$2)`,
+      [
+        userId,
+        {
+          syncedAt: new Date().toISOString(),
+          entitlementId: config.revenueCat.entitlementId,
+          productId,
+          store: subscription?.store ?? null,
+        },
+      ],
+    );
+    return { synced: false, reason: 'no_matching_entitlement' };
+  }
+
+  const currentPeriodEnd = parseRevenueCatDate(entitlement.expires_date ?? subscription.expires_date);
+  const subscriptionId = `${userId}:${provider}:${productId}`;
+  await upsertMobileSubscription({
+    userId,
+    provider,
+    subscriptionId,
+    status: statusForRevenueCatSubscriber(currentPeriodEnd),
+    plan: planForRevenueCatProduct(productId),
+    currentPeriodEnd,
+    metadata: {
+      revenueCatSync: true,
+      syncedAt: new Date().toISOString(),
+      entitlementId: config.revenueCat.entitlementId,
+      productId,
+      store: subscription.store ?? null,
+      purchaseDate: entitlement.purchase_date ?? subscription.purchase_date ?? subscription.original_purchase_date ?? null,
+    },
+  });
+
+  await query(
+    `INSERT INTO audit_events (actor_user_id, target_user_id, event_type, metadata)
+     VALUES ($1,$1,'billing.revenuecat.sync.received',$2)`,
+    [userId, { syncedAt: new Date().toISOString(), entitlementId: config.revenueCat.entitlementId, productId, provider }],
+  );
+
+  return { synced: true };
 }
 
 async function handleRevenueCatWebhook(body: unknown) {
@@ -228,6 +369,8 @@ async function handleRevenueCatWebhook(body: unknown) {
       store: event.store,
       productId: event.product_id,
       periodType: event.period_type,
+      cancelReason: event.cancel_reason ?? null,
+      expirationReason: event.expiration_reason ?? null,
       purchasedAt: event.purchased_at_ms ? new Date(event.purchased_at_ms).toISOString() : null,
     },
   });
@@ -320,6 +463,22 @@ export async function billingRoutes(app: FastifyInstance) {
     return reply.code(201).send({ portalUrl: session.url });
   });
 
+  app.post('/billing/revenuecat/sync', { preHandler: app.authenticate }, async (request, reply) => {
+    try {
+      await syncRevenueCatSubscriber(request.authUser.id);
+      return { entitlement: await resolveEntitlement(request.authUser.id) };
+    } catch (error) {
+      request.log.error(
+        { error: externalServiceErrorLogContext(error), userId: request.authUser.id },
+        'RevenueCat subscriber sync failed',
+      );
+      return reply.code(502).send({
+        error: 'Could not sync subscription status right now',
+        requestId: request.id,
+      });
+    }
+  });
+
   app.get('/billing/success', async (_request, reply) => {
     return reply
       .type('text/html; charset=utf-8')
@@ -347,12 +506,25 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.post('/billing/webhook', { config: { rawBody: true } }, async (request, reply) => {
+    const startedAt = Date.now();
     if (!stripe || !config.stripe.webhookSecret) {
+      recordBillingWebhookMetrics({
+        provider: 'stripe',
+        outcome: 'configuration_error',
+        statusCode: 503,
+        durationMs: Date.now() - startedAt,
+      });
       return reply.code(503).send({ error: 'Stripe webhook is not configured' });
     }
 
     const signature = request.headers['stripe-signature'];
     if (!signature || Array.isArray(signature)) {
+      recordBillingWebhookMetrics({
+        provider: 'stripe',
+        outcome: 'invalid_payload',
+        statusCode: 400,
+        durationMs: Date.now() - startedAt,
+      });
       return reply.code(400).send({ error: 'Missing Stripe signature' });
     }
 
@@ -362,43 +534,96 @@ export async function billingRoutes(app: FastifyInstance) {
       if (!rawBody) throw new Error('Missing raw body');
       event = stripe.webhooks.constructEvent(rawBody, signature, config.stripe.webhookSecret);
     } catch (error) {
+      recordBillingWebhookMetrics({
+        provider: 'stripe',
+        outcome: 'unauthorized',
+        statusCode: 400,
+        durationMs: Date.now() - startedAt,
+      });
       return reply.code(400).send({ error: 'Invalid Stripe webhook signature' });
     }
 
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const userId = session.metadata?.userId ?? session.client_reference_id ?? null;
-      if (userId && typeof session.subscription === 'string') {
-        const subscription = await stripe.subscriptions.retrieve(session.subscription);
-        await handleStripeSubscription(subscription);
+    try {
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.userId ?? session.client_reference_id ?? null;
+        if (userId && typeof session.subscription === 'string') {
+          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+          await handleStripeSubscription(subscription);
+        }
       }
+
+      if (
+        event.type === 'customer.subscription.created' ||
+        event.type === 'customer.subscription.updated' ||
+        event.type === 'customer.subscription.deleted'
+      ) {
+        await handleStripeSubscription(event.data.object as Stripe.Subscription);
+      }
+
+      await query(
+        `INSERT INTO audit_events (event_type, metadata)
+         VALUES ('billing.webhook.received', $1)`,
+        [{ receivedAt: new Date().toISOString(), stripeEventId: event.id, type: event.type }],
+      );
+    } catch (error) {
+      recordBillingWebhookMetrics({
+        provider: 'stripe',
+        outcome: 'exception',
+        statusCode: 500,
+        durationMs: Date.now() - startedAt,
+      });
+      throw error;
     }
 
-    if (
-      event.type === 'customer.subscription.created' ||
-      event.type === 'customer.subscription.updated' ||
-      event.type === 'customer.subscription.deleted'
-    ) {
-      await handleStripeSubscription(event.data.object as Stripe.Subscription);
-    }
-
-    await query(
-      `INSERT INTO audit_events (event_type, metadata)
-       VALUES ('billing.webhook.received', $1)`,
-      [{ receivedAt: new Date().toISOString(), stripeEventId: event.id, type: event.type }],
-    );
+    recordBillingWebhookMetrics({
+      provider: 'stripe',
+      outcome: 'received',
+      statusCode: 200,
+      durationMs: Date.now() - startedAt,
+    });
     return { received: true };
   });
 
   app.post('/billing/revenuecat/webhook', async (request, reply) => {
+    const startedAt = Date.now();
     if (!config.revenueCat.webhookAuthorization) {
+      recordBillingWebhookMetrics({
+        provider: 'revenuecat',
+        outcome: 'configuration_error',
+        statusCode: 503,
+        durationMs: Date.now() - startedAt,
+      });
       return reply.code(503).send({ error: 'RevenueCat webhook is not configured' });
     }
 
-    if (request.headers.authorization !== config.revenueCat.webhookAuthorization) {
+    if (!secureStringEquals(config.revenueCat.webhookAuthorization, request.headers.authorization)) {
+      recordBillingWebhookMetrics({
+        provider: 'revenuecat',
+        outcome: 'unauthorized',
+        statusCode: 401,
+        durationMs: Date.now() - startedAt,
+      });
       return reply.code(401).send({ error: 'Invalid RevenueCat authorization' });
     }
 
-    return handleRevenueCatWebhook(request.body);
+    try {
+      const result = await handleRevenueCatWebhook(request.body);
+      recordBillingWebhookMetrics({
+        provider: 'revenuecat',
+        outcome: result.replayed ? 'replayed' : result.ignored ? 'ignored' : 'received',
+        statusCode: 200,
+        durationMs: Date.now() - startedAt,
+      });
+      return result;
+    } catch (error) {
+      recordBillingWebhookMetrics({
+        provider: 'revenuecat',
+        outcome: 'exception',
+        statusCode: 500,
+        durationMs: Date.now() - startedAt,
+      });
+      throw error;
+    }
   });
 }

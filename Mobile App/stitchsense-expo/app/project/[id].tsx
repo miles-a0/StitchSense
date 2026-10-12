@@ -1554,7 +1554,12 @@ export default function ProjectDetailScreen() {
                   <Text style={styles.metaPill}>{activeProject.progressPercent}% done</Text>
                   <Text style={styles.metaPill}>{stageLabelForState(projectState)}</Text>
                 </View>
-                <Pressable onPress={() => void handleToggleFavorite()} style={styles.pinIconButton}>
+                <Pressable
+                  accessibilityLabel="Pin project"
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: Boolean(activeProject.isFavorite) }}
+                  onPress={() => void handleToggleFavorite()}
+                  style={styles.pinIconButton}>
                   <MaterialCommunityIcons
                     color={activeProject.isFavorite ? tokens.color.warning : tokens.color.primary}
                     name={activeProject.isFavorite ? 'pin' : 'pin-outline'}
@@ -1830,6 +1835,8 @@ export default function ProjectDetailScreen() {
                 </Text>
               </View>
               <Pressable
+                accessibilityLabel="Close pattern"
+                accessibilityRole="button"
                 onPress={() => setShowPatternPdfOverlay(false)}
                 style={styles.makingModalClose}>
                 <MaterialCommunityIcons color={tokens.color.primary} name="close" size={20} />
@@ -1860,6 +1867,8 @@ export default function ProjectDetailScreen() {
                   <Text style={styles.makingModalTitle}>{activeProject.title}</Text>
                 </View>
                 <Pressable
+                  accessibilityLabel="Close making assistant"
+                  accessibilityRole="button"
                   onPress={() => setShowMakingAssistant(false)}
                   style={styles.makingModalClose}>
                   <MaterialCommunityIcons color={tokens.color.primary} name="close" size={20} />
@@ -1953,6 +1962,12 @@ export default function ProjectDetailScreen() {
                   placeholderTextColor="#9b867d"
                 />
                 <Pressable
+                  accessibilityLabel="Send message"
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    busy: isMakingChatSending,
+                    disabled: !makingChatDraft.trim() || isMakingChatSending || !linkedPatternId,
+                  }}
                   disabled={!makingChatDraft.trim() || isMakingChatSending || !linkedPatternId}
                   onPress={() => void handleSendMakingAssistant()}
                   style={[
@@ -1969,6 +1984,8 @@ export default function ProjectDetailScreen() {
         </Modal>
 
         <Pressable
+          accessibilityLabel="Open making assistant"
+          accessibilityRole="button"
           onPress={openMakingAssistant}
           style={({ pressed }) => [
             styles.floatingAssistantButton,
@@ -2005,7 +2022,12 @@ export default function ProjectDetailScreen() {
             <Text style={styles.metaPill}>{stageLabelForState(projectState)}</Text>
             {project.isFavorite ? <Text style={styles.metaPill}>Pinned</Text> : null}
           </View>
-          <Pressable onPress={() => void handleToggleFavorite()} style={styles.pinIconButton}>
+          <Pressable
+            accessibilityLabel="Pin project"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: Boolean(project.isFavorite) }}
+            onPress={() => void handleToggleFavorite()}
+            style={styles.pinIconButton}>
             <MaterialCommunityIcons
               color={project.isFavorite ? tokens.color.warning : tokens.color.primary}
               name={project.isFavorite ? 'pin' : 'pin-outline'}
@@ -2841,7 +2863,11 @@ export default function ProjectDetailScreen() {
           ) : (
             projectPhotos.map((photo) => (
               <View key={photo.id} style={styles.subCard}>
-                <Pressable onPress={() => setSelectedPhoto(photo)} style={styles.photoPressable}>
+                <Pressable
+                  accessibilityLabel="View project photo"
+                  accessibilityRole="imagebutton"
+                  onPress={() => setSelectedPhoto(photo)}
+                  style={styles.photoPressable}>
                   <Image
                     source={{ uri: resolvedPhotoUri(photo) ?? photo.photoUrl }}
                     style={styles.projectPhoto}
@@ -3221,6 +3247,8 @@ export default function ProjectDetailScreen() {
                 <Text style={styles.makingModalTitle}>{activeProject.title}</Text>
               </View>
               <Pressable
+                accessibilityLabel="Close making assistant"
+                accessibilityRole="button"
                 onPress={() => setShowMakingAssistant(false)}
                 style={styles.makingModalClose}>
                 <MaterialCommunityIcons color={tokens.color.primary} name="close" size={20} />
@@ -3321,6 +3349,12 @@ export default function ProjectDetailScreen() {
                 placeholderTextColor="#9b867d"
               />
               <Pressable
+                accessibilityLabel="Send message"
+                accessibilityRole="button"
+                accessibilityState={{
+                  busy: isMakingChatSending,
+                  disabled: !makingChatDraft.trim() || isMakingChatSending || !linkedPatternId,
+                }}
                 disabled={!makingChatDraft.trim() || isMakingChatSending || !linkedPatternId}
                 onPress={() => void handleSendMakingAssistant()}
                 style={[
@@ -3336,6 +3370,8 @@ export default function ProjectDetailScreen() {
         </KeyboardAvoidingView>
       </Modal>
       <Pressable
+        accessibilityLabel="Open making assistant"
+        accessibilityRole="button"
         onPress={openMakingAssistant}
         style={({ pressed }) => [
           styles.floatingAssistantButton,

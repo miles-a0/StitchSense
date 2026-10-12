@@ -8,6 +8,14 @@ type LinkedWordPressAccount = {
   wpUserId: string;
 };
 
+function wordpressProxyHttpError(label: string, status: number) {
+  return `${label} failed with HTTP ${status}`;
+}
+
+function wordpressProxyWorkflowError(label: string) {
+  return `${label} reported failure`;
+}
+
 async function linkedWordPressAccount(userId: string): Promise<LinkedWordPressAccount | null> {
   if (!config.wordpress.sharedSecret) {
     return null;
@@ -81,15 +89,7 @@ export async function callWordPressChatProxy(userId: string, payload: Record<str
   }
 
   if (!response.ok) {
-    const errorMessage =
-      typeof body === 'object' && body
-        ? String(
-            (body as { error?: unknown; message?: unknown }).error ??
-              (body as { error?: unknown; message?: unknown }).message ??
-              `WordPress chat proxy failed with HTTP ${response.status}`,
-          )
-        : `WordPress chat proxy failed with HTTP ${response.status}`;
-    throw new Error(errorMessage);
+    throw new Error(wordpressProxyHttpError('WordPress chat proxy', response.status));
   }
 
   if (
@@ -100,12 +100,7 @@ export async function callWordPressChatProxy(userId: string, payload: Record<str
       ('ok' in body && (body as { ok?: unknown }).ok === false)
     )
   ) {
-    const errorMessage = String(
-      (body as { error?: unknown; message?: unknown }).error ??
-        (body as { error?: unknown; message?: unknown }).message ??
-        'WordPress chat proxy failed.',
-    );
-    throw new Error(errorMessage);
+    throw new Error(wordpressProxyWorkflowError('WordPress chat proxy'));
   }
 
   return body;
@@ -141,15 +136,7 @@ async function postWordPressJsonProxy(
   }
 
   if (!response.ok) {
-    const errorMessage =
-      typeof body === 'object' && body
-        ? String(
-            (body as { error?: unknown; message?: unknown }).error ??
-              (body as { error?: unknown; message?: unknown }).message ??
-              `WordPress proxy failed with HTTP ${response.status}`,
-          )
-        : `WordPress proxy failed with HTTP ${response.status}`;
-    throw new Error(errorMessage);
+    throw new Error(wordpressProxyHttpError('WordPress proxy', response.status));
   }
 
   if (
@@ -158,12 +145,7 @@ async function postWordPressJsonProxy(
     'success' in body &&
     (body as { success?: unknown }).success === false
   ) {
-    const errorMessage = String(
-      (body as { error?: unknown; message?: unknown }).error ??
-        (body as { error?: unknown; message?: unknown }).message ??
-        'WordPress proxy failed.',
-    );
-    throw new Error(errorMessage);
+    throw new Error(wordpressProxyWorkflowError('WordPress proxy'));
   }
 
   return body;

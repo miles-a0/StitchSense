@@ -45,6 +45,21 @@ test('auth lifecycle registers, logs in, rotates refresh tokens, logs out, and h
   assert.match(registered.accessToken, /^[\w-]+\.[\w-]+\.[\w-]+$/);
   assert.ok(registered.refreshToken.length >= 32);
 
+  const duplicateRegister = await app.inject({
+    method: 'POST',
+    url: '/auth/register',
+    payload: {
+      email: 'auth-lifecycle@example.test',
+      password: 'another-correct-horse-battery-staple',
+      displayName: 'Duplicate Auth Lifecycle',
+    },
+  });
+  assert.equal(duplicateRegister.statusCode, 409, duplicateRegister.body);
+  assert.deepEqual(duplicateRegister.json(), { error: 'An account already exists for this email address.' });
+
+  const registeredHash = await client.query('SELECT password_hash FROM users WHERE id = $1', [registered.user.id]);
+  assert.match(registeredHash.rows[0].password_hash, /^\$2[aby]\$10\$/);
+
   const storedAfterRegister = await client.query(
     `SELECT token_hash, revoked_at, expires_at
      FROM refresh_tokens
@@ -70,7 +85,25 @@ test('auth lifecycle registers, logs in, rotates refresh tokens, logs out, and h
   assert.equal(loginResponse.statusCode, 200, loginResponse.body);
   const login = loginResponse.json();
   assert.equal(login.user.id, registered.user.id);
+  assert.equal(login.user.password_hash, undefined);
   assert.notEqual(login.refreshToken, registered.refreshToken);
+
+  const legacyUser = (
+    await client.query(
+      `INSERT INTO users (email, display_name, password_hash)
+       VALUES ('legacy-hash@example.test', 'Legacy Hash', crypt('legacy-password', gen_salt('bf', 6)))
+       RETURNING id, password_hash`,
+    )
+  ).rows[0];
+  assert.match(legacyUser.password_hash, /^\$2[aby]\$06\$/);
+  const legacyLogin = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: { email: 'legacy-hash@example.test', password: 'legacy-password' },
+  });
+  assert.equal(legacyLogin.statusCode, 200, legacyLogin.body);
+  const upgradedHash = await client.query('SELECT password_hash FROM users WHERE id = $1', [legacyUser.id]);
+  assert.match(upgradedHash.rows[0].password_hash, /^\$2[aby]\$10\$/);
 
   const refreshResponse = await app.inject({
     method: 'POST',

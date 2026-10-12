@@ -88,11 +88,14 @@ export type Pattern = {
   originalFilename?: string | null;
   fileUrl?: string | null;
   fileKey?: string | null;
+  fileId?: string | null;
+  jobId?: string | null;
   fileMimeType?: string | null;
   fileSize?: number | null;
   sourceUrl?: string | null;
   patternSummaryText?: string | null;
   patternSummaryHtml?: string | null;
+  patternSummaryStructured?: Record<string, unknown> | null;
   metadata?: Record<string, unknown>;
   source: string;
   isArchived?: boolean;
@@ -378,6 +381,8 @@ export type WordPressPendingSyncResponse = WordPressPendingSyncStatus;
 export type UserExportResponse = {
   exportedAt: string;
   userId: string;
+  account: unknown;
+  subscriptions: unknown[];
   patterns: unknown[];
   projects: unknown[];
   projectCounters: unknown[];

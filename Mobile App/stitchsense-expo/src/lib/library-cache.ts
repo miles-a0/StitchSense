@@ -1,4 +1,5 @@
 import { deleteStoredItem, getStoredItem, setStoredItem } from './secure-storage';
+import { normalizeCachedPattern } from './library-cache-patterns';
 
 import type { Pattern, WordPressSyncStatus } from '@/src/lib/models';
 
@@ -23,46 +24,6 @@ function isUsableUserId(userId: string) {
 
 function byteSize(value: string) {
   return new TextEncoder().encode(value).length;
-}
-
-function normalizeCachedPattern(pattern: Pattern): Pattern {
-  const thumbnailUrl =
-    typeof pattern.thumbnailUrl === 'string' && /^data:image\//i.test(pattern.thumbnailUrl)
-      ? null
-      : pattern.thumbnailUrl ?? null;
-  const metadataThumbnail =
-    typeof pattern.metadata?.thumbnail_url === 'string' && /^data:image\//i.test(pattern.metadata.thumbnail_url)
-      ? null
-      : pattern.metadata?.thumbnail_url ?? null;
-
-  return {
-    id: pattern.id,
-    title: pattern.title,
-    thumbnailUrl,
-    craftType: pattern.craftType ?? null,
-    originalFilename: pattern.originalFilename ?? null,
-    fileUrl: pattern.fileUrl ?? null,
-    fileKey: pattern.fileKey ?? null,
-    fileMimeType: pattern.fileMimeType ?? null,
-    fileSize: pattern.fileSize ?? null,
-    sourceUrl: pattern.sourceUrl ?? null,
-    patternSummaryText: null,
-    patternSummaryHtml: null,
-    metadata: {
-      ravelry_id: pattern.metadata?.ravelry_id ?? null,
-      thumbnail_url: metadataThumbnail,
-    },
-    source: pattern.source,
-    isArchived: pattern.isArchived ?? false,
-    updatedAt: pattern.updatedAt ?? null,
-    createdAt: pattern.createdAt ?? null,
-    activityCounts: pattern.activityCounts
-      ? {
-          chats: pattern.activityCounts.chats,
-          rewrites: pattern.activityCounts.rewrites,
-        }
-      : { chats: 0, rewrites: 0 },
-  };
 }
 
 export async function loadLibraryCache(userId: string) {
