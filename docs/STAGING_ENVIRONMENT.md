@@ -25,7 +25,7 @@ Use `docs/ENVIRONMENT_CONFIGURATION_MATRIX.md` to compare settings across enviro
 - Staging workflows read and write only the `stitchsense_wf_staging` database and the `knitting_knowledge_staging` Qdrant collection. Check both after importing or duplicating a workflow export, because the committed exports reference the production `knitting_knowledge` collection.
 - Staging uses its own shared secrets (`N8N_SHARED_SECRET`, `N8N_CHAT_SHARED_SECRET`, `N8N_UPLOAD_SHARED_SECRET`). Do not reuse production values.
 - Apply workflow changes to staging first, then follow `docs/N8N_WORKFLOW_RELEASE_CHECKLIST.md` before promoting them to production.
-- The StitchSense Library API Proxy workflow is deactivated and is not part of staging or production. The API no longer exposes `/workflows/library-proxy`.
+- The StitchSense Library API Proxy workflow is deactivated and is not part of staging or production. Its export has been removed from the repository and the API no longer exposes `/workflows/library-proxy`.
 
 ## Isolation rules
 

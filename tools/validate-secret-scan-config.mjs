@@ -44,7 +44,6 @@ if (secretAssignmentPattern.test(envFixture)) {
 const workflowFiles = [
   'StitchSense Chat API - Qdrant RAG + Client History - UK Metric.json',
   'Pattern Helper AI - RAG Chat API - v7.6.0 - Google Drive Storage.json',
-  'StitchSense Library API Proxy v2.json',
 ];
 
 for (const file of workflowFiles) {
