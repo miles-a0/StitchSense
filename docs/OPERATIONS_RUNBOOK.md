@@ -157,6 +157,17 @@ Files referenced by more than one user are reported as conflicts and stay blocke
 
 3. Package and install the plugin, then verify in a private window that a direct `wp-content/uploads/stitchsense/...pdf` address returns 403 and that pattern viewing works on the website and in the app.
 
+## Admin accounts
+
+StitchSense admin rights (granting manual entitlements, viewing user access) are given only to named accounts. WordPress roles are ignored: a WordPress administrator signs in as a standard user. The person must have signed in once before they can be granted admin. Each change writes an `admin.role.granted` or `admin.role.revoked` audit event.
+
+```bash
+cd /opt/stitchsense-mobile/backend
+docker compose --env-file stitchsense-api/.env.vps -f docker-compose.vps.yml run --rm --no-deps api node dist/scripts/admin-role.js --list
+docker compose --env-file stitchsense-api/.env.vps -f docker-compose.vps.yml run --rm --no-deps api node dist/scripts/admin-role.js --grant someone@example.com
+docker compose --env-file stitchsense-api/.env.vps -f docker-compose.vps.yml run --rm --no-deps api node dist/scripts/admin-role.js --revoke someone@example.com
+```
+
 ## Rollback procedure
 
 Use rollback when a deployment causes failed health/readiness checks, elevated errors, data-integrity risk, or broken critical flows.

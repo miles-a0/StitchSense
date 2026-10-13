@@ -112,7 +112,8 @@ async function issueWordPressBridgeAuth(
 ) {
   const email = body.email.toLowerCase();
   const providerUserId = `${body.siteUrl.replace(/\/$/, '')}|${body.wpUserId}`;
-  const desiredRole: 'user' | 'admin' = body.roles.includes('administrator') ? 'admin' : 'user';
+  // StitchSense admin rights are granted only to named accounts (npm run admin:role), never inferred
+  // from WordPress roles, so a WordPress administrator account cannot grant itself platform access.
 
   const existingLink = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin' }>(
     `SELECT u.id, u.email, u.display_name AS "displayName", u.role
@@ -126,27 +127,15 @@ async function issueWordPressBridgeAuth(
   if (!user) {
     const trialEnds = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const result = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin' }>(
-      `INSERT INTO users (email, display_name, role, standard_trial_ends_at)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO users (email, display_name, standard_trial_ends_at)
+       VALUES ($1, $2, $3)
        ON CONFLICT (email) DO UPDATE SET
          display_name = COALESCE(EXCLUDED.display_name, users.display_name),
-         role = EXCLUDED.role,
          updated_at = NOW()
        RETURNING id, email, display_name AS "displayName", role`,
-      [email, body.displayName ?? null, desiredRole, trialEnds],
+      [email, body.displayName ?? null, trialEnds],
     );
     user = result.rows[0];
-  } else if (user.role !== desiredRole) {
-    const result = await query<{ id: string; email: string; displayName: string | null; role: 'user' | 'admin' }>(
-      `UPDATE users
-       SET role = $2,
-           display_name = COALESCE($3, display_name),
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING id, email, display_name AS "displayName", role`,
-      [user.id, desiredRole, body.displayName ?? null],
-    );
-    user = result.rows[0] ?? user;
   }
 
   await query(
