@@ -18,6 +18,7 @@ test('pattern file URL access is scoped to active owned patterns only', {
   process.env.NODE_ENV = 'test';
   process.env.DATABASE_URL = databaseUrl;
   process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-32-characters';
+  process.env.PUBLIC_API_BASE_URL = 'https://api.example.test';
   process.env.OBJECT_STORAGE_PROVIDER = process.env.OBJECT_STORAGE_PROVIDER ?? 'minio';
   process.env.OBJECT_STORAGE_BUCKET = process.env.OBJECT_STORAGE_BUCKET ?? 'stitchsense-test-patterns';
   process.env.OBJECT_STORAGE_REGION = process.env.OBJECT_STORAGE_REGION ?? 'us-east-1';
@@ -144,7 +145,27 @@ test('pattern file URL access is scoped to active owned patterns only', {
   assert.equal(ownerStoredUrl.statusCode, 200, ownerStoredUrl.body);
   assert.equal(ownerStoredUrl.json().fileKey, storedFileKey);
   assert.equal(ownerStoredUrl.json().expiresIn, 900);
-  assert.match(ownerStoredUrl.json().fileUrl, /X-Amz-Signature=/);
+  const storedLink = new URL(ownerStoredUrl.json().fileUrl);
+  assert.equal(storedLink.origin, 'https://api.example.test');
+  assert.equal(storedLink.pathname, '/files/signed');
+  assert.doesNotMatch(storedLink.toString(), /X-Amz-Signature=/);
+
+  // The signed link works without a session, as the phone's browser opens it.
+  const storedLinkDownload = await app.inject({ method: 'GET', url: `${storedLink.pathname}${storedLink.search}` });
+  assert.equal(storedLinkDownload.statusCode, 200, storedLinkDownload.body);
+  assert.equal(storedLinkDownload.headers['content-disposition'], 'inline');
+  assert.equal(storedLinkDownload.body, storedFileBody);
+
+  const tamperedLink = new URL(storedLink);
+  tamperedLink.searchParams.set('s', '0'.repeat(64));
+  const tamperedDownload = await app.inject({ method: 'GET', url: `${tamperedLink.pathname}${tamperedLink.search}` });
+  assert.equal(tamperedDownload.statusCode, 403, tamperedDownload.body);
+  assert.doesNotMatch(tamperedDownload.body, new RegExp(storedFileBody.slice(0, 12)));
+
+  const otherUserKeyLink = new URL(storedLink);
+  otherUserKeyLink.searchParams.set('k', Buffer.from(`${otherId}/someone-else.pdf`).toString('base64url'));
+  const otherUserKeyDownload = await app.inject({ method: 'GET', url: `${otherUserKeyLink.pathname}${otherUserKeyLink.search}` });
+  assert.equal(otherUserKeyDownload.statusCode, 403, otherUserKeyDownload.body);
 
   const ownerStoredDownload = await app.inject({
     method: 'GET',

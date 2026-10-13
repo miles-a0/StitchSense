@@ -35,6 +35,7 @@ test('stash image routes cover upload validation, owner scoping, signed URLs, an
   process.env.NODE_ENV = 'test';
   process.env.DATABASE_URL = databaseUrl;
   process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-32-characters';
+  process.env.PUBLIC_API_BASE_URL = 'https://api.example.test';
   process.env.OBJECT_STORAGE_PROVIDER = process.env.OBJECT_STORAGE_PROVIDER ?? 'minio';
   process.env.OBJECT_STORAGE_BUCKET = process.env.OBJECT_STORAGE_BUCKET ?? 'stitchsense-test-patterns';
   process.env.OBJECT_STORAGE_REGION = process.env.OBJECT_STORAGE_REGION ?? 'us-east-1';
@@ -206,7 +207,12 @@ test('stash image routes cover upload validation, owner scoping, signed URLs, an
   assert.equal(Number(item.image_file_size), imageBody.length);
   assert.match(item.image_file_key, new RegExp(`^${ownerId}/stash/${ownerStashId}/`));
   assert.match(item.image_file_key, /sea-glass-yarn\.png$/);
-  assert.match(item.image_url, /X-Amz-Signature=/);
+  assert.match(item.image_url, /^https:\/\/api\.example\.test\/files\/signed\?k=/);
+  const imageLink = new URL(item.image_url);
+  const imageLinkDownload = await app.inject({ method: 'GET', url: `${imageLink.pathname}${imageLink.search}` });
+  assert.equal(imageLinkDownload.statusCode, 200, imageLinkDownload.body);
+  assert.equal(imageLinkDownload.headers['content-type'], 'image/png');
+  assert.deepEqual(imageLinkDownload.rawPayload, imageBody);
 
   const storedObject = await storage.send(
     new GetObjectCommand({
@@ -225,7 +231,7 @@ test('stash image routes cover upload validation, owner scoping, signed URLs, an
   assert.equal(listed.statusCode, 200, listed.body);
   const listedItem = listed.json().items.find((candidate) => candidate.id === ownerStashId);
   assert.equal(listedItem.image_file_key, item.image_file_key);
-  assert.match(listedItem.image_url, /X-Amz-Signature=/);
+  assert.match(listedItem.image_url, /^https:\/\/api\.example\.test\/files\/signed\?k=/);
 
   const downloaded = await app.inject({
     method: 'GET',

@@ -148,7 +148,8 @@ paths:
     get:
       summary: Get a short-lived signed pattern file URL
       description: >-
-        Object-storage files return a 15-minute presigned URL. Files stored in WordPress uploads return a
+        Object-storage files return a 15-minute signed `/files/signed` link on the public API (object storage
+        is never exposed to clients). Files stored in WordPress uploads return a
         15-minute signed WordPress link when the user owns the file, judged by the `user-<id>` folder or the
         legacy owner registry; otherwise 404.
       parameters:
@@ -158,6 +159,26 @@ paths:
           description: Signed URL
         "404":
           description: Pattern not found, or its WordPress file is not owned by the user
+  /files/signed:
+    get:
+      summary: Download a stored file through a signed link
+      description: >-
+        Links are issued by `/patterns/{id}/file-url` and in project `photo_url` / `latest_photo_url` and stash
+        `image_url` fields, after the issuing route has checked ownership. No session is needed. The link is an
+        HMAC over the object key and expiry (15 minutes), keyed by a value derived from `JWT_SECRET`. PDFs, plain
+        text and JPEG/PNG/WebP images are served inline; anything else is sent as a download.
+      security: []
+      parameters:
+        - { name: k, in: query, required: true, schema: { type: string }, description: Object key, base64url }
+        - { name: e, in: query, required: true, schema: { type: string }, description: Expiry, Unix seconds }
+        - { name: s, in: query, required: true, schema: { type: string }, description: Signature, hex }
+      responses:
+        "200":
+          description: File contents
+        "403":
+          description: Link expired, tampered with, or malformed
+        "404":
+          description: The stored object no longer exists
   /patterns/{id}/chats:
     get:
       summary: List chat sessions for a pattern
