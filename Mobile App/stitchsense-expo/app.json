@@ -64,6 +64,14 @@
           "cameraPermission": "StitchSense uses your camera so Stitch Vision can analyse knitting and crochet images.",
           "microphonePermission": false
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://de.sentry.io/",
+          "organization": "stitchsense-app",
+          "project": "stitchsense-app"
+        }
       ]
     ],
     "runtimeVersion": {
@@ -78,7 +86,8 @@
       "wordpressBaseUrl": "https://catlowyarns.co.uk",
       "revenueCatIosApiKey": "",
       "revenueCatAndroidApiKey": "",
-      "revenueCatEntitlementId": "pro"
+      "revenueCatEntitlementId": "pro",
+      "sentryDsn": "https://cca03b3b530fc97fd94bbe2002685967@o4512246563799040.ingest.de.sentry.io/4512246573105232"
     }
   }
 }

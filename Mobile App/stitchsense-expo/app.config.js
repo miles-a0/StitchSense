@@ -34,6 +34,7 @@ module.exports = ({ config }) => {
       revenueCatTestStoreApiKey:
         configured(process.env.EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY) ||
         configured(config.extra?.revenueCatTestStoreApiKey),
+      sentryDsn: configured(process.env.EXPO_PUBLIC_SENTRY_DSN) || configured(config.extra?.sentryDsn),
       revenueCatEntitlementId:
         configured(process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID) ||
         configured(config.extra?.revenueCatEntitlementId) ||

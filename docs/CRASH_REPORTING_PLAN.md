@@ -1,6 +1,8 @@
 # StitchSense Crash Reporting Plan
 
-Status: Stage 1 fallback selected. StitchSense will use store-native crash reporting from TestFlight/App Store Connect and Google Play Console plus structured tester/support reports for the first controlled release. A dedicated crash SDK such as Sentry or Firebase Crashlytics remains a post-Stage-1 improvement unless beta evidence promotes it to a blocker.
+Status: Sentry selected (2026-10-13), EU data region, project `stitchsense-app`. Store-native crash reports from App Store Connect and Google Play Console remain a second signal.
+
+The app initialises Sentry in `app/_layout.tsx` through `src/lib/crash-reporting.ts`. Reports are sent from preview and store builds only; development and Expo Go are silent. Every event and breadcrumb passes through `src/lib/crash-report-scrub.ts`, which drops console breadcrumbs and touch labels, strips URL query strings (signed file links) and route params, and keeps only the internal user ID. Screenshots, view hierarchy, session replay and performance tracing are off. Sentry's project settings also have the data scrubber, default scrubbers and IP-address storage prevention enabled.
 
 ## Required Signals
 
@@ -43,10 +45,10 @@ Status: Stage 1 fallback selected. StitchSense will use store-native crash repor
 
 | Step | Result | Evidence |
 | --- | --- | --- |
-| Provider selected | Stage 1 fallback selected | 2026-10-06: Store-native crash reporting and tester/support reports selected for first controlled release. |
+| Provider selected | Sentry | 2026-10-13: Owner chose Sentry (EU region). Store-native reports kept as a second signal. |
 | iOS native build configured | Pending | Verify TestFlight/App Store Connect crash reporting on the preview/release-candidate build. |
 | Android native build configured | Pending | Verify Play Console internal testing crash reporting on the preview/release-candidate build. |
-| Source maps uploaded or intentionally unavailable | Intentionally unavailable for Stage 1 fallback | Revisit when choosing Sentry/Firebase/Expo Insights. |
+| Source maps uploaded or intentionally unavailable | Pending auth token | Create a Sentry organization auth token and store it as the EAS secret `SENTRY_AUTH_TOKEN` (never in the repo). Until then `SENTRY_ALLOW_FAILURE=true` in `eas.json` lets builds finish without readable stack traces. Confirm the organization slug in `app.json`. |
 | Alerts route to production owner / triage channel | Pending | Store-console crash checks must be included in first-hour/first-day monitoring. |
 | Test crash verified on non-production build | Pending | Use a non-public build or documented store-console crash signal before widening rollout. |
-| Privacy policy/data safety updated if needed | No SDK change for Stage 1 fallback | Dedicated crash SDK would require a fresh privacy/data-safety review. |
+| Privacy policy/data safety updated if needed | Worksheets updated | `docs/PRIVACY_DATA_SAFETY_WORKSHEET.md` and `docs/IOS_PRIVACY_MANIFEST_REVIEW.md` list Sentry and crash data. The published privacy policy must name Sentry as a processor before launch. |
