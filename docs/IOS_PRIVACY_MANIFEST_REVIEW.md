@@ -11,7 +11,7 @@ Use this review before creating App Store builds. It aligns `app.json`, Apple pr
 | Photo library read permission | `NSPhotoLibraryUsageDescription` present | Confirm wording matches pattern, project, stash, and Stitch Vision images |
 | Photo library add permission | `NSPhotoLibraryAddUsageDescription` present | Confirm whether save-to-library behaviour ships in v1 |
 | RevenueCat SDK | Native purchase and entitlement SDK | Confirm no tracking declaration is required |
-| Crash reporting SDK | No dedicated SDK for Stage 1 | Store-native crash reporting is the Stage 1 fallback; add privacy declaration changes if Sentry/Firebase/another SDK is later selected |
+| Crash reporting SDK | Sentry (`@sentry/react-native` 7.11) | Sentry's iOS SDK ships its own privacy manifest; App Store labels must declare Crash Data and Other Diagnostic Data, linked to the user (internal ID), not used for tracking |
 
 ## Store Label Alignment
 
@@ -20,7 +20,7 @@ Use this review before creating App Store builds. It aligns `app.json`, Apple pr
 | Contact info | Privacy policy, data safety worksheet, account support copy |
 | User content | Pattern, project, stash, image, chat, and rewrite handling |
 | Purchases | RevenueCat, Apple, Google, backend entitlement records |
-| Diagnostics | Backend logs, API request IDs, store-native crash reports for Stage 1 |
+| Diagnostics | Backend logs, API request IDs, Sentry crash reports (scrubbed; see `docs/CRASH_REPORTING_PLAN.md`) |
 | Tracking | Must remain `No` unless a tracking SDK is deliberately added and approved |
 
 ## Review Steps

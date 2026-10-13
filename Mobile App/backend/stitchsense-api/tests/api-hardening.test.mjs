@@ -80,6 +80,26 @@ test('API hardening controls', async (t) => {
     assert.match(metrics.body, /stitchsense_api_request_duration_seconds_bucket\{method="GET",route="\/health",status_class="2xx",le="\+Inf"\} \d+/);
   });
 
+  await t.test('does not expose the retired library proxy workflow route', async () => {
+    const originalFetch = globalThis.fetch;
+    let workflowCalls = 0;
+    globalThis.fetch = async () => {
+      workflowCalls += 1;
+      return new Response('{}', { status: 200 });
+    };
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/workflows/library-proxy',
+        payload: { user_id: 'another-user-id' },
+      });
+      assert.equal(response.statusCode, 404);
+      assert.equal(workflowCalls, 0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   await t.test('rate limits repeated login attempts', async () => {
     let response;
     for (let attempt = 0; attempt < 11; attempt += 1) {
@@ -121,7 +141,6 @@ test('production startup rejects missing billing webhook secrets', async () => {
     TRUST_PROXY: '127.0.0.1',
     N8N_CHAT_URL: 'https://workflow.example.test/chat',
     N8N_UPLOAD_URL: 'https://workflow.example.test/upload',
-    N8N_LIBRARY_PROXY_URL: 'https://workflow.example.test/library',
     N8N_IMAGE_URL: 'https://workflow.example.test/image',
     N8N_SHARED_SECRET: 'test-only-n8n-secret-with-more-than-32-characters',
     N8N_CHAT_SHARED_SECRET: 'test-only-chat-secret-with-more-than-32-characters',
@@ -172,7 +191,6 @@ test('production startup validates workflow secrets and accepts a complete launc
     TRUST_PROXY: '127.0.0.1',
     N8N_CHAT_URL: 'https://workflow.example.test/chat',
     N8N_UPLOAD_URL: 'https://workflow.example.test/upload',
-    N8N_LIBRARY_PROXY_URL: 'https://workflow.example.test/library',
     N8N_IMAGE_URL: 'https://workflow.example.test/image',
     N8N_SHARED_SECRET: 'test-only-n8n-secret-with-more-than-32-characters',
     N8N_CHAT_SHARED_SECRET: 'test-only-chat-secret-with-more-than-32-characters',

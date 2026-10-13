@@ -956,17 +956,6 @@ export async function patternRoutes(app: FastifyInstance) {
     return { result };
   });
 
-  app.post('/workflows/library-proxy', { preHandler: app.authenticate }, async (request, reply) => {
-    const entitlement = await resolveEntitlement(request.authUser.id);
-    if (!hasFeature(entitlement, 'patternUploads'))
-      return reply.code(402).send({ error: 'Subscription required', entitlement });
-    const result = await callWorkflow('library', {
-      userId: request.authUser.id,
-      payload: request.body,
-    });
-    return { result };
-  });
-
   app.get('/patterns/:id/file-url', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await query(

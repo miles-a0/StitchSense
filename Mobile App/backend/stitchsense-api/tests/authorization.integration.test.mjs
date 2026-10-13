@@ -106,6 +106,28 @@ test('authenticated users cannot read, change, or delete another user\'s records
     assert.equal(response.statusCode, 403);
   });
 
+  await t.test('removed library proxy route cannot forward client-supplied user IDs to n8n', async () => {
+    const originalFetch = globalThis.fetch;
+    const workflowRequests = [];
+    globalThis.fetch = async (input, init) => {
+      workflowRequests.push({ input, init });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    };
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/workflows/library-proxy',
+        headers: { authorization },
+        payload: { action: 'list', user_id: ownerId, userId: ownerId },
+      });
+      assert.equal(response.statusCode, 404, response.body);
+      assert.doesNotMatch(response.body, new RegExp(ownerId));
+      assert.equal(workflowRequests.length, 0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   await t.test('repeated Ravelry creates update the existing library row', async () => {
     const ravelryId = 'ravelry-idempotency-test';
     const first = await app.inject({

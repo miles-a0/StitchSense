@@ -12,6 +12,7 @@ Use this worksheet to align the public privacy policy, Apple privacy labels, and
 | Files and images | Uploaded PDFs, project/stash photos, Stitch Vision images | Pattern storage, project/stash media, image analysis | Yes | Object storage and AI/image workflow providers | Files are private unless explicitly shared by the user |
 | Purchase data | RevenueCat app user ID, product ID, entitlement status, store transaction metadata | Subscription access and support | Yes | RevenueCat, Apple, Google | Do not store store credentials or payment card data |
 | Diagnostics | Request ID, route, status, timing, operational error class | Reliability, abuse detection, support | Potentially | Monitoring/alerting systems | Logs must not include secrets or full user-generated content |
+| Crash data | Crash/error stack traces, app version, device model and OS, scrubbed navigation/network paths, internal user ID | App stability and support correlation | Yes (internal user ID only) | Sentry (EU data region) | No email, IP address, screenshots, session replay, console output, pattern/chat content, or URL query strings (`src/lib/crash-report-scrub.ts`) |
 
 ## Apple Privacy Labels Draft
 
@@ -21,7 +22,7 @@ Use this worksheet to align the public privacy policy, Apple privacy labels, and
 | User Content | Yes | Yes | No | Patterns, projects, stash, chats, photos |
 | Purchases | Yes | Yes | No | Subscription status through Apple/RevenueCat |
 | Identifiers | Yes | Yes | No | User ID, RevenueCat app user ID |
-| Diagnostics | Yes | Potentially | No | Request/error diagnostics, crash reporting once configured |
+| Diagnostics | Yes | Yes | No | Crash data and other diagnostic data via Sentry, linked by internal user ID only; request/error diagnostics |
 | Usage Data | Limited | Potentially | No | Operational events/audit records only |
 
 ## Google Data Safety Draft
@@ -30,7 +31,7 @@ Use this worksheet to align the public privacy policy, Apple privacy labels, and
 | --- | --- | --- |
 | Data encrypted in transit | Yes | App/API and WordPress endpoints must use HTTPS |
 | Users can request deletion | Yes | App supports synced-data deletion and full account deletion |
-| Data shared with third parties | Yes, for service functionality | RevenueCat, Apple/Google billing, n8n/AI workflows, object storage, WordPress bridge where linked |
+| Data shared with third parties | Yes, for service functionality | RevenueCat, Apple/Google billing, n8n/AI workflows, object storage, WordPress bridge where linked, Sentry (crash logs and diagnostics, as a service provider) |
 | Data used for advertising | No | No ad SDK is part of the launch build |
 | Data used for tracking | No | Do not add tracking SDKs without updating this worksheet and legal copy |
 
@@ -42,6 +43,7 @@ Use this worksheet to align the public privacy policy, Apple privacy labels, and
 | Camera | iOS / Android | Stitch Vision image capture | Analyse knitting/crochet images chosen by the user |
 | Photo library / media images | iOS / Android | Choose images and files for Stitch Vision, project, and stash media | Upload selected images only |
 | Secure storage | iOS / Android | Store local session tokens | Keep the user signed in |
+| Sentry (`@sentry/react-native`) | iOS / Android | Crash and error reporting from store and preview builds | App activity: crash logs and diagnostics, collected to keep the app working |
 
 ## Launch Approval
 

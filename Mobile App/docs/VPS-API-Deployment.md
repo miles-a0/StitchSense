@@ -56,7 +56,6 @@ Known n8n workflows:
 ```text
 N8N_CHAT_URL=https://n8n.zu-auto.co.uk/webhook/pattern-helper-chat
 N8N_UPLOAD_URL=https://n8n.zu-auto.co.uk/webhook/stitchsense-upload-v5
-N8N_LIBRARY_PROXY_URL=https://n8n.zu-auto.co.uk/webhook/stitchsense-library-proxy
 N8N_IMAGE_URL=https://n8n.zu-auto.co.uk/webhook/stitchsense-image-analysis
 ```
 
@@ -146,7 +145,6 @@ Current API workflow routes:
 
 ```text
 POST /workflows/upload
-POST /workflows/library-proxy
 POST /chats/:id/messages
 POST /vision/analyse
 ```
