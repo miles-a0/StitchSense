@@ -15,6 +15,7 @@ import { authRoutes } from './routes/auth.js';
 import { billingRoutes } from './routes/billing.js';
 import { chatRoutes } from './routes/chats.js';
 import { eventRoutes } from './routes/events.js';
+import { fileRoutes } from './routes/files.js';
 import { patternRoutes } from './routes/patterns.js';
 import { projectRoutes } from './routes/projects.js';
 import { promoRoutes } from './routes/promos.js';
@@ -234,6 +235,7 @@ export async function buildApp() {
   await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(syncRoutes);
   await app.register(eventRoutes);
+  await app.register(fileRoutes);
 
   return app;
 }

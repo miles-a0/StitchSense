@@ -6,8 +6,9 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { config } from '../config.js';
+import { secureStringEquals } from './secureCompare.js';
 
 const client = new S3Client({
   region: config.storage.region,
@@ -139,7 +140,45 @@ export async function putStashPhoto(input: {
   };
 }
 
-export async function signedPatternUrl(key: string, expiresIn = 900) {
+export const storageLinkPath = '/files/signed';
+
+// Derived from JWT_SECRET so storage links need no extra setting and cannot be confused with access tokens.
+function storageLinkKey() {
+  return createHmac('sha256', config.jwtSecret).update('stitchsense-storage-link-key').digest();
+}
+
+export function signStorageLink(key: string, expires: number) {
+  return createHmac('sha256', storageLinkKey()).update(`stitchsense-storage-link\n${key}\n${expires}`).digest('hex');
+}
+
+// Returns the object key for a valid, unexpired link, or null.
+export function verifyStorageLink(encodedKey: unknown, expires: unknown, signature: unknown, now = Date.now()) {
+  if (typeof encodedKey !== 'string' || typeof expires !== 'string' || !/^\d{1,12}$/.test(expires)) return null;
+  const expiresAt = Number(expires);
+  if (expiresAt * 1000 < now) return null;
+  let key: string;
+  try {
+    key = Buffer.from(encodedKey, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  if (!key || Buffer.from(key, 'utf8').toString('base64url') !== encodedKey) return null;
+  return secureStringEquals(signStorageLink(key, expiresAt), signature) ? key : null;
+}
+
+// Callers check ownership before asking for a link. Object storage is private to the server,
+// so clients get a short-lived signed link to the API, which streams the object.
+export async function signedPatternUrl(key: string, expiresIn = 900, now = Date.now()) {
+  if (config.publicApiBaseUrl) {
+    const expires = Math.floor(now / 1000) + expiresIn;
+    const url = new URL(`${config.publicApiBaseUrl.replace(/\/+$/, '')}${storageLinkPath}`);
+    url.searchParams.set('k', Buffer.from(key, 'utf8').toString('base64url'));
+    url.searchParams.set('e', String(expires));
+    url.searchParams.set('s', signStorageLink(key, expires));
+    return url.toString();
+  }
+
+  // Local development without a public API address: hand out a direct presigned storage URL.
   await ensureBucket();
   const command = new GetObjectCommand({
     Bucket: config.storage.bucket,

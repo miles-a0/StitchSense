@@ -45,6 +45,7 @@ test('project photo routes cover multipart storage, ownership, download, and sof
   process.env.NODE_ENV = 'test';
   process.env.DATABASE_URL = databaseUrl;
   process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-32-characters';
+  process.env.PUBLIC_API_BASE_URL = 'https://api.example.test';
   process.env.OBJECT_STORAGE_PROVIDER = process.env.OBJECT_STORAGE_PROVIDER ?? 'minio';
   process.env.OBJECT_STORAGE_BUCKET = process.env.OBJECT_STORAGE_BUCKET ?? 'stitchsense-test-patterns';
   process.env.OBJECT_STORAGE_REGION = process.env.OBJECT_STORAGE_REGION ?? 'us-east-1';
@@ -216,7 +217,7 @@ test('project photo routes cover multipart storage, ownership, download, and sof
   assert.equal(new Date(photo.taken_at).toISOString(), '2026-09-20T10:15:00.000Z');
   assert.match(photo.file_key, new RegExp(`^${ownerId}/projects/${ownerProjectId}/`));
   assert.match(photo.file_key, /blocking-progress\.png$/);
-  assert.match(photo.photo_url, /X-Amz-Signature=/);
+  assert.match(photo.photo_url, /^https:\/\/api\.example\.test\/files\/signed\?k=/);
 
   const storedObject = await storage.send(
     new GetObjectCommand({
@@ -235,7 +236,7 @@ test('project photo routes cover multipart storage, ownership, download, and sof
   assert.equal(listed.statusCode, 200, listed.body);
   assert.equal(listed.json().photos.length, 1);
   assert.equal(listed.json().photos[0].id, photo.id);
-  assert.match(listed.json().photos[0].photo_url, /X-Amz-Signature=/);
+  assert.match(listed.json().photos[0].photo_url, /^https:\/\/api\.example\.test\/files\/signed\?k=/);
 
   const projectDetail = await app.inject({
     method: 'GET',
@@ -244,7 +245,7 @@ test('project photo routes cover multipart storage, ownership, download, and sof
   });
   assert.equal(projectDetail.statusCode, 200, projectDetail.body);
   assert.equal(projectDetail.json().project.latest_photo_id, photo.id);
-  assert.match(projectDetail.json().project.latest_photo_url, /X-Amz-Signature=/);
+  assert.match(projectDetail.json().project.latest_photo_url, /^https:\/\/api\.example\.test\/files\/signed\?k=/);
 
   const downloaded = await app.inject({
     method: 'GET',
