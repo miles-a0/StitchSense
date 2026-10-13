@@ -30,6 +30,7 @@ import { SelectSheet } from '@/src/components/ui/select-sheet';
 import { authenticatedImageSource, projectPhotoFileUrl, stitchSenseAPI } from '@/src/lib/api';
 import { destructiveResourceActionPrompt } from '@/src/lib/destructive-actions';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
+import { loadTokens } from '@/src/lib/token-store';
 import { describeStashItem, findStashMentionsInText } from '@/src/lib/stash-insights';
 import type { StashItem } from '@/src/lib/stash-store';
 import type {
@@ -375,7 +376,7 @@ export default function ProjectDetailScreen() {
   const [counterSectionY, setCounterSectionY] = useState(0);
   const [showMakingAssistant, setShowMakingAssistant] = useState(false);
   const [showPatternPdfOverlay, setShowPatternPdfOverlay] = useState(false);
-  const [patternPdfUrl, setPatternPdfUrl] = useState<string | null>(null);
+  const [patternPdfSource, setPatternPdfSource] = useState<{ uri: string; headers: Record<string, string> } | null>(null);
   const [isOpeningPatternOverlay, setIsOpeningPatternOverlay] = useState(false);
   const [patternOverlayStatus, setPatternOverlayStatus] = useState<string | null>(null);
   const [makingChatDraft, setMakingChatDraft] = useState(stepByStepGuidePrompt);
@@ -1507,7 +1508,12 @@ export default function ProjectDetailScreen() {
         setStatusMessage('No PDF file is linked to this pattern yet.');
         return;
       }
-      setPatternPdfUrl(response.fileUrl);
+      // Load through the API like the library viewer: stored files have no address the phone can reach directly.
+      const saved = await loadTokens();
+      setPatternPdfSource({
+        uri: stitchSenseAPI.patternFileApiUrl(linkedPatternId),
+        headers: { Authorization: `Bearer ${saved.accessToken ?? accessToken}` },
+      });
       setShowPatternPdfOverlay(true);
       setPatternOverlayStatus(null);
     } catch (error) {
@@ -1842,8 +1848,8 @@ export default function ProjectDetailScreen() {
                 <MaterialCommunityIcons color={tokens.color.primary} name="close" size={20} />
               </Pressable>
             </View>
-            {patternPdfUrl ? (
-              <WebView source={{ uri: patternPdfUrl }} style={styles.patternOverlayWebView} />
+            {patternPdfSource ? (
+              <WebView source={patternPdfSource} style={styles.patternOverlayWebView} />
             ) : (
               <View style={styles.patternOverlayEmpty}>
                 <Text style={styles.copy}>{patternOverlayStatus ?? 'Pattern PDF not ready yet.'}</Text>

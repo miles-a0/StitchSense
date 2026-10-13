@@ -13,7 +13,7 @@ import {
   selectedPatternUnavailableMessage,
   ownedSourceRequiredMessage,
 } from '../services/patternWorkflowGuards.js';
-import { getPatternFile, putPatternFile, signedPatternUrl } from '../services/storage.js';
+import { getPatternFile, putPatternFile, signedPatternUrl, uploadedFilename } from '../services/storage.js';
 import { callUploadWorkflowWithFile, callWorkflow } from '../services/workflows.js';
 import { callWordPressChatProxy, callWordPressUploadProxy } from '../services/wordpressBridge.js';
 import { config } from '../config.js';
@@ -746,7 +746,7 @@ export async function patternRoutes(app: FastifyInstance) {
     if (!file) return reply.code(400).send({ error: 'No file uploaded' });
 
     const buffer = await file.toBuffer();
-    const filename = file.filename || 'pattern.pdf';
+    const filename = uploadedFilename(file.filename, 'pattern.pdf');
     const looksLikePdf = isPdfBuffer(buffer);
     const looksLikeText = /\.(txt|md)$/i.test(filename) && isPlainTextBuffer(buffer);
     const isAllowedUpload = looksLikePdf || looksLikeText;
