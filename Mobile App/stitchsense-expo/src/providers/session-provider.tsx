@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { APIError, stitchSenseAPI } from '@/src/lib/api';
+import { setCrashReportingUser } from '@/src/lib/crash-reporting';
 import { effectiveEntitlement } from '@/src/lib/entitlement-access';
 import { getUserFacingErrorMessage } from '@/src/lib/errors';
 import { saveOnboardingPending } from '@/src/lib/onboarding-store';
@@ -43,6 +44,10 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
   const [isReady, setIsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCrashReportingUser(user?.id ?? null);
+  }, [user?.id]);
 
   const isFallbackAuthError = useCallback((error: unknown) => {
     return error instanceof APIError && [400, 401, 404, 500, 502, 503].includes(error.statusCode);

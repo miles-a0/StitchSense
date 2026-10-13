@@ -9,6 +9,7 @@ const extra = expoConfig?.extra as
       revenueCatAndroidApiKey?: string;
       revenueCatTestStoreApiKey?: string;
       revenueCatEntitlementId?: string;
+      sentryDsn?: string;
   }
   | undefined;
 
@@ -23,6 +24,7 @@ const revenueCatTestStoreApiKey =
 export const config = {
   apiBaseUrl: configured(extra?.apiBaseUrl) ?? 'https://stitchsense.zu-auto.co.uk',
   wordpressBaseUrl: configured(extra?.wordpressBaseUrl) ?? 'https://catlowyarns.co.uk',
+  sentryDsn: configured(extra?.sentryDsn) ?? configured(process.env.EXPO_PUBLIC_SENTRY_DSN) ?? '',
   revenueCat: {
     iosApiKey:
       configured(extra?.revenueCatIosApiKey) ??

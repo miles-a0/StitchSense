@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppTabBar } from '@/src/components/navigation/app-tab-bar';
+import { initCrashReporting, wrapWithCrashReporting } from '@/src/lib/crash-reporting';
 import { LibraryProvider } from '@/src/providers/library-provider';
 import { PromoPopup } from '@/src/components/promos/promo-popup';
 import { PreferencesProvider } from '@/src/providers/preferences-provider';
@@ -13,6 +14,8 @@ import { ProjectsProvider } from '@/src/providers/projects-provider';
 import { SessionProvider, useSession } from '@/src/providers/session-provider';
 import { StashProvider } from '@/src/providers/stash-provider';
 import { tokens } from '@/src/theme/tokens';
+
+initCrashReporting();
 
 const editorialHeaderOptions = {
   headerTitle: '',
@@ -190,7 +193,7 @@ function AppNavigator() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <SafeAreaProvider>
       <SessionProvider>
@@ -199,6 +202,8 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+export default wrapWithCrashReporting(RootLayout);
 
 const styles = StyleSheet.create({
   loadingScreen: {
