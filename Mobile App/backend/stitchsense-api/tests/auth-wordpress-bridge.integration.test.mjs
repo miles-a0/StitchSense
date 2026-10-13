@@ -130,6 +130,35 @@ test('WordPress bridge auth requires the shared secret and trusted site URL', {
     assert.equal(linked.rows[0].provider_user_id, 'http://wordpress.test/site|42');
     assert.equal(linked.rows[0].metadata.wpUserId, '42');
     assert.equal(linked.rows[0].metadata.siteUrl, 'http://wordpress.test/site');
+
+    // A WordPress administrator is not made a StitchSense admin; admin rights are named, not inferred.
+    const bridgeHeaders = { 'x-stitchsense-wordpress-secret': 'test-wordpress-secret-with-more-than-32-characters' };
+    const wpAdmin = await app.inject({
+      method: 'POST',
+      url: '/auth/wordpress',
+      headers: bridgeHeaders,
+      payload: { ...payload, wpUserId: 7, email: 'wp-admin@example.test', roles: ['administrator'] },
+    });
+    assert.equal(wpAdmin.statusCode, 200, wpAdmin.body);
+    assert.equal(wpAdmin.json().user.role, 'user');
+    const wpAdminAccess = await app.inject({
+      method: 'GET',
+      url: '/admin/entitlements',
+      headers: { authorization: `Bearer ${wpAdmin.json().accessToken}` },
+    });
+    assert.equal(wpAdminAccess.statusCode, 403, wpAdminAccess.body);
+
+    // A named admin keeps the role across WordPress logins, whatever their WordPress role.
+    await client.query(`UPDATE users SET role = 'admin' WHERE email = 'wp-bridge@example.test'`);
+    const namedAdmin = await app.inject({ method: 'POST', url: '/auth/wordpress', headers: bridgeHeaders, payload });
+    assert.equal(namedAdmin.statusCode, 200, namedAdmin.body);
+    assert.equal(namedAdmin.json().user.role, 'admin');
+    const namedAdminAccess = await app.inject({
+      method: 'GET',
+      url: '/admin/entitlements',
+      headers: { authorization: `Bearer ${namedAdmin.json().accessToken}` },
+    });
+    assert.equal(namedAdminAccess.statusCode, 200, namedAdminAccess.body);
   } finally {
     globalThis.fetch = originalFetch;
     await app.close();
