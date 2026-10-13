@@ -51,3 +51,23 @@ test('workflow metrics record success, workflow errors, HTTP errors, and excepti
   assert.doesNotMatch(metrics, /pattern-1/);
   assert.doesNotMatch(metrics, /test-upload-secret/);
 });
+
+test('library proxy workflow type is retired and never calls n8n', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const originalLibraryProxyUrl = process.env.N8N_LIBRARY_PROXY_URL;
+  let workflowCalls = 0;
+  process.env.N8N_LIBRARY_PROXY_URL = 'https://workflow.example.test/library';
+  globalThis.fetch = async () => {
+    workflowCalls += 1;
+    return new Response('{}', { status: 200 });
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    if (originalLibraryProxyUrl === undefined) delete process.env.N8N_LIBRARY_PROXY_URL;
+    else process.env.N8N_LIBRARY_PROXY_URL = originalLibraryProxyUrl;
+  });
+
+  const { callWorkflow } = await import('../dist/services/workflows.js');
+  await assert.rejects(callWorkflow('library', { userId: 'another-user-id' }), /Workflow endpoint for library is not configured/);
+  assert.equal(workflowCalls, 0);
+});

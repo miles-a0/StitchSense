@@ -35,7 +35,6 @@ export const config = {
   n8n: {
     chatUrl: process.env.N8N_CHAT_URL ?? '',
     uploadUrl: process.env.N8N_UPLOAD_URL ?? '',
-    libraryProxyUrl: process.env.N8N_LIBRARY_PROXY_URL ?? '',
     imageUrl: process.env.N8N_IMAGE_URL ?? '',
     sharedSecret: process.env.N8N_SHARED_SECRET ?? '',
     chatSharedSecret: process.env.N8N_CHAT_SHARED_SECRET ?? process.env.N8N_SHARED_SECRET ?? '',
@@ -115,7 +114,6 @@ export function validateProductionConfig() {
   }
   requireProductionHttpsUrl(errors, 'N8N_CHAT_URL', config.n8n.chatUrl);
   requireProductionHttpsUrl(errors, 'N8N_UPLOAD_URL', config.n8n.uploadUrl);
-  requireProductionHttpsUrl(errors, 'N8N_LIBRARY_PROXY_URL', config.n8n.libraryProxyUrl);
   requireProductionHttpsUrl(errors, 'N8N_IMAGE_URL', config.n8n.imageUrl);
   requireProductionSecret(errors, 'N8N_SHARED_SECRET', config.n8n.sharedSecret);
   requireProductionSecret(errors, 'N8N_CHAT_SHARED_SECRET', config.n8n.chatSharedSecret);

@@ -8,7 +8,7 @@ Treat n8n as an external service boundary. Workflow changes must preserve user o
 | --- | --- | --- |
 | Chat | `N8N_CHAT_WEBHOOK_URL` | User ID, selected pattern ID, selected pattern content/context, request ID |
 | Upload/indexing | `N8N_UPLOAD_WEBHOOK_URL` | User ID, pattern ID, uploaded file metadata, request ID |
-| Library/Ravelry | `N8N_LIBRARY_WEBHOOK_URL` | User ID, linked account/import metadata, request ID |
+| Library/Ravelry | None: not an n8n workflow | Handled by the API's authenticated `/ravelry/*` routes. The Library Proxy workflow is deactivated and `/workflows/library-proxy` has been removed. |
 | Image/Stitch Vision | `N8N_IMAGE_WEBHOOK_URL` | User ID, image reference, selected pattern or project context where applicable, request ID |
 
 ## Contract Checks
