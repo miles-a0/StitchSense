@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
-import { getPatternFile, putProjectPhoto, signedStorageUrl } from '../services/storage.js';
+import { getPatternFile, putProjectPhoto, signedStorageUrl, uploadedFilename } from '../services/storage.js';
 
 const projectStatus = z.enum(['planned', 'active', 'paused', 'completed', 'archived']);
 const projectProgressMode = z.enum(['percent', 'rows', 'rounds', 'motifs', 'sections']);
@@ -561,7 +561,7 @@ export async function projectRoutes(app: FastifyInstance) {
     for await (const part of parts) {
       if (part.type === 'file') {
         fileBuffer = await part.toBuffer();
-        filename = part.filename || filename;
+        filename = uploadedFilename(part.filename, filename);
       } else {
         meta[part.fieldname] = String(part.value ?? '');
       }

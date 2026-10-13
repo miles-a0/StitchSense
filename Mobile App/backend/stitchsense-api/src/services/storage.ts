@@ -31,6 +31,18 @@ async function ensureBucket() {
   bucketReady = true;
 }
 
+// The Expo app's fetch percent-encodes multipart filenames ("Hat One.pdf" arrives as "Hat%20One.pdf").
+export function uploadedFilename(raw: string | undefined, fallback: string) {
+  if (!raw) return fallback;
+  if (!/%[0-9A-Fa-f]{2}/.test(raw)) return raw;
+  try {
+    const decoded = decodeURIComponent(raw).replace(/[\\/\u0000-\u001f]/g, '_').trim();
+    return decoded || fallback;
+  } catch {
+    return raw;
+  }
+}
+
 export async function putPatternFile(input: {
   userId: string;
   patternId: string;

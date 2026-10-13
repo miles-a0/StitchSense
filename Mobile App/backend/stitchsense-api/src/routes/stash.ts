@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
-import { getPatternFile, putStashPhoto, signedStorageUrl } from '../services/storage.js';
+import { getPatternFile, putStashPhoto, signedStorageUrl, uploadedFilename } from '../services/storage.js';
 
 const stashCategory = z.enum(['yarn', 'needle-hook', 'tool']);
 
@@ -254,7 +254,7 @@ export async function stashRoutes(app: FastifyInstance) {
     for await (const part of parts) {
       if (part.type === 'file') {
         fileBuffer = await part.toBuffer();
-        filename = part.filename || filename;
+        filename = uploadedFilename(part.filename, filename);
       }
     }
 
