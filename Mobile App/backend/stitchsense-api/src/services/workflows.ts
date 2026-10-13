@@ -2,12 +2,11 @@ import { config } from '../config.js';
 import { fetchWithTimeout } from './http.js';
 import { recordWorkflowMetrics } from './metrics.js';
 
-type WorkflowType = 'chat' | 'upload' | 'library' | 'image';
+type WorkflowType = 'chat' | 'upload' | 'image';
 
 const endpointByType: Record<WorkflowType, string> = {
   chat: config.n8n.chatUrl,
   upload: config.n8n.uploadUrl,
-  library: config.n8n.libraryProxyUrl,
   image: config.n8n.imageUrl || config.n8n.chatUrl,
 };
 
