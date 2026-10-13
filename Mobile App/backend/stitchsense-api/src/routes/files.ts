@@ -2,14 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { getPatternFile, storageLinkPath, verifyStorageLink } from '../services/storage.js';
 
 // Only types the upload routes store are served; anything else is sent as a download.
-const inlineContentTypes = new Set([
-  'application/pdf',
-  'text/plain',
-  'text/plain; charset=utf-8',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-]);
+const inlineContentTypes = new Set(['application/pdf', 'text/plain', 'image/jpeg', 'image/png', 'image/webp']);
+
+// Storage backends may rewrite parameters (S3Mock returns `text/plain;charset=utf-8`), so match the media type only.
+function mediaType(contentType: string) {
+  return contentType.split(';')[0].trim().toLowerCase();
+}
 
 function isMissingObject(error: unknown) {
   if (!error || typeof error !== 'object') return false;
@@ -35,8 +33,7 @@ export async function fileRoutes(app: FastifyInstance) {
       throw error;
     }
 
-    const contentType = file.contentType.toLowerCase();
-    if (inlineContentTypes.has(contentType)) {
+    if (inlineContentTypes.has(mediaType(file.contentType))) {
       reply.header('content-type', file.contentType);
       reply.header('content-disposition', 'inline');
     } else {
