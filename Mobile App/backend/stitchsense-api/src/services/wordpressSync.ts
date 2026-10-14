@@ -607,7 +607,9 @@ async function upsertPattern(userId: string, legacyWpUserId: number | null, patt
        metadata = EXCLUDED.metadata,
        created_at = LEAST(user_patterns.created_at, EXCLUDED.created_at),
        updated_at = GREATEST(user_patterns.updated_at, EXCLUDED.updated_at),
-       deleted_at = NULL`,
+       deleted_at = NULL
+     WHERE EXCLUDED.updated_at > user_patterns.updated_at
+        OR user_patterns.deleted_at IS NOT NULL`,
     [
       id,
       userId,
