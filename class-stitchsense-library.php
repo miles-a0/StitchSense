@@ -298,6 +298,9 @@ if (!class_exists('StitchSense_Library')) {
                 $payload['metadata']['legacy_wp_user_id'] = $uid;
                 $payload['metadata']['wordpress_site_url'] = home_url('/');
             }
+            if (array_key_exists('is_archived', $body) || array_key_exists('isArchived', $body)) {
+                $payload['isArchived'] = filter_var($body['is_archived'] ?? $body['isArchived'], FILTER_VALIDATE_BOOLEAN);
+            }
             if (array_key_exists('pattern_summary_structured', $body) || array_key_exists('patternSummaryStructured', $body)) {
                 $structured = $body['pattern_summary_structured'] ?? $body['patternSummaryStructured'];
                 $payload['patternSummaryStructured'] = is_array($structured) || is_object($structured) ? $structured : new stdClass();

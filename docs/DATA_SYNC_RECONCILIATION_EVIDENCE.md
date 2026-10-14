@@ -55,6 +55,7 @@ Each user signed in through the staging API `POST /auth/wordpress-login`, which 
 | E5 | A chat could be started on, or receive messages for, a deleted pattern, and the AI request still carried the deleted pattern's context | `POST /chats` checked ownership but not deletion, and the chat message routes did not check the bound pattern. | Closed: fixed with a regression test (PR #79), confirmed on staging (Run 2) |
 | E6 | After deleting a pattern through the API, staging WordPress still exported it and the reconciliation reported it as missing | WordPress deletes by archiving (`is_archived`) and its export includes archived patterns. The sync ignored the flag, so archived patterns could be imported as active on first sync, and a deleted pattern stayed deleted only because WordPress stamped the archive slightly earlier than the API delete. Zone-less WordPress timestamps were read in the host's time zone. | Closed: archived patterns are never imported, retire the matching platform pattern unless it was changed after the archive, and are left out of counts; zone-less timestamps are read as UTC. Regression test (PR #79), confirmed on staging (Run 2). |
 | E7 | Renaming a WordPress-imported pattern in the app or on the website would be undone by the next sync | Platform edits do not update the legacy WordPress copy, and the sync copied every field from that older copy over the platform pattern without comparing timestamps. Found by code review before the rename check. | Fixed: the sync only overwrites a pattern when the WordPress copy is newer. Regression test added. Rename check on staging pending deployment. |
+| E8 | "Archive" on the website fails while the Platform API setting is enabled | The plugin forwards website pattern updates to the API but dropped `is_archived`, so an archive became an empty update and returned "No valid fields to update." Found by code review before the website checks. | Fixed in plugin 7.7.44 (forwards `isArchived`). Archive check on staging pending plugin upload. |
 
 ## Object storage and file access (all runs)
 
@@ -123,4 +124,4 @@ Staging on `main` at `5016fe1` (PR #79). Expo started with `EXPO_PUBLIC_API_BASE
 | Decision owner |  |
 | Decision time |  |
 | Exceptions accepted |  |
-| Follow-up issues | E2, E7 (confirm on staging) |
+| Follow-up issues | E2, E7 and E8 (confirm on staging) |
