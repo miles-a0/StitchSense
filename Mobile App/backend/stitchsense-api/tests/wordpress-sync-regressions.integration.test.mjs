@@ -150,4 +150,67 @@ test('WordPress sync does not resurrect stale deleted Ravelry patterns', {
   assert.equal(pattern.rows[0].updated_at.toISOString(), '2026-09-14T09:01:00.000Z');
   assert.equal(pattern.rows[0].metadata.ravelry_id, '12345');
   assert.equal(pattern.rows[0].metadata.stored_pdf_url, 'https://patterns.example.test/updated-ravelry.pdf');
+
+  const editedAfterArchiveId = (
+    await client.query(
+      `INSERT INTO user_patterns (id, user_id, title, source, metadata, updated_at)
+       VALUES ('0b9d2c6e-4f3a-4c1d-9e8f-1a2b3c4d5e6f', $1, 'Edited in the app after web archive', 'upload',
+               '{"wordpress_pattern_id":"0b9d2c6e-4f3a-4c1d-9e8f-1a2b3c4d5e6f"}', '2026-10-01T12:00:00Z')
+       RETURNING id`,
+      [userId],
+    )
+  ).rows[0].id;
+
+  wordpressPayload = {
+    user: { legacy_wp_user_id: 42 },
+    patterns: [
+      {
+        id: 'wp-stale',
+        title: 'Updated Ravelry import',
+        source: 'ravelry',
+        metadata: { ravelry_id: '12345', external_service: 'ravelry' },
+        is_archived: true,
+        updated_at: '2026-09-14 09:05:00',
+      },
+      {
+        id: 'wp-archived-never-imported',
+        title: 'Archived on the web before the app existed',
+        source: 'upload',
+        is_archived: true,
+        updated_at: '2026-06-01 10:00:00',
+      },
+      {
+        id: editedAfterArchiveId,
+        title: 'Edited in the app after web archive',
+        source: 'upload',
+        is_archived: true,
+        updated_at: '2026-09-20 10:00:00',
+      },
+    ],
+    chat_sessions: [{ id: 'wp-chat-on-archived', pattern_id: 'wp-archived-never-imported', title: 'Archived chat' }],
+    chat_messages: [{ session_id: 'wp-chat-on-archived', role: 'user', content: 'Archived question' }],
+  };
+
+  await syncWordPressLibraryForUser(userId);
+
+  pattern = await client.query('SELECT deleted_at, metadata FROM user_patterns WHERE id = $1', [deletedPatternId]);
+  assert.notEqual(pattern.rows[0].deleted_at, null, 'an archived WordPress pattern retires the matching platform pattern');
+  assert.equal(pattern.rows[0].metadata.wordpress_tombstone_source, 'wordpress_archived');
+  const neverImported = await client.query(
+    `SELECT COUNT(*)::int AS count FROM user_patterns WHERE metadata->>'wordpress_pattern_id' = 'wp-archived-never-imported'`,
+  );
+  assert.equal(neverImported.rows[0].count, 0, 'archived WordPress patterns are never imported as active');
+  const archivedChats = await client.query(`SELECT COUNT(*)::int AS count FROM chat_sessions WHERE title = 'Archived chat'`);
+  assert.equal(archivedChats.rows[0].count, 0);
+  const edited = await client.query('SELECT deleted_at FROM user_patterns WHERE id = $1', [editedAfterArchiveId]);
+  assert.equal(edited.rows[0].deleted_at, null, 'a pattern changed in the app after the web archive stays active');
+
+  wordpressPayload.patterns[0].updated_at = '2026-12-31 23:59:59';
+  await syncWordPressLibraryForUser(userId);
+  pattern = await client.query('SELECT deleted_at FROM user_patterns WHERE id = $1', [deletedPatternId]);
+  assert.notEqual(pattern.rows[0].deleted_at, null, 'a later archive timestamp never resurrects the pattern');
+
+  const { wordpressPendingSyncForUser } = await import('../dist/services/wordpressSync.js');
+  const pending = await wordpressPendingSyncForUser(userId);
+  assert.equal(pending.counts.patterns, 0, 'archived WordPress patterns are not reported as missing from the platform');
 });

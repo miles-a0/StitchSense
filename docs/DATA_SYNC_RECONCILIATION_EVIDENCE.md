@@ -52,6 +52,7 @@ Each user signed in through the staging API `POST /auth/wordpress-login`, which 
 | E2 | User B has 1 WordPress chat (2 messages) not imported | That chat references a pattern no longer in the WordPress export. The sync correctly refuses a chat whose pattern does not exist. Not an importer bug. | Accept, or clean up the orphaned chat in WordPress |
 | E3 | Staging `N8N_IMAGE_URL` points at `staging-stitchsense-image-analysis`, which n8n reports as not registered | Stitch Vision still worked: the WordPress image proxy is tried first, and a 404 from the direct image webhook falls back to the chat webhook. The direct call wasted a request and recorded an error on each use. | Set `N8N_IMAGE_URL` to `staging-pattern-helper-chat` on the staging host (matches `.env.staging.example`) |
 | E4 | `my-main-net` is attached to `stitchsense-api-staging` but not declared in `docker-compose.staging.yml` | Proxy reachability would be lost when the container is recreated. Name resolution was verified safe. | Fixed in `docker-compose.staging.yml` (`reverse_proxy` network, as in production) |
+| E6 | After deleting a pattern through the API, staging WordPress still exported it and the reconciliation reported it as missing from the platform | WordPress deletes by archiving (`is_archived`), and its export includes archived patterns. The sync ignored the flag, so archived patterns could be imported as active on first sync, and a deleted pattern stayed deleted only because WordPress stamped the archive slightly earlier than the API delete. Zone-less WordPress timestamps were also read in the host's local time zone. | Fixed: archived WordPress patterns are never imported, retire the matching platform pattern unless it was changed after the archive, and are left out of reconciliation counts. Zone-less WordPress timestamps are read as UTC. Regression test added. |
 | E5 | A chat could be started on, or receive messages for, a pattern that had been deleted, and the AI request still carried the deleted pattern's context | Found while reviewing the stale-ID scenario. `POST /chats` checked ownership but not deletion, and the chat message routes did not check the bound pattern. | Fixed: `POST /chats`, `POST /chats/:id/messages`, and `PUT /chats/:id/messages` now return 404 for deleted patterns, with a regression test |
 
 ### Object storage and file access
@@ -76,14 +77,22 @@ Each user signed in through the staging API `POST /auth/wordpress-login`, which 
 | Deleted pattern cannot be opened through stale IDs | Not checked |
 | App relaunch and reinstall | Not checked (device) |
 
+### Run 2 additions (2026-10-14, staging on `fix/staging-reconciliation-followups`)
+
+| Check | Result |
+| --- | --- |
+| Staging deploy | Branch commit `c2ac06f`, API on `stitchsense_staging` and `my-main-net`, `N8N_IMAGE_URL` set to `staging-pattern-helper-chat`, `/ready` healthy (closes E3, E4) |
+| Delete a pattern (User B, Ravelry entry with details only) | API returned 204 and archived the pattern in staging WordPress |
+| Deleted pattern opened through its old ID | Pass: 404 on pattern, file link, file, rewrite, new chat, sending a message, and importing messages into its chat |
+| Re-sync after delete | Pass: pattern stayed deleted (9 to 8). Pending check failed and exposed E6. |
+
 ### Outstanding for Workstream 5
 
 - Web upload appears in the mobile Library, and mobile upload appears on the web, including a large PDF.
 - Mobile delete followed by re-sync must not resurrect the record. Web delete/update follows the agreed rule.
-- Deleted pattern opened through a stale ID.
 - Stash counts and stash image owner scoping.
 - Mobile counts column, and the relaunch/reinstall matrix on a device.
-- Close exceptions E1 and E3 on staging, and confirm the E5 fix on staging after deployment.
+- Close exception E1 in the browser, and confirm the E6 fix on staging after deployment.
 
 ### Decision
 
@@ -93,4 +102,4 @@ Each user signed in through the staging API `POST /auth/wordpress-login`, which 
 | Decision owner |  |
 | Decision time |  |
 | Exceptions accepted |  |
-| Follow-up issues | E1 to E5 |
+| Follow-up issues | E1 to E6 |
