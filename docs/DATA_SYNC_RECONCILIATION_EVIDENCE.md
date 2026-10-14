@@ -41,65 +41,85 @@ Each user signed in through the staging API `POST /auth/wordpress-login`, which 
 | Pattern chat messages | 39 (A 0, B 39) | 42 (A 5, B 37) | Not checked | E1, E2 |
 | Pattern rewrites | 4 (A 0, B 4) | 4 (A 0, B 4) | Not checked | None |
 | Projects, counters, work logs, project photos | Platform only | 0 | Not checked | Integrity check passed, 0 orphans |
-| Stash items, stash photos | Platform only | Not checked | Not checked | Outstanding |
-| Deleted/tombstoned records | Not checked | Not checked | Not checked | Outstanding |
+| Stash items, stash photos | Platform only | Not checked in Run 1 | Not checked | See Run 3 |
+| Deleted/tombstoned records | Not checked in Run 1 | Not checked in Run 1 | Not checked | See Runs 2 and 3 |
 
-### Exceptions
+## Exceptions (all runs)
 
-| ID | Exception | Assessment | Action |
+| ID | Exception | Assessment | Status |
 | --- | --- | --- | --- |
-| E1 | User A has 3 chats (5 messages) in the API and 0 in WordPress | Owner requirement (2026-10-14): app chats must show on the web and web chats in the app. With the WordPress Platform API setting enabled, the plugin's web chat endpoints list, create, read, and append chats through the API, so both surfaces share one store. The WordPress count here is the legacy local store only. | Confirm in the browser that User A's app chats appear on the web and a web chat appears in the API (Run 2). Platform API must stay enabled in production for this to hold. |
-| E2 | User B has 1 WordPress chat (2 messages) not imported | That chat references a pattern no longer in the WordPress export. The sync correctly refuses a chat whose pattern does not exist. Not an importer bug. | Accept, or clean up the orphaned chat in WordPress |
-| E3 | Staging `N8N_IMAGE_URL` points at `staging-stitchsense-image-analysis`, which n8n reports as not registered | Stitch Vision still worked: the WordPress image proxy is tried first, and a 404 from the direct image webhook falls back to the chat webhook. The direct call wasted a request and recorded an error on each use. | Set `N8N_IMAGE_URL` to `staging-pattern-helper-chat` on the staging host (matches `.env.staging.example`) |
-| E4 | `my-main-net` is attached to `stitchsense-api-staging` but not declared in `docker-compose.staging.yml` | Proxy reachability would be lost when the container is recreated. Name resolution was verified safe. | Fixed in `docker-compose.staging.yml` (`reverse_proxy` network, as in production) |
-| E6 | After deleting a pattern through the API, staging WordPress still exported it and the reconciliation reported it as missing from the platform | WordPress deletes by archiving (`is_archived`), and its export includes archived patterns. The sync ignored the flag, so archived patterns could be imported as active on first sync, and a deleted pattern stayed deleted only because WordPress stamped the archive slightly earlier than the API delete. Zone-less WordPress timestamps were also read in the host's local time zone. | Fixed: archived WordPress patterns are never imported, retire the matching platform pattern unless it was changed after the archive, and are left out of reconciliation counts. Zone-less WordPress timestamps are read as UTC. Regression test added. |
-| E5 | A chat could be started on, or receive messages for, a pattern that had been deleted, and the AI request still carried the deleted pattern's context | Found while reviewing the stale-ID scenario. `POST /chats` checked ownership but not deletion, and the chat message routes did not check the bound pattern. | Fixed: `POST /chats`, `POST /chats/:id/messages`, and `PUT /chats/:id/messages` now return 404 for deleted patterns, with a regression test |
+| E1 | User A has 3 chats (5 messages) in the API and 0 in WordPress | Owner requirement (2026-10-14): app chats must show on the web and web chats in the app. With the WordPress Platform API setting enabled, the plugin's web chat endpoints list, create, read, and append chats through the API, so both surfaces share one store. The WordPress count is the legacy local store only. | Closed: confirmed in the browser and the app (Run 2). Platform API must stay enabled in production WordPress. |
+| E2 | User B has 1 WordPress chat (2 messages) not imported | That chat references a pattern no longer in the WordPress export. The sync correctly refuses a chat whose pattern does not exist. Not an importer bug. | Open: accept, or clean up the orphaned chat in WordPress |
+| E3 | Staging `N8N_IMAGE_URL` pointed at `staging-stitchsense-image-analysis`, which n8n reports as not registered | Stitch Vision still worked through the WordPress image proxy and the chat-webhook fallback, but each direct call wasted a request and recorded an error. | Closed: set to `staging-pattern-helper-chat` on the staging host (Run 2) |
+| E4 | `my-main-net` was attached to `stitchsense-api-staging` by hand through an untracked override file | Proxy reachability would be lost when the container was recreated. Name resolution was verified safe. | Closed: declared in `docker-compose.staging.yml` (PR #79); override file moved to backups |
+| E5 | A chat could be started on, or receive messages for, a deleted pattern, and the AI request still carried the deleted pattern's context | `POST /chats` checked ownership but not deletion, and the chat message routes did not check the bound pattern. | Closed: fixed with a regression test (PR #79), confirmed on staging (Run 2) |
+| E6 | After deleting a pattern through the API, staging WordPress still exported it and the reconciliation reported it as missing | WordPress deletes by archiving (`is_archived`) and its export includes archived patterns. The sync ignored the flag, so archived patterns could be imported as active on first sync, and a deleted pattern stayed deleted only because WordPress stamped the archive slightly earlier than the API delete. Zone-less WordPress timestamps were read in the host's time zone. | Closed: archived patterns are never imported, retire the matching platform pattern unless it was changed after the archive, and are left out of counts; zone-less timestamps are read as UTC. Regression test (PR #79), confirmed on staging (Run 2). |
 
-### Object storage and file access
+## Object storage and file access (all runs)
 
 | Check | Result |
 | --- | --- |
-| Every active DB file reference has an object | Pass: 19 of 19 owner downloads returned the PDF |
-| Signed URLs require owner access | Pass: every file link was signed (WordPress) or presigned (MinIO) |
-| Raw WordPress upload URLs without a signature | Pass: 3 of 3 sampled returned HTTP 403 |
-| Cross-user access to patterns, files, thumbnails, chats, rewrites | Pass: 138 requests (B to A 84, A to B 54), 0 leaks |
+| Every active DB file reference has an object | Pass: 19 of 19 owner downloads returned the PDF (Run 1) |
+| Signed URLs require owner access | Pass: every file link was signed (WordPress) or presigned (MinIO) (Run 1) |
+| Raw WordPress upload URLs without a signature | Pass: 3 of 3 sampled returned HTTP 403 (Run 1) |
+| Cross-user access to patterns, files, thumbnails, chats, rewrites | Pass: 138 requests (B to A 84, A to B 54), 0 leaks (Run 1) |
+| Stash photo owner scoping | Pass: owner opens photo and signed link; tampered link 403; other user cannot list, open, or delete the item (Run 3) |
 | Orphan objects quarantined before deletion | Not checked |
-| Deleted account replay after restore | Not checked |
+| Deleted account replay after restore | Not checked (migration rollback rehearsal) |
 
-### Pattern context matrix
+## Pattern context matrix (all runs)
 
 | Scenario | Result |
 | --- | --- |
-| Pattern A chat cannot read Pattern B content | Pass at API guard level: sending another pattern's ID into a pattern chat returned 409 before any workflow call |
-| Another user cannot start a chat, post into a chat, or rewrite with someone else's pattern | Pass: 404 on 3 patterns for chat and rewrite, and on posting into another user's chat session |
-| Metadata-only paid Ravelry pattern blocks AI content operations | Pass: rewrite refused with 409 on all 4 Ravelry entries with details only |
-| Stored-source Ravelry pattern allows AI content operations | Not checked (needs a real AI call) |
-| Deleted pattern cannot be opened through stale IDs | Not checked |
-| App relaunch and reinstall | Not checked (device) |
+| Pattern A chat cannot read Pattern B content | Pass: API guard returned 409 before any workflow call (Run 1); on the device, chats on two patterns each answered about their own pattern (Run 3) |
+| Another user cannot start a chat, post into a chat, or rewrite with someone else's pattern | Pass: 404 (Run 1) |
+| Metadata-only paid Ravelry pattern blocks AI content operations | Pass: rewrite refused with 409 on all 4 Ravelry entries with details only (Run 1) |
+| Stored-source Ravelry pattern allows AI content operations | Not checked separately (needs a real AI call on a Ravelry pattern with a stored PDF) |
+| Deleted pattern cannot be opened through stale IDs | Pass: 404 on every route (Run 2) |
+| App relaunch | Pass: still signed in with library intact after force-closing Expo Go (Run 3) |
+| App reinstall | Not checked: Expo Go cannot reinstall the app. Sign out and back in restored the library (Run 3). Needs a staging build. |
 
-### Run 2 additions (2026-10-14, staging on `fix/staging-reconciliation-followups`)
+## Run 2: fixes deployed to staging (2026-10-14)
 
 | Check | Result |
 | --- | --- |
-| Staging deploy | Branch commit `c2ac06f`, API on `stitchsense_staging` and `my-main-net`, `N8N_IMAGE_URL` set to `staging-pattern-helper-chat`, `/ready` healthy (closes E3, E4) |
+| Staging deploy | Branch commit `c2ac06f`, then `1244ac7`; API on `stitchsense_staging` and `my-main-net`; `N8N_IMAGE_URL` set to `staging-pattern-helper-chat`; `/ready` healthy |
 | Delete a pattern (User B, Ravelry entry with details only) | API returned 204 and archived the pattern in staging WordPress |
 | Deleted pattern opened through its old ID | Pass: 404 on pattern, file link, file, rewrite, new chat, sending a message, and importing messages into its chat |
-| Re-sync after delete | Pass: pattern stayed deleted (9 to 8). Pending check failed and exposed E6. |
+| Re-sync after delete | Pass after the E6 fix: pattern stays deleted (User B 9 to 8) and nothing is pending |
+| User A re-sync after E6 fix | Pass: 14 patterns unchanged |
+| App chats on the web, web chats in the app | Pass (closes E1) |
 
-### Outstanding for Workstream 5
+## Run 3: device checks with Expo Go against staging (2026-10-14)
 
-- Web upload appears in the mobile Library, and mobile upload appears on the web, including a large PDF.
-- Mobile delete followed by re-sync must not resurrect the record. Web delete/update follows the agreed rule.
-- Stash counts and stash image owner scoping.
-- Mobile counts column, and the relaunch/reinstall matrix on a device.
-- Close exception E1 in the browser, and confirm the E6 fix on staging after deployment.
+Staging on `main` at `5016fe1` (PR #79). Expo started with `EXPO_PUBLIC_API_BASE_URL=https://staging-stitchsense.zu-auto.co.uk`.
 
-### Decision
+| Check | Result |
+| --- | --- |
+| Mobile library count, User A | Pass: 14, matching WordPress and the API |
+| Open patterns on the device | Pass: upload and Ravelry patterns open |
+| Large PDF uploaded on the phone appears on the web | Pass: appears and opens for the owner, not visible to the other user |
+| Web upload appears in the mobile library | Pass: appears and opens after refresh |
+| Mobile delete, then web and re-sync | Pass: gone from the web, stays gone after sign-out and sign-in |
+| Chats stay on their own pattern | Pass |
+| Stash item with photo | Pass: 1 item with photo stored for User A only; owner scoping checks passed |
+| Relaunch | Pass |
+
+## Outstanding for Workstream 5
+
+- Reinstall check on a staging build of the app (Expo Go cannot reinstall).
+- Stored-source Ravelry pattern AI operation, orphan object quarantine check.
+- Migration rollback rehearsal (`docs/MIGRATION_ROLLBACK_REHEARSAL.md`), including deleted-account replay.
+- Representative staging data: Runs 1 to 3 used the owner's two accounts. Customer-like data must be minimised or anonymised before use.
+- Decide E2.
+- Final migration counts, exceptions, and approval before touching production data. Production must run the PR #79 sync fix before any production user's first app sign-in imports their WordPress library.
+
+## Decision
 
 | Field | Value |
 | --- | --- |
-| Reconciliation decision | Continue (import and API-level checks passed; device and bidirectional checks outstanding) |
+| Reconciliation decision | Continue (staging import, reconciliation, bidirectional, and device checks passed; reinstall, rollback rehearsal, and final sign-off outstanding) |
 | Decision owner |  |
 | Decision time |  |
 | Exceptions accepted |  |
-| Follow-up issues | E1 to E6 |
+| Follow-up issues | E2 |
