@@ -251,6 +251,66 @@ test('chat history routes cover scoped sessions, imported messages, ordering, an
     ['Other private message'],
   );
 
+  const deletedPatternId = (
+    await client.query(
+      `INSERT INTO user_patterns (user_id, title, source, pattern_summary_text)
+       VALUES ($1, 'Deleted chat pattern', 'upload', 'Deleted pattern context')
+       RETURNING id`,
+      [ownerId],
+    )
+  ).rows[0].id;
+  const deletedPatternSessionId = (
+    await client.query(
+      `INSERT INTO chat_sessions (user_id, pattern_id, title, skill_level)
+       VALUES ($1, $2, 'Chat on a pattern deleted later', 'beginner')
+       RETURNING id`,
+      [ownerId, deletedPatternId],
+    )
+  ).rows[0].id;
+  await client.query('UPDATE user_patterns SET deleted_at = NOW() WHERE id = $1', [deletedPatternId]);
+  const deletedPatternMessageCount = async () =>
+    Number(
+      (await client.query('SELECT COUNT(*)::int AS count FROM chat_messages WHERE session_id = $1', [deletedPatternSessionId]))
+        .rows[0].count,
+    );
+
+  let workflowCalls = 0;
+  globalThis.fetch = async () => {
+    workflowCalls += 1;
+    return new Response(JSON.stringify({ answer: 'Should not be called' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const staleCreate = await app.inject({
+    method: 'POST',
+    url: '/chats',
+    headers: { authorization: ownerAuthorization },
+    payload: { patternId: deletedPatternId, title: 'Stale pattern chat' },
+  });
+  assert.equal(staleCreate.statusCode, 404, staleCreate.body);
+  assert.deepEqual(staleCreate.json(), { error: 'Pattern not found' });
+
+  const staleMessage = await app.inject({
+    method: 'POST',
+    url: `/chats/${deletedPatternSessionId}/messages`,
+    headers: { authorization: ownerAuthorization },
+    payload: { content: 'Does the deleted pattern still answer?', patternId: deletedPatternId },
+  });
+  assert.equal(staleMessage.statusCode, 404, staleMessage.body);
+  assert.deepEqual(staleMessage.json(), { error: 'Session not found' });
+
+  const staleImport = await app.inject({
+    method: 'PUT',
+    url: `/chats/${deletedPatternSessionId}/messages`,
+    headers: { authorization: ownerAuthorization },
+    payload: { messages: [{ role: 'assistant', content: 'Should not import' }] },
+  });
+  assert.equal(staleImport.statusCode, 404, staleImport.body);
+  assert.equal(workflowCalls, 0);
+  assert.equal(await deletedPatternMessageCount(), 0);
+
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ error: 'N8N_UPLOAD_SHARED_SECRET leaked upstream detail' }), {
       status: 500,
