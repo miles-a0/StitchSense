@@ -23,6 +23,7 @@ services:
         condition: service_started
     networks:
       - staging
+      - reverse_proxy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -66,6 +67,9 @@ services:
 networks:
   staging:
     name: stitchsense_staging
+  reverse_proxy:
+    external: true
+    name: my-main-net
 
 volumes:
   stitchsense_staging_postgres:

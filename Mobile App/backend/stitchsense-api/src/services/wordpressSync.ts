@@ -26,6 +26,7 @@ interface WordPressExportPattern {
   project_id?: string;
   file_id?: string;
   job_id?: string;
+  is_archived?: unknown;
 }
 
 interface WordPressExportChat {
@@ -125,9 +126,11 @@ export interface WordPressMirrorSnapshot {
   };
 }
 
+// WordPress writes zone-less timestamps in UTC; read them as UTC regardless of the host time zone.
 function asDate(value: string | undefined) {
   if (!value) return new Date();
-  const parsed = new Date(value);
+  const zoneless = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(value.trim());
+  const parsed = new Date(zoneless ? `${value.trim().replace(' ', 'T')}Z` : value);
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
@@ -142,6 +145,12 @@ function asUUID(value: string | undefined) {
 function asArray<T>(value: T[] | Record<string, T> | undefined): T[] {
   if (!value) return [];
   return Array.isArray(value) ? value : Object.values(value);
+}
+
+// WordPress deletes patterns by archiving them, and its export still includes archived rows.
+function isArchivedWordPressPattern(pattern: WordPressExportPattern) {
+  const value = pattern.is_archived;
+  return value === true || value === 1 || value === '1' || value === 't' || value === 'true';
 }
 
 function normaliseString(value: unknown) {
@@ -294,7 +303,7 @@ export async function wordpressMirrorSnapshotForUser(userId: string): Promise<Wo
   }
 
   const payload = await fetchWordPressExport(siteUrl, wpUserId);
-  const wordpressPatterns = asArray(payload.patterns);
+  const wordpressPatterns = asArray(payload.patterns).filter((pattern) => !isArchivedWordPressPattern(pattern));
   const messagesBySession = normaliseMessagesBySession(payload);
   let chatMessageCount = 0;
   for (const messages of messagesBySession.values()) {
@@ -621,6 +630,26 @@ async function upsertPattern(userId: string, legacyWpUserId: number | null, patt
   );
 
   return { importedId: id, legacyId: pattern.id ?? id, skipped: false };
+}
+
+// Only the same pattern is retired, and only if the platform has not changed it since WordPress archived it.
+async function retireArchivedWordPressPattern(userId: string, pattern: WordPressExportPattern) {
+  const wordpressPatternId = normaliseString(pattern.id);
+  if (!wordpressPatternId) return;
+  await query(
+    `UPDATE user_patterns
+     SET deleted_at = NOW(),
+         updated_at = NOW(),
+         metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+           'wordpress_deleted_at', NOW(),
+           'wordpress_tombstone_source', 'wordpress_archived'
+         )
+     WHERE user_id = $1
+       AND deleted_at IS NULL
+       AND (($2::uuid IS NOT NULL AND id = $2::uuid) OR metadata->>'wordpress_pattern_id' = $3)
+       AND updated_at <= $4`,
+    [userId, asUUID(wordpressPatternId), wordpressPatternId, asDate(pattern.updated_at)],
+  );
 }
 
 async function upsertChatSession(userId: string, chat: WordPressExportChat, patternMap: Map<string, string>) {
@@ -1037,6 +1066,10 @@ export async function syncWordPressLibraryForUser(userId: string) {
   const patternMap = new Map<string, string>();
   const importedPatternIds = new Set<string>();
   for (const pattern of patterns) {
+    if (isArchivedWordPressPattern(pattern)) {
+      await retireArchivedWordPressPattern(userId, pattern);
+      continue;
+    }
     const mapping = await upsertPattern(userId, legacyWpUserId, pattern);
     if (mapping.skipped) {
       continue;

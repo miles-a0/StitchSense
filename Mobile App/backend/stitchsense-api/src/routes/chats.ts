@@ -16,6 +16,21 @@ import { resolvePatternGuideContinuation } from '../services/patternGuideContinu
 import { callWorkflow } from '../services/workflows.js';
 import { callWordPressChatProxy } from '../services/wordpressBridge.js';
 
+// Chats bound to a deleted pattern are closed to new messages so stale IDs cannot reuse its context.
+async function findWritableChatSession(sessionId: string, userId: string) {
+  const result = await query<{ id: string; pattern_id: string | null }>(
+    `SELECT cs.id, cs.pattern_id
+     FROM chat_sessions cs
+     LEFT JOIN user_patterns up ON up.id = cs.pattern_id AND up.user_id = cs.user_id
+     WHERE cs.id = $1
+       AND cs.user_id = $2
+       AND (cs.pattern_id IS NULL OR (up.id IS NOT NULL AND up.deleted_at IS NULL))
+     LIMIT 1`,
+    [sessionId, userId],
+  );
+  return result.rows[0] ?? null;
+}
+
 const createChatBody = z.object({
   patternId: z.string().uuid().optional(),
   title: z.string().default('Untitled chat'),
@@ -257,6 +272,7 @@ export async function chatRoutes(app: FastifyInstance) {
          FROM user_patterns
          WHERE id = $1
            AND user_id = $2
+           AND deleted_at IS NULL
          LIMIT 1`,
         [body.patternId, request.authUser.id],
       );
@@ -300,23 +316,11 @@ export async function chatRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const body = messageBody.parse(request.body);
-    const sessionAccess = await query<{
-      id: string;
-      pattern_id: string | null;
-    }>(
-      `SELECT id, pattern_id
-       FROM chat_sessions
-       WHERE id = $1
-         AND user_id = $2
-       LIMIT 1`,
-      [id, request.authUser.id],
-    );
-
-    if (!sessionAccess.rowCount) {
+    const activeSession = await findWritableChatSession(id, request.authUser.id);
+    if (!activeSession) {
       return reply.code(404).send({ error: 'Session not found' });
     }
 
-    const activeSession = sessionAccess.rows[0];
     if (body.patternId !== undefined && (activeSession.pattern_id ?? null) !== (body.patternId ?? null)) {
       return reply.code(409).send({
         error: 'This chat session belongs to a different pattern. Please start a fresh chat for the selected pattern.',
@@ -757,11 +761,7 @@ export async function chatRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = importMessagesBody.parse(request.body);
 
-    const session = await query<{ id: string }>('SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2', [
-      id,
-      request.authUser.id,
-    ]);
-    if (!session.rowCount) {
+    if (!(await findWritableChatSession(id, request.authUser.id))) {
       return reply.code(404).send({ error: 'Session not found' });
     }
 

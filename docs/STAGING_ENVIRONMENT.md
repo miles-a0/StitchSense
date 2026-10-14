@@ -17,6 +17,7 @@ Use `docs/ENVIRONMENT_CONFIGURATION_MATRIX.md` to compare settings across enviro
 | Qdrant collection | `knitting_knowledge_staging` | `knitting_knowledge` | Qdrant node URLs inside the staging n8n workflows |
 | WordPress bridge | `https://staging.catlowyarns.co.uk` | `https://catlowyarns.co.uk` | `WORDPRESS_SITE_URL`, `WORDPRESS_BRIDGE_SHARED_SECRET` |
 | CORS origins | `https://staging.catlowyarns.co.uk` | `https://catlowyarns.co.uk`, `https://www.catlowyarns.co.uk` | `CORS_ORIGINS` |
+| Reverse proxy | Nginx Proxy Manager forwards `staging-stitchsense.zu-auto.co.uk` to `stitchsense-api-staging:8080` over the external `my-main-net` network | Forwards to `stitchsense-api:8080` over `my-main-net` | `docker-compose.staging.yml` (`reverse_proxy` network) |
 | Trusted proxies | `127.0.0.1,172.16.0.0/12` (host reverse proxy and Docker bridge networks) | Production reverse proxy | `TRUST_PROXY` |
 
 ## n8n workflows
@@ -33,6 +34,7 @@ Use `docs/ENVIRONMENT_CONFIGURATION_MATRIX.md` to compare settings across enviro
 - Never copy production secrets into `.env.staging` or `.env.staging.compose`. The `.example` files contain placeholders only.
 - Never restore production backups into staging without an approved anonymisation step. Staging holds test accounts only.
 - Staging ports bind to `127.0.0.1` only and are reached through the host reverse proxy.
+- `my-main-net` is shared with the production API, and both containers carry the compose service alias `api` there. Proxy hosts must forward to container names (`stitchsense-api-staging`, `stitchsense-api`), never to `api`. Staging reaches its own database and MinIO only through the `stitchsense_staging` network.
 - When adding a new external integration, add a staging-specific value to `.env.staging.example` and a row to this document before deploying it to staging.
 
 ## Setup
