@@ -128,7 +128,7 @@ Staging API on `fix/sync-keeps-newer-platform-edits` (`ee7f7a3`), staging WordPr
 - Representative staging data: Runs 1 to 3 used the owner's two accounts. Customer-like data must be minimised or anonymised before use.
 - Decide E2.
 - App follow-ups: show the real reason when a username sign-in fails (the email fallback currently reports "Invalid request"), and ask for a password before sending an empty one.
-- Final migration counts, exceptions, and approval before touching production data. Production must run the PR #79 sync fix before any production user's first app sign-in imports their WordPress library.
+- Final migration counts, exceptions, and approval before touching production data. The PR #79 and #82 sync fixes are live in production since 2026-10-16 (see `docs/OPERATIONS_REHEARSAL_LOG.md`).
 
 ## Decision
 
