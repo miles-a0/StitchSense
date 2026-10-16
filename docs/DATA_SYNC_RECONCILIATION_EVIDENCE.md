@@ -66,7 +66,7 @@ Each user signed in through the staging API `POST /auth/wordpress-login`, which 
 | Raw WordPress upload URLs without a signature | Pass: 3 of 3 sampled returned HTTP 403 (Run 1) |
 | Cross-user access to patterns, files, thumbnails, chats, rewrites | Pass: 138 requests (B to A 84, A to B 54), 0 leaks (Run 1) |
 | Stash photo owner scoping | Pass: owner opens photo and signed link; tampered link 403; other user cannot list, open, or delete the item (Run 3) |
-| Orphan objects quarantined before deletion | Not checked |
+| Orphan objects quarantined before deletion | Window started 2026-10-16: read-only report. Staging 3 files all referenced, 0 orphans. Production 91 files: 17 referenced by live records, 61 (244 MB) referenced only by deleted records, 13 (2.8 MB) referenced by nothing; 0 live records missing their file. Nothing deleted. |
 | Deleted account replay after restore | Pass: 0 deleted accounts reappear in a restored production backup (2026-10-16 rehearsal) |
 
 ## Pattern context matrix (all runs)
@@ -123,7 +123,8 @@ Staging API on `fix/sync-keeps-newer-platform-edits` (`ee7f7a3`), staging WordPr
 ## Outstanding for Workstream 5
 
 - Reinstall check on a staging build of the app (Expo Go cannot reinstall).
-- Stored-source Ravelry pattern AI operation, orphan object quarantine check.
+- Stored-source Ravelry pattern AI operation.
+- Object-storage window (owner decision): re-run the orphan report after the window (proposed 30 days, about 2026-11-15), quarantine then delete files still unreferenced, and decide whether files kept only for deleted patterns are purged after the window.
 - Representative staging data: Runs 1 to 3 used the owner's two accounts. Customer-like data must be minimised or anonymised before use.
 - Decide E2.
 - Final migration counts, exceptions, and approval before touching production data. The PR #79 and #82 sync fixes are live in production since 2026-10-16 (see `docs/OPERATIONS_REHEARSAL_LOG.md`).
