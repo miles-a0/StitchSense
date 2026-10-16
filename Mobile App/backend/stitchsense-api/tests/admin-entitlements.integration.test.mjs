@@ -84,6 +84,9 @@ test('admin entitlement routes grant, list, report, and revoke manual access', {
   assert.equal(tooLongReason.statusCode, 400, tooLongReason.body);
   assert.equal(tooLongReason.json().error, 'Invalid request');
 
+  const dayMs = 24 * 60 * 60 * 1000;
+  const courtesyStartsAt = new Date(Date.now() - 30 * dayMs).toISOString();
+  const courtesyExpiresAt = new Date(Date.now() + 30 * dayMs).toISOString();
   const grant = await app.inject({
     method: 'POST',
     url: '/admin/entitlements',
@@ -91,8 +94,8 @@ test('admin entitlement routes grant, list, report, and revoke manual access', {
     payload: {
       userId: targetUserId,
       type: 'courtesy_access',
-      startsAt: '2026-09-16T10:00:00.000Z',
-      expiresAt: '2026-10-16T10:00:00.000Z',
+      startsAt: courtesyStartsAt,
+      expiresAt: courtesyExpiresAt,
       reason: 'launch support validation',
     },
   });
@@ -130,7 +133,7 @@ test('admin entitlement routes grant, list, report, and revoke manual access', {
     plan: 'pro',
     status: 'active',
     accessSource: 'courtesy_access',
-    trialEndsAt: '2026-10-16T10:00:00.000Z',
+    trialEndsAt: courtesyExpiresAt,
   });
   assert.equal(paidAccess.entitlement.plan, 'pro_monthly');
   assert.equal(paidAccess.entitlement.accessSource, 'apple');
