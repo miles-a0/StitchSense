@@ -5,6 +5,8 @@ import test from 'node:test';
 import pg from 'pg';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
+// Subscription dates sit in next calendar year so active entitlements never lapse as real time passes.
+const futureYear = new Date().getUTCFullYear() + 1;
 
 test('RevenueCat webhook is authorized, idempotent, and pinned to the original StitchSense user', {
   skip: databaseUrl ? false : 'TEST_DATABASE_URL is not configured',
@@ -79,16 +81,16 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       subscriber: {
         entitlements: {
           pro: {
-            expires_date: '2026-12-08T10:00:00Z',
+            expires_date: `${futureYear}-12-08T10:00:00Z`,
             product_identifier: 'stitchsense_pro_annual_sync',
-            purchase_date: '2026-11-08T10:00:00Z',
+            purchase_date: `${futureYear}-11-08T10:00:00Z`,
           },
         },
         subscriptions: {
           stitchsense_pro_annual_sync: {
             store: 'app_store',
-            expires_date: '2026-12-08T10:00:00Z',
-            purchase_date: '2026-11-08T10:00:00Z',
+            expires_date: `${futureYear}-12-08T10:00:00Z`,
+            purchase_date: `${futureYear}-11-08T10:00:00Z`,
           },
         },
       },
@@ -121,7 +123,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(syncRows.rows[0].user_id, syncId);
   assert.equal(syncRows.rows[0].plan, 'pro_annual');
   assert.equal(syncRows.rows[0].status, 'active');
-  assert.equal(syncRows.rows[0].current_period_end.toISOString(), '2026-12-08T10:00:00.000Z');
+  assert.equal(syncRows.rows[0].current_period_end.toISOString(), `${futureYear}-12-08T10:00:00.000Z`);
   assert.equal(syncRows.rows[0].metadata.revenueCatSync, true);
   assert.equal(syncRows.rows[0].metadata.entitlementId, 'pro');
 
@@ -145,8 +147,8 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
     period_type: 'NORMAL',
     transaction_id: 'tx_apple_1',
     original_transaction_id: 'original_apple_1',
-    purchased_at_ms: Date.parse('2026-09-07T10:00:00Z'),
-    expiration_at_ms: Date.parse('2026-10-07T10:00:00Z'),
+    purchased_at_ms: Date.parse(`${futureYear}-09-07T10:00:00Z`),
+    expiration_at_ms: Date.parse(`${futureYear}-10-07T10:00:00Z`),
     entitlement_ids: ['pro'],
   };
 
@@ -186,7 +188,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rows[0].provider, 'apple');
   assert.equal(subscriptionRows.rows[0].plan, 'pro_annual');
   assert.equal(subscriptionRows.rows[0].status, 'active');
-  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-10-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), `${futureYear}-10-07T10:00:00.000Z`);
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_initial_1');
 
   const replay = await webhook({ event: baseEvent });
@@ -201,7 +203,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rowCount, 1);
   assert.equal(subscriptionRows.rows[0].user_id, ownerId);
   assert.equal(subscriptionRows.rows[0].status, 'active');
-  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-10-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), `${futureYear}-10-07T10:00:00.000Z`);
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_initial_1');
 
   let receivedAudit = await client.query(
@@ -217,7 +219,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       ...baseEvent,
       id: 'evt_rc_renewal_1',
       type: 'RENEWAL',
-      expiration_at_ms: Date.parse('2026-11-07T10:00:00Z'),
+      expiration_at_ms: Date.parse(`${futureYear}-11-07T10:00:00Z`),
     },
   });
   assert.equal(renewal.statusCode, 200, renewal.body);
@@ -231,7 +233,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rowCount, 1);
   assert.equal(subscriptionRows.rows[0].user_id, ownerId);
   assert.equal(subscriptionRows.rows[0].status, 'active');
-  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-11-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), `${futureYear}-11-07T10:00:00.000Z`);
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_renewal_1');
 
   const mismatchedUser = await webhook({
@@ -240,7 +242,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       id: 'evt_rc_mismatch_1',
       type: 'RENEWAL',
       app_user_id: otherId,
-      expiration_at_ms: Date.parse('2026-12-07T10:00:00Z'),
+      expiration_at_ms: Date.parse(`${futureYear}-12-07T10:00:00Z`),
     },
   });
   assert.equal(mismatchedUser.statusCode, 200, mismatchedUser.body);
@@ -253,7 +255,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   );
   assert.equal(subscriptionRows.rowCount, 1);
   assert.equal(subscriptionRows.rows[0].user_id, ownerId);
-  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-11-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), `${futureYear}-11-07T10:00:00.000Z`);
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_renewal_1');
 
   const mismatchAudit = await client.query(
@@ -272,7 +274,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       id: 'evt_rc_cancellation_1',
       type: 'CANCELLATION',
       cancel_reason: 'UNSUBSCRIBE',
-      expiration_at_ms: Date.parse('2026-11-07T10:00:00Z'),
+      expiration_at_ms: Date.parse(`${futureYear}-11-07T10:00:00Z`),
     },
   });
   assert.equal(cancellation.statusCode, 200, cancellation.body);
@@ -286,7 +288,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rowCount, 1);
   assert.equal(subscriptionRows.rows[0].user_id, ownerId);
   assert.equal(subscriptionRows.rows[0].status, 'active');
-  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-11-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), `${futureYear}-11-07T10:00:00.000Z`);
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_cancellation_1');
   assert.equal(subscriptionRows.rows[0].metadata.type, 'CANCELLATION');
   assert.equal(subscriptionRows.rows[0].metadata.cancelReason, 'UNSUBSCRIBE');
@@ -306,7 +308,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       id: 'evt_rc_expiration_1',
       type: 'EXPIRATION',
       expiration_reason: 'UNSUBSCRIBE',
-      expiration_at_ms: Date.parse('2026-11-07T10:00:00Z'),
+      expiration_at_ms: Date.parse(`${futureYear}-11-07T10:00:00Z`),
     },
   });
   assert.equal(expiration.statusCode, 200, expiration.body);
@@ -320,7 +322,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rowCount, 1);
   assert.equal(subscriptionRows.rows[0].user_id, ownerId);
   assert.equal(subscriptionRows.rows[0].status, 'expired');
-  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-11-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), `${futureYear}-11-07T10:00:00.000Z`);
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_expiration_1');
   assert.equal(subscriptionRows.rows[0].metadata.type, 'EXPIRATION');
   assert.equal(subscriptionRows.rows[0].metadata.expirationReason, 'UNSUBSCRIBE');
@@ -339,7 +341,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       ...baseEvent,
       id: 'evt_rc_restore_1',
       type: 'UNCANCELLATION',
-      expiration_at_ms: Date.parse('2026-12-07T10:00:00Z'),
+      expiration_at_ms: Date.parse(`${futureYear}-12-07T10:00:00Z`),
     },
   });
   assert.equal(restore.statusCode, 200, restore.body);
@@ -353,7 +355,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(subscriptionRows.rowCount, 1);
   assert.equal(subscriptionRows.rows[0].user_id, ownerId);
   assert.equal(subscriptionRows.rows[0].status, 'active');
-  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), '2026-12-07T10:00:00.000Z');
+  assert.equal(subscriptionRows.rows[0].current_period_end.toISOString(), `${futureYear}-12-07T10:00:00.000Z`);
   assert.equal(subscriptionRows.rows[0].metadata.revenueCatEventId, 'evt_rc_restore_1');
   assert.equal(subscriptionRows.rows[0].metadata.type, 'UNCANCELLATION');
 
@@ -374,7 +376,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
       product_id: 'stitchsense_pro_monthly',
       transaction_id: 'gpa.1234-5678-9012-34567',
       original_transaction_id: undefined,
-      expiration_at_ms: Date.parse('2026-10-07T10:00:00Z'),
+      expiration_at_ms: Date.parse(`${futureYear}-10-07T10:00:00Z`),
     },
   });
   assert.equal(googleInitialPurchase.statusCode, 200, googleInitialPurchase.body);
@@ -390,7 +392,7 @@ test('RevenueCat webhook is authorized, idempotent, and pinned to the original S
   assert.equal(googleRows.rows[0].provider, 'google');
   assert.equal(googleRows.rows[0].plan, 'pro_monthly');
   assert.equal(googleRows.rows[0].status, 'active');
-  assert.equal(googleRows.rows[0].current_period_end.toISOString(), '2026-10-07T10:00:00.000Z');
+  assert.equal(googleRows.rows[0].current_period_end.toISOString(), `${futureYear}-10-07T10:00:00.000Z`);
   assert.equal(googleRows.rows[0].metadata.revenueCatEventId, 'evt_rc_google_initial_1');
 
   receivedAudit = await client.query(
