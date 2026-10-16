@@ -127,7 +127,6 @@ Staging API on `fix/sync-keeps-newer-platform-edits` (`ee7f7a3`), staging WordPr
 - Migration rollback rehearsal (`docs/MIGRATION_ROLLBACK_REHEARSAL.md`), including deleted-account replay.
 - Representative staging data: Runs 1 to 3 used the owner's two accounts. Customer-like data must be minimised or anonymised before use.
 - Decide E2.
-- App follow-ups: show the real reason when a username sign-in fails (the email fallback currently reports "Invalid request"), and ask for a password before sending an empty one.
 - Final migration counts, exceptions, and approval before touching production data. The PR #79 and #82 sync fixes are live in production since 2026-10-16 (see `docs/OPERATIONS_REHEARSAL_LOG.md`).
 
 ## Decision
@@ -138,4 +137,4 @@ Staging API on `fix/sync-keeps-newer-platform-edits` (`ee7f7a3`), staging WordPr
 | Decision owner |  |
 | Decision time |  |
 | Exceptions accepted |  |
-| Follow-up issues | E2, app sign-in error messages |
+| Follow-up issues | E2 |

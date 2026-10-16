@@ -12,6 +12,7 @@ import {
   usesRevenueCatStoreBilling,
 } from '@/src/lib/revenuecat';
 import { restoreSessionFromTokens } from '@/src/lib/session-restoration';
+import { runSignInFlow, signInInputError } from '@/src/lib/sign-in-flow';
 import { clearTokens, loadTokens, saveTokens } from '@/src/lib/token-store';
 import type { Entitlement, User } from '@/src/lib/models';
 
@@ -185,41 +186,22 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
 
   const signIn = useCallback(
     async (identifier: string, password: string) => {
+      const inputError = signInInputError(identifier, password);
+      if (inputError) {
+        setErrorMessage(inputError);
+        return;
+      }
+
       setIsLoading(true);
       setErrorMessage(null);
-      const trimmed = identifier.trim();
-      const isEmailIdentifier = trimmed.includes('@');
 
       try {
-        if (isEmailIdentifier) {
-          try {
-            const response = await stitchSenseAPI.signIn(trimmed, password);
-            await applyAuth(response);
-            return;
-          } catch (error) {
-            if (!isFallbackAuthError(error)) {
-              throw error;
-            }
-          }
-        }
-
-        try {
-          const wordpressResponse = await stitchSenseAPI.signInWithWordPress(trimmed, password);
-          await applyAuth(wordpressResponse);
-          return;
-        } catch (error) {
-          if (!isFallbackAuthError(error)) {
-            throw error;
-          }
-
-          if (!isEmailIdentifier) {
-            const platformResponse = await stitchSenseAPI.signIn(trimmed, password);
-            await applyAuth(platformResponse);
-            return;
-          }
-
-          throw error;
-        }
+        const response = await runSignInFlow(identifier, password, {
+          signInWithEmail: stitchSenseAPI.signIn,
+          signInWithWordPress: stitchSenseAPI.signInWithWordPress,
+          isFallbackError: isFallbackAuthError,
+        });
+        await applyAuth(response);
       } catch (error) {
         setErrorMessage(
           getUserFacingErrorMessage(error, { fallback: 'Could not sign in right now.' }),
