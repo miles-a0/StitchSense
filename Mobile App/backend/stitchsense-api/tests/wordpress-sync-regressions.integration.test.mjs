@@ -213,4 +213,37 @@ test('WordPress sync does not resurrect stale deleted Ravelry patterns', {
   const { wordpressPendingSyncForUser } = await import('../dist/services/wordpressSync.js');
   const pending = await wordpressPendingSyncForUser(userId);
   assert.equal(pending.counts.patterns, 0, 'archived WordPress patterns are not reported as missing from the platform');
+
+  const renamedId = '5f1e2d3c-4b5a-4968-8776-655443322110';
+  await client.query(
+    `INSERT INTO user_patterns (id, user_id, title, source, pattern_summary_text, metadata, updated_at)
+     VALUES ($1::uuid, $2, 'Renamed in the app', 'upload', 'Platform summary',
+             jsonb_build_object('wordpress_pattern_id', $3::text, 'app_only', true), '2026-10-10T12:00:00Z')`,
+    [renamedId, userId, renamedId],
+  );
+  wordpressPayload = {
+    user: { legacy_wp_user_id: 42 },
+    patterns: [
+      {
+        id: renamedId,
+        title: 'Original WordPress title',
+        source: 'upload',
+        pattern_summary_text: 'Older WordPress summary',
+        updated_at: '2026-09-01 10:00:00',
+      },
+    ],
+  };
+  await syncWordPressLibraryForUser(userId);
+  let renamed = await client.query('SELECT title, pattern_summary_text, metadata, updated_at FROM user_patterns WHERE id = $1', [renamedId]);
+  assert.equal(renamed.rows[0].title, 'Renamed in the app', 'an older WordPress copy does not undo a newer platform edit');
+  assert.equal(renamed.rows[0].pattern_summary_text, 'Platform summary');
+  assert.equal(renamed.rows[0].metadata.app_only, true);
+  assert.equal(renamed.rows[0].updated_at.toISOString(), '2026-10-10T12:00:00.000Z');
+
+  wordpressPayload.patterns[0].title = 'Renamed on WordPress later';
+  wordpressPayload.patterns[0].updated_at = '2026-10-12 09:00:00';
+  await syncWordPressLibraryForUser(userId);
+  renamed = await client.query('SELECT title, updated_at FROM user_patterns WHERE id = $1', [renamedId]);
+  assert.equal(renamed.rows[0].title, 'Renamed on WordPress later', 'a newer WordPress edit still wins');
+  assert.equal(renamed.rows[0].updated_at.toISOString(), '2026-10-12T09:00:00.000Z');
 });

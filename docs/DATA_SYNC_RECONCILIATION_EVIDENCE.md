@@ -54,6 +54,8 @@ Each user signed in through the staging API `POST /auth/wordpress-login`, which 
 | E4 | `my-main-net` was attached to `stitchsense-api-staging` by hand through an untracked override file | Proxy reachability would be lost when the container was recreated. Name resolution was verified safe. | Closed: declared in `docker-compose.staging.yml` (PR #79); override file moved to backups |
 | E5 | A chat could be started on, or receive messages for, a deleted pattern, and the AI request still carried the deleted pattern's context | `POST /chats` checked ownership but not deletion, and the chat message routes did not check the bound pattern. | Closed: fixed with a regression test (PR #79), confirmed on staging (Run 2) |
 | E6 | After deleting a pattern through the API, staging WordPress still exported it and the reconciliation reported it as missing | WordPress deletes by archiving (`is_archived`) and its export includes archived patterns. The sync ignored the flag, so archived patterns could be imported as active on first sync, and a deleted pattern stayed deleted only because WordPress stamped the archive slightly earlier than the API delete. Zone-less WordPress timestamps were read in the host's time zone. | Closed: archived patterns are never imported, retire the matching platform pattern unless it was changed after the archive, and are left out of counts; zone-less timestamps are read as UTC. Regression test (PR #79), confirmed on staging (Run 2). |
+| E7 | Renaming a WordPress-imported pattern in the app or on the website would be undone by the next sync | Platform edits do not update the legacy WordPress copy, and the sync copied every field from that older copy over the platform pattern without comparing timestamps. Found by code review before the rename check. | Fixed: the sync only overwrites a pattern when the WordPress copy is newer. Regression test added. Closed: rename in the app and summary edit on the website survived re-sync on staging (Run 4). |
+| E8 | "Archive" on the website fails while the Platform API setting is enabled | The plugin forwards website pattern updates to the API but dropped `is_archived`, so an archive became an empty update and returned "No valid fields to update." Found by code review before the website checks. | Fixed in plugin 7.7.44 (forwards `isArchived`). Closed: website archive and delete passed on staging (Run 4). |
 
 ## Object storage and file access (all runs)
 
@@ -105,6 +107,19 @@ Staging on `main` at `5016fe1` (PR #79). Expo started with `EXPO_PUBLIC_API_BASE
 | Stash item with photo | Pass: 1 item with photo stored for User A only; owner scoping checks passed |
 | Relaunch | Pass |
 
+## Run 4: edits, website archive and delete (2026-10-16)
+
+Staging API on `fix/sync-keeps-newer-platform-edits` (`ee7f7a3`), staging WordPress plugin 7.7.44. Expo started with both `EXPO_PUBLIC_API_BASE_URL` and `EXPO_PUBLIC_WORDPRESS_BASE_URL` set to staging.
+
+| Check | Result |
+| --- | --- |
+| Rename an older WordPress pattern in the app | Pass: new name shows on the website |
+| Edit a pattern summary on the website | Pass: edit shows in the app |
+| Sign out and back in on the phone (re-sync) | Pass: rename and summary edit kept (closes E7) |
+| Archive on the website | Pass: leaves the website library, shows as archived in the app (closes E8) |
+| Delete on the website | Pass: gone from the website and the app, stays gone after re-sync |
+| Reconciliation, User A | Pass: nothing pending; 4 WordPress patterns matched, 1 app-only upload, 9 patterns the owner deleted are archived in WordPress and stay deleted; 0 relational gaps |
+
 ## Outstanding for Workstream 5
 
 - Reinstall check on a staging build of the app (Expo Go cannot reinstall).
@@ -112,6 +127,7 @@ Staging on `main` at `5016fe1` (PR #79). Expo started with `EXPO_PUBLIC_API_BASE
 - Migration rollback rehearsal (`docs/MIGRATION_ROLLBACK_REHEARSAL.md`), including deleted-account replay.
 - Representative staging data: Runs 1 to 3 used the owner's two accounts. Customer-like data must be minimised or anonymised before use.
 - Decide E2.
+- App follow-ups: show the real reason when a username sign-in fails (the email fallback currently reports "Invalid request"), and ask for a password before sending an empty one.
 - Final migration counts, exceptions, and approval before touching production data. Production must run the PR #79 sync fix before any production user's first app sign-in imports their WordPress library.
 
 ## Decision
@@ -122,4 +138,4 @@ Staging on `main` at `5016fe1` (PR #79). Expo started with `EXPO_PUBLIC_API_BASE
 | Decision owner |  |
 | Decision time |  |
 | Exceptions accepted |  |
-| Follow-up issues | E2 |
+| Follow-up issues | E2, app sign-in error messages |
