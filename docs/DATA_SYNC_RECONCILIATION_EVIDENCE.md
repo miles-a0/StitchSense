@@ -49,7 +49,7 @@ Each user signed in through the staging API `POST /auth/wordpress-login`, which 
 | ID | Exception | Assessment | Status |
 | --- | --- | --- | --- |
 | E1 | User A has 3 chats (5 messages) in the API and 0 in WordPress | Owner requirement (2026-10-14): app chats must show on the web and web chats in the app. With the WordPress Platform API setting enabled, the plugin's web chat endpoints list, create, read, and append chats through the API, so both surfaces share one store. The WordPress count is the legacy local store only. | Closed: confirmed in the browser and the app (Run 2). Platform API must stay enabled in production WordPress. |
-| E2 | User B has 1 WordPress chat (2 messages) not imported | That chat references a pattern no longer in the WordPress export. The sync correctly refuses a chat whose pattern does not exist. Not an importer bug. | Open: accept, or clean up the orphaned chat in WordPress |
+| E2 | User B has 1 WordPress chat (2 messages) not imported | That chat references a pattern no longer in the WordPress export. The sync correctly refuses a chat whose pattern does not exist. Not an importer bug. | Accepted by the owner (2026-10-16): the orphaned legacy chat stays in WordPress and is not imported |
 | E3 | Staging `N8N_IMAGE_URL` pointed at `staging-stitchsense-image-analysis`, which n8n reports as not registered | Stitch Vision still worked through the WordPress image proxy and the chat-webhook fallback, but each direct call wasted a request and recorded an error. | Closed: set to `staging-pattern-helper-chat` on the staging host (Run 2) |
 | E4 | `my-main-net` was attached to `stitchsense-api-staging` by hand through an untracked override file | Proxy reachability would be lost when the container was recreated. Name resolution was verified safe. | Closed: declared in `docker-compose.staging.yml` (PR #79); override file moved to backups |
 | E5 | A chat could be started on, or receive messages for, a deleted pattern, and the AI request still carried the deleted pattern's context | `POST /chats` checked ownership but not deletion, and the chat message routes did not check the bound pattern. | Closed: fixed with a regression test (PR #79), confirmed on staging (Run 2) |
@@ -122,11 +122,12 @@ Staging API on `fix/sync-keeps-newer-platform-edits` (`ee7f7a3`), staging WordPr
 
 ## Outstanding for Workstream 5
 
+Owner decisions (2026-10-16): E2 accepted; the owner's two staging accounts are representative enough, so no anonymised customer copy is needed; unreferenced files and files kept only for deleted patterns are deleted after a 30-day window.
+
+
 - Reinstall check on a staging build of the app (Expo Go cannot reinstall).
 - Stored-source Ravelry pattern AI operation.
-- Object-storage window (owner decision): re-run the orphan report after the window (proposed 30 days, about 2026-11-15), quarantine then delete files still unreferenced, and decide whether files kept only for deleted patterns are purged after the window.
-- Representative staging data: Runs 1 to 3 used the owner's two accounts. Customer-like data must be minimised or anonymised before use.
-- Decide E2.
+- Object storage, on or after 2026-11-15: re-run the orphan report; quarantine, then delete, files still unreferenced and files kept only for deleted patterns (owner decision 2026-10-16: 30-day window, then delete).
 - Final migration counts, exceptions, and approval before touching production data. The PR #79 and #82 sync fixes are live in production since 2026-10-16 (see `docs/OPERATIONS_REHEARSAL_LOG.md`).
 
 ## Decision
@@ -136,5 +137,5 @@ Staging API on `fix/sync-keeps-newer-platform-edits` (`ee7f7a3`), staging WordPr
 | Reconciliation decision | Continue (staging import, reconciliation, bidirectional, and device checks passed; reinstall, rollback rehearsal, and final sign-off outstanding) |
 | Decision owner |  |
 | Decision time |  |
-| Exceptions accepted |  |
-| Follow-up issues | E2 |
+| Exceptions accepted | E2 (owner, 2026-10-16) |
+| Follow-up issues | Object-storage cleanup after 2026-11-15 |
